@@ -93,6 +93,7 @@ func (x *XmlConfigFileHandler) Read(source io.Reader) error {
 	return nil
 }
 
+// handleChildElements recursively processes the child elements and their attributes
 func (x *XmlConfigFileHandler) handleChildElements(elements []*etree.Element) {
 	for _, element := range elements {
 		x.entries = append(x.entries, &XmlElementConfigEntry{
@@ -122,6 +123,7 @@ func (x *XmlConfigFileHandler) Process() (iter.Seq[ConfigEntry], error) {
 
 // Write writes the configuration entries to the target
 func (x *XmlConfigFileHandler) Write(target io.Writer) error {
+	// Need to re-process all Attribute entries to ensure they are written to the document
 	for _, entry := range x.entries {
 		if attr, ok := entry.(*XmlAttributeConfigEntry); !ok {
 			continue
