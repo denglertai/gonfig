@@ -11,6 +11,7 @@ require (
 )
 
 require (
+	github.com/Jeffail/gabs/v2 v2.7.0
 	github.com/gkampitakis/ciinfo v0.3.0 // indirect
 	github.com/gkampitakis/go-diff v1.3.2 // indirect
 	github.com/gkampitakis/go-snaps v0.5.7 // indirect
