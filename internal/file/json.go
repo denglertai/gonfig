@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"io"
 	"iter"
+	"strconv"
 
 	"github.com/Jeffail/gabs/v2"
 	"github.com/samber/lo"
 )
 
-// JsonConfigEntry represents a single configuration entry
-type JsonConfigEntry struct {
+// HierarchicalConfigEntry represents a single configuration entry
+type HierarchicalConfigEntry struct {
 	originalValue interface{}
 	value         string
 	edited        bool
@@ -20,31 +21,52 @@ type JsonConfigEntry struct {
 }
 
 // Key returns the key of the configuration entry
-func (j *JsonConfigEntry) Key() string {
+func (j *HierarchicalConfigEntry) Key() string {
 	return j.key
 }
 
 // GetValue returns the value of the configuration entry
-func (j *JsonConfigEntry) GetValue() string {
+func (j *HierarchicalConfigEntry) GetValue() string {
 	return j.value
 }
 
 // SetValue sets the value of the configuration entry
-func (j *JsonConfigEntry) SetValue(value string) {
+func (j *HierarchicalConfigEntry) SetValue(value string) {
 	j.value = value
 	j.edited = true
 }
 
+func (j *HierarchicalConfigEntry) getConvertedValue() (interface{}, error) {
+	// Convert the value to the original type and return it
+	switch j.originalValue.(type) {
+	case int:
+		return strconv.Atoi(j.value)
+	case float64:
+		return strconv.ParseFloat(j.value, 64)
+	case string:
+		return j.value, nil
+	}
+
+	return nil, fmt.Errorf("unsupported type: %T", j.originalValue)
+}
+
+// hierarchicalConfigHandler represents a basic configuration handler for hierarchical configuration files
+type hierarchicalConfigHandler struct {
+	entries []ConfigEntry
+}
+
 // JsonConfigFileHandler represents a configuration file handler
 type JsonConfigFileHandler struct {
+	hierarchicalConfigHandler
 	container *gabs.Container
-	entries   []ConfigEntry
 }
 
 // NewXmlConfigFileHandler creates a new XML configuration file handler
 func NewJsonConfigFileHandler() *JsonConfigFileHandler {
 	return &JsonConfigFileHandler{
-		entries: make([]ConfigEntry, 0),
+		hierarchicalConfigHandler: hierarchicalConfigHandler{
+			entries: make([]ConfigEntry, 0),
+		},
 	}
 }
 
@@ -115,8 +137,8 @@ func (j *JsonConfigFileHandler) handleChildren(container *gabs.Container, path s
 	return nil
 }
 
-func (j *JsonConfigFileHandler) appendEntry(path, key string, hierarchy []string, value interface{}) {
-	entry := &JsonConfigEntry{
+func (j *hierarchicalConfigHandler) appendEntry(path, key string, hierarchy []string, value interface{}) {
+	entry := &HierarchicalConfigEntry{
 		path:          path,
 		key:           key,
 		originalValue: value,
@@ -136,13 +158,18 @@ func appendToPath(path string, key string) string {
 
 // Write writes the configuration entries to the target
 func (j *JsonConfigFileHandler) Write(target io.Writer) error {
-	filteredEntries := lo.FilterMap(j.entries, func(entry ConfigEntry, _ int) (*JsonConfigEntry, bool) {
-		jce := entry.(*JsonConfigEntry)
+	filteredEntries := lo.FilterMap(j.entries, func(entry ConfigEntry, _ int) (*HierarchicalConfigEntry, bool) {
+		jce := entry.(*HierarchicalConfigEntry)
 		return jce, jce.edited
 	})
 
 	for _, entry := range filteredEntries {
-		_, err := j.container.Set(entry.value, entry.hierarchy...)
+		val, err := entry.getConvertedValue()
+		if err != nil {
+			return err
+		}
+
+		_, err = j.container.Set(val, entry.hierarchy...)
 		if err != nil {
 			return err
 		}
