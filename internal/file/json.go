@@ -61,7 +61,7 @@ type JsonConfigFileHandler struct {
 	container *gabs.Container
 }
 
-// NewXmlConfigFileHandler creates a new XML configuration file handler
+// NewJsonConfigFileHandler creates a new JSON configuration file handler
 func NewJsonConfigFileHandler() *JsonConfigFileHandler {
 	return &JsonConfigFileHandler{
 		hierarchicalConfigHandler: hierarchicalConfigHandler{
