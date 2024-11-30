@@ -15,9 +15,32 @@ spec:
         app: nginx
     spec:
       containers:
-      - image: nginx:1.14.2
-        name: nginx
-        ports:
-        - containerPort: 80
+        - image: nginx:1.14.2
+          name: nginx
+          ports:
+            - containerPort: 80
+
+---
+
+[TestYamlProcessorEdit - 1]
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+spec:
+  replicas: 777
+  selector:
+    matchLabels:
+      app: edited
+  template:
+    metadata:
+      labels:
+        app: edited
+    spec:
+      containers:
+        - image: nginx:1.14.2
+          name: nginx
+          ports:
+            - containerPort: 80
 
 ---

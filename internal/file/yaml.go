@@ -8,8 +8,67 @@ import (
 	"strconv"
 
 	"github.com/samber/lo"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
+
+// Set sets a value in the hierarchical container
+func setHierarchical(container map[string]interface{}, value interface{}, hierarchy ...string) error {
+	if len(hierarchy) == 0 {
+		return fmt.Errorf("empty hierarchy")
+	}
+
+	// Hierarchy at the first level will always be a string
+	currentLocation := container[hierarchy[0]]
+	remainingHierarchy := hierarchy[1:]
+
+	return setInner(currentLocation, value, remainingHierarchy)
+}
+
+func setInner(location interface{}, value interface{}, hierarchy []string) error {
+	if len(hierarchy) == 0 {
+		return fmt.Errorf("empty hierarchy")
+	}
+
+	switch l := location.(type) {
+	case nil:
+		// If the current location is nil we cannot continue
+		return fmt.Errorf("nil hierarchy")
+	case map[string]interface{}:
+		if len(hierarchy) == 1 {
+			// We are at the end of the hierarchy, we can set the value
+			l[hierarchy[0]] = value
+			return nil
+		}
+
+		// If the current location is a map, we need to go deeper
+		currentLocation := l[hierarchy[0]]
+		remainingHierarchy := hierarchy[1:]
+		err := setInner(currentLocation, value, remainingHierarchy)
+		if err != nil {
+			return err
+		}
+	case []interface{}:
+		// If the current location is a list, we need to go deeper
+		if len(hierarchy) == 0 {
+			return fmt.Errorf("empty hierarchy at slice level")
+		}
+		// if this a slice, we expected the current entry to be an integer
+		index, err := strconv.Atoi(hierarchy[0])
+		if err != nil {
+			return err
+		}
+
+		if len(hierarchy) == 1 {
+			// We are at the end of the hierarchy, we can set the value
+			l[index] = value
+			return nil
+		}
+	default:
+		return fmt.Errorf("unsupported type: %T", l)
+	}
+
+	return nil
+}
 
 // YamlConfigFileHandler represents a configuration file handler
 type YamlConfigFileHandler struct {
@@ -45,58 +104,53 @@ func (y *YamlConfigFileHandler) Read(source io.Reader) (err error) {
 func (y *YamlConfigFileHandler) handleChildren(container map[string]interface{}, path string, hierarchy []string) error {
 	for key, value := range container {
 		currentPath := appendToPath(path, key)
-		currentHierarchy := append(hierarchy, key)
-		switch v := value.(type) {
-		case int:
-			y.appendEntry(currentPath, key, currentHierarchy, v)
-			continue
-		case float64:
-			y.appendEntry(currentPath, key, currentHierarchy, v)
-			continue
-		case string:
-			y.appendEntry(currentPath, key, currentHierarchy, v)
-			continue
-		case map[interface{}]interface{}:
-			// Convert the map to a map[string]interface{}
-			m := make(map[string]interface{})
-			for k, v := range v {
-				m[fmt.Sprintf("%v", k)] = v
-			}
-			// Deeper down the rabbit hole
-			err := y.handleChildren(m, currentPath, currentHierarchy)
+		copiedHierarchy := append(make([]string, 0), hierarchy...)
+		currentHierarchy := append(copiedHierarchy, key)
+		err := y.handleEntry(currentPath, key, currentHierarchy, value)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (y *YamlConfigFileHandler) handleEntry(path string, key string, hierarchy []string, value interface{}) error {
+	switch v := value.(type) {
+	case int:
+		y.appendEntry(path, key, hierarchy, v)
+	case float64:
+		y.appendEntry(path, key, hierarchy, v)
+	case string:
+		y.appendEntry(path, key, hierarchy, v)
+	case map[interface{}]interface{}:
+		// Convert the map to a map[string]interface{}
+		m := make(map[string]interface{})
+		for k, v := range v {
+			m[fmt.Sprintf("%v", k)] = v
+		}
+		// Deeper down the rabbit hole
+		err := y.handleChildren(m, path, hierarchy)
+		if err != nil {
+			return err
+		}
+	case map[string]interface{}:
+		// Deeper down the rabbit hole
+		err := y.handleChildren(v, path, hierarchy)
+		if err != nil {
+			return err
+		}
+	case []interface{}:
+		for i, item := range v {
+			is := strconv.Itoa(i)
+			currentPath := appendToPath(path, is)
+			currentHierarchy := append(hierarchy, is)
+			err := y.handleEntry(currentPath, is, currentHierarchy, item)
 			if err != nil {
 				return err
 			}
-		case []interface{}:
-			for i, item := range v {
-				is := strconv.Itoa(i)
-
-				currentPath := appendToPath(currentPath, is)
-				currentHierarchy := append(currentHierarchy, is)
-				switch iv := item.(type) {
-				case int:
-					y.appendEntry(currentPath, is, currentHierarchy, iv)
-					continue
-				case float64:
-					y.appendEntry(currentPath, is, currentHierarchy, iv)
-					continue
-				case string:
-					y.appendEntry(currentPath, is, currentHierarchy, iv)
-					continue
-				case map[interface{}]interface{}:
-					// Convert the map to a map[string]interface{}
-					miv := make(map[string]interface{})
-					for k, v := range v {
-						miv[fmt.Sprintf("%v", k)] = v
-					}
-					// Deeper down the rabbit hole
-					err := y.handleChildren(miv, currentPath, currentHierarchy)
-					if err != nil {
-						return err
-					}
-				}
-			}
 		}
+	default:
+		return fmt.Errorf("unsupported type: %T", v)
 	}
 	return nil
 }
@@ -115,8 +169,8 @@ func (y *YamlConfigFileHandler) Process() (iter.Seq[ConfigEntry], error) {
 // Write writes the configuration entries to the target
 func (y *YamlConfigFileHandler) Write(target io.Writer) error {
 	filteredEntries := lo.FilterMap(y.entries, func(entry ConfigEntry, _ int) (*HierarchicalConfigEntry, bool) {
-		jce := entry.(*HierarchicalConfigEntry)
-		return jce, jce.edited
+		hce := entry.(*HierarchicalConfigEntry)
+		return hce, hce.edited
 	})
 
 	for _, entry := range filteredEntries {
@@ -125,20 +179,21 @@ func (y *YamlConfigFileHandler) Write(target io.Writer) error {
 			return err
 		}
 
-		fmt.Print(val)
-
-		// _, err = y.container.Set(val, entry.hierarchy...)
+		err = setHierarchical(y.container, val, entry.hierarchy...)
 		if err != nil {
 			return err
 		}
 	}
 
-	data, err := yaml.Marshal(y.container)
+	buf := bytes.Buffer{}
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	err := enc.Encode(y.container)
 	if err != nil {
 		return err
 	}
 
-	_, err = target.Write(data)
+	_, err = target.Write(buf.Bytes())
 
 	return err
 }
