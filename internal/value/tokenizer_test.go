@@ -42,14 +42,36 @@ func TestProcessValue(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "Test 1",
+			name: "Simple Env Var Lookup with filter",
 			args: args{
-				value: "${BLA_BLUB|flt|bla(ddd=\"asf\") | ag}",
+				value: "${BLA_BLUB|upper}",
+			},
+			envVars: map[string]string{
+				"BLA_BLUB": "abc",
+			},
+			want:    "ABC",
+			wantErr: false,
+		},
+		{
+			name: "Simple Env Var Lookup with multiple filters",
+			args: args{
+				value: "${BLA_BLUB|upper|trimleft}",
+			},
+			envVars: map[string]string{
+				"BLA_BLUB": " a bc ",
+			},
+			want:    "A BC ",
+			wantErr: false,
+		},
+		{
+			name: "Simple Env Var Lookup with conversion and multiplication",
+			args: args{
+				value: "${BLA_BLUB|to_int|multiply(m=\"2\")}",
 			},
 			envVars: map[string]string{
 				"BLA_BLUB": "123",
 			},
-			want:    "",
+			want:    "246",
 			wantErr: false,
 		},
 	}

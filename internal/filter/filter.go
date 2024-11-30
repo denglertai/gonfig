@@ -2,13 +2,14 @@ package filter
 
 import (
 	"os"
+	"strconv"
 	"strings"
 )
 
 // Filter provides a basic abstraction for being able to process input and transform or validate it as needed
 type Filter interface {
 	// Process executes the filter's function
-	Process(value string) (string, error)
+	Process(value any) (any, error)
 }
 
 // FilterParams makes a filter confiruable
@@ -33,7 +34,7 @@ type EnvVarFilter struct {
 }
 
 // Process replaces the value with the value of an environment variable
-func (f *EnvVarFilter) Process(_ string) (string, error) {
+func (f *EnvVarFilter) Process(_ any) (any, error) {
 	value, found := os.LookupEnv(f.envVar)
 	if !found {
 		return "", nil
@@ -54,9 +55,11 @@ type FileInterceptorFilter struct {
 }
 
 // Process reads the file content if the value is a file reference
-func (f *FileInterceptorFilter) Process(value string) (string, error) {
-	if strings.HasPrefix(value, "@") {
-		path := value[1:]
+func (f *FileInterceptorFilter) Process(value any) (any, error) {
+	s := value.(string)
+
+	if strings.HasPrefix(s, "@") {
+		path := s[1:]
 		if _, err := os.Stat(path); err != nil {
 			return value, nil
 		}
@@ -78,7 +81,7 @@ func NewFileInterceptorFilter() *FileInterceptorFilter {
 }
 
 // ApplyFilters applies a list of filters to a value
-func ApplyFilters(value string, filters []Filter) (string, error) {
+func ApplyFilters(value any, filters []Filter) (any, error) {
 	for _, filter := range filters {
 		var err error
 		value, err = filter.Process(value)
@@ -97,7 +100,8 @@ type notFoundFilter struct {
 }
 
 // Process returns the filter name as the value
-func (f notFoundFilter) Process(value string) (string, error) {
+func (f notFoundFilter) Process(value any) (any, error) {
+	// ToDo: Log info  that filter was not found
 	return value, nil
 }
 
@@ -112,5 +116,72 @@ func NewFilter(token string) Filter {
 
 	return &notFoundFilter{
 		filter: token,
+	}
+}
+
+// FuncFilter is a filter that uses a function to process the value
+type FuncFilter struct {
+	fn func(any, map[string]string) (any, error)
+	DefaultFilterParamsHandler
+}
+
+// Process executes the filter's function
+func (f *FuncFilter) Process(value any) (any, error) {
+	return f.fn(value, f.DefaultFilterParamsHandler.params)
+}
+
+// init initializes the filter map
+func init() {
+	filterMap["upper"] = func(token string) Filter {
+		return &FuncFilter{
+			fn: func(value any, _ map[string]string) (any, error) {
+				return strings.ToUpper(value.(string)), nil
+			},
+		}
+	}
+	filterMap["lower"] = func(token string) Filter {
+		return &FuncFilter{
+			fn: func(value any, _ map[string]string) (any, error) {
+				return strings.ToLower(value.(string)), nil
+			},
+		}
+	}
+	filterMap["trim"] = func(token string) Filter {
+		return &FuncFilter{
+			fn: func(value any, _ map[string]string) (any, error) {
+				return strings.TrimSpace(value.(string)), nil
+			},
+		}
+	}
+	filterMap["trimleft"] = func(token string) Filter {
+		return &FuncFilter{
+			fn: func(value any, _ map[string]string) (any, error) {
+				return strings.TrimLeft(value.(string), " "), nil
+			},
+		}
+	}
+	filterMap["trimright"] = func(token string) Filter {
+		return &FuncFilter{
+			fn: func(value any, _ map[string]string) (any, error) {
+				return strings.TrimRight(value.(string), " "), nil
+			},
+		}
+	}
+	filterMap["multiply"] = func(token string) Filter {
+		return &FuncFilter{
+			fn: func(value any, params map[string]string) (any, error) {
+				multiplier, found := params["m"]
+				if !found {
+					multiplier = "1"
+				}
+
+				m, err := strconv.Atoi(multiplier)
+				if err != nil {
+					return "", err
+				}
+
+				return value.(int) * m, nil
+			},
+		}
 	}
 }
