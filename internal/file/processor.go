@@ -5,6 +5,7 @@ import (
 	"io"
 	"iter"
 	"os"
+	"path"
 
 	"github.com/denglertai/gonfig/internal/general"
 )
@@ -50,7 +51,10 @@ func NewFileProcessor(fileName string, fileType general.FileType, output io.Writ
 
 // Process processes the file
 func (fp *FileProcessor) Process() error {
-	var handler ConfigFileHandler
+	handler, err := fp.getFileProcessor()
+	if err != nil {
+		return err
+	}
 
 	file, err := os.Open(fp.FileName)
 	if err != nil {
@@ -68,13 +72,30 @@ func (fp *FileProcessor) Process() error {
 		return err
 	}
 
-	fmt.Print(entries)
-
 	for entry := range entries {
 		fmt.Print(entry)
 	}
 
-	err = handler.Write(fp.Output)
+	return handler.Write(fp.Output)
+}
 
-	return nil
+// getFileProcessor returns the file processor based on the file type
+func (fp *FileProcessor) getFileProcessor() (ConfigFileHandler, error) {
+	if fp.FileType == general.Undefined {
+		ext := path.Ext(fp.FileName)
+		fp.FileType = general.FileType(ext)
+	}
+
+	switch fp.FileType {
+	case general.YAML:
+		return NewYamlConfigFileHandler(), nil
+	case general.JSON:
+		return NewJsonConfigFileHandler(), nil
+	case general.XML:
+		return NewXmlConfigFileHandler(), nil
+	// case general.PROPERTIES:
+	// 	return NewPropertiesConfigFileHandler(), nil
+	default:
+		return nil, fmt.Errorf("unsupported file type: %v", fp.FileType)
+	}
 }
