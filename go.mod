@@ -10,6 +10,7 @@ require (
 )
 
 require (
+	github.com/bzick/tokenizer v1.4.6 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	golang.org/x/text v0.16.0 // indirect
@@ -17,13 +18,13 @@ require (
 
 require (
 	github.com/Jeffail/gabs/v2 v2.7.0
-	github.com/bzick/tokenizer v1.4.6
 	github.com/gkampitakis/ciinfo v0.3.0 // indirect
 	github.com/gkampitakis/go-diff v1.3.2 // indirect
 	github.com/gkampitakis/go-snaps v0.5.7
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
+	github.com/magiconair/properties v1.8.7
 	github.com/maruel/natural v1.1.1 // indirect
 	github.com/rogpeppe/go-internal v1.12.0 // indirect
 	github.com/spf13/cobra v1.8.1
