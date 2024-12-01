@@ -1,0 +1,20 @@
+
+[TestPropertiesFileHandler - 1]
+database.url = jdbc:mysql://localhost:3306/mydatabase
+database.username = test
+database.password = password
+port = 9000
+server.host = 127.0.0.1
+server.port = 8080
+
+---
+
+[TestPropertiesFileHandlerEdit - 1]
+database.url = jdbc:mysql://localhost:3306/mydatabase
+database.username = test
+database.password = password
+port = 9000
+server.host = 127.0.0.1
+server.port = 12345
+
+---
