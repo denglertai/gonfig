@@ -71,7 +71,7 @@ func TestProcessValue(t *testing.T) {
 			envVars: map[string]string{
 				"BLA_BLUB": "123",
 			},
-			want:    "246",
+			want:    246,
 			wantErr: false,
 		},
 	}

@@ -167,6 +167,15 @@ func init() {
 			},
 		}
 	}
+
+	filterMap["to_int"] = func(token string) Filter {
+		return &FuncFilter{
+			fn: func(value any, _ map[string]string) (any, error) {
+				return strconv.Atoi(value.(string))
+			},
+		}
+	}
+
 	filterMap["multiply"] = func(token string) Filter {
 		return &FuncFilter{
 			fn: func(value any, params map[string]string) (any, error) {

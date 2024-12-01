@@ -1,8 +1,6 @@
 package value
 
 import (
-	"fmt"
-
 	"github.com/bzick/tokenizer"
 	"github.com/denglertai/gonfig/internal/filter"
 )
@@ -17,6 +15,7 @@ const (
 	TokenRoundClose
 	TokenFilterSeparator
 	TokenEqual
+	TokenComma
 )
 
 func init() {
@@ -27,6 +26,7 @@ func init() {
 	parser.DefineTokens(TokenRoundOpen, []string{"("})
 	parser.DefineTokens(TokenRoundClose, []string{")"})
 	parser.DefineTokens(TokenEqual, []string{"="})
+	parser.DefineTokens(TokenComma, []string{","})
 	parser.DefineTokens(TokenFilterSeparator, []string{"|", " |", " | "})
 
 	parser.AllowKeywordUnderscore()
@@ -63,7 +63,6 @@ func processStream(stream *tokenizer.Stream) ([]filter.Filter, error) {
 	var currentParams map[string]string = make(map[string]string)
 	var currentParamKey string
 	var currentParamValue string
-	var equalHit bool
 
 	for stream.IsValid() {
 		currentToken := stream.CurrentToken()
@@ -87,29 +86,29 @@ func processStream(stream *tokenizer.Stream) ([]filter.Filter, error) {
 		} else if currentToken.Is(TokenRoundOpen) {
 			// Filter Params Start
 			currentParamKey = ""
-		} else if currentToken.Is(TokenEqual) {
-			equalHit = true
-		} else if currentToken.Is(tokenizer.TokenString) && equalHit {
+		} else if currentToken.Is(tokenizer.TokenString) && currentParamKey != "" {
 			// Filter Param Value
 			currentParamValue = currentToken.ValueString()
-			equalHit = false
-		} else if currentToken.Is(TokenRoundClose) {
-			// Filter Params End
+		} else if currentToken.Is(TokenRoundClose) || currentToken.Is(TokenComma) {
+			// Filter Params End or parmas Separator
 			if currentParamKey != "" {
 				currentParams[currentParamKey] = currentParamValue
+				currentParamKey = ""
 			}
 		} else if currentFilter != nil && (currentToken.Is(TokenFilterSeparator) || currentToken.Is(TokenCurlyClose)) {
 			// We have reached a filter separator or the end, we can add the filter to the list
 			if p, ok := currentFilter.(filter.FilterParams); ok && currentParams != nil {
 				p.AcceptParams(currentParams)
+				// Reset params
 				currentParams = make(map[string]string)
 			}
 
 			filters = append(filters, currentFilter)
 			currentFilter = nil
+		} else if currentParamKey != "" && !currentToken.Is(tokenizer.TokenUnknown) {
+			// Assume it is a param value
+			currentParamValue = currentToken.ValueString()
 		}
-
-		fmt.Println(currentToken)
 
 		stream.GoNext()
 	}
