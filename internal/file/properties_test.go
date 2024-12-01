@@ -21,7 +21,7 @@ func TestPropertiesFileHandler(t *testing.T) {
 
 	defer input.Close()
 
-	handler := NewPropertiesFileHandler()
+	handler := NewPropertiesConfigFileHandler()
 
 	err = handler.Read(input)
 	assert.NoError(t, err)
@@ -55,7 +55,7 @@ func TestPropertiesFileHandlerEdit(t *testing.T) {
 
 	defer input.Close()
 
-	handler := NewPropertiesFileHandler()
+	handler := NewPropertiesConfigFileHandler()
 
 	err = handler.Read(input)
 	assert.NoError(t, err)

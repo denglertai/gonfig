@@ -34,8 +34,8 @@ func (p *PropertiesConfigEntry) SetValue(value string) {
 	p.val = value
 }
 
-// NewPropertiesFileHandler creates a new PropertiesFileHandler
-func NewPropertiesFileHandler() *PropertiesFileHandler {
+// NewPropertiesConfigFileHandler creates a new PropertiesFileHandler
+func NewPropertiesConfigFileHandler() *PropertiesFileHandler {
 	return &PropertiesFileHandler{}
 }
 
