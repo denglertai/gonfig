@@ -93,8 +93,8 @@ func (fp *FileProcessor) getFileProcessor() (ConfigFileHandler, error) {
 		return NewJsonConfigFileHandler(), nil
 	case general.XML:
 		return NewXmlConfigFileHandler(), nil
-	// case general.PROPERTIES:
-	// 	return NewPropertiesConfigFileHandler(), nil
+	case general.PROPERTIES:
+		return NewPropertiesConfigFileHandler(), nil
 	default:
 		return nil, fmt.Errorf("unsupported file type: %v", fp.FileType)
 	}

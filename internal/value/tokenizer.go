@@ -1,6 +1,8 @@
 package value
 
 import (
+	"strings"
+
 	"github.com/bzick/tokenizer"
 	"github.com/denglertai/gonfig/internal/filter"
 )
@@ -38,6 +40,10 @@ func tokenize(value string) (*tokenizer.Stream, error) {
 }
 
 func ProcessValue(value string) (interface{}, error) {
+	if !strings.HasPrefix(value, "$") {
+		return value, nil
+	}
+
 	stream, err := tokenize(value)
 	if err != nil {
 		return nil, err

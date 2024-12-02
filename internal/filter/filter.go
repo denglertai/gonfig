@@ -194,3 +194,17 @@ func init() {
 		}
 	}
 }
+
+// AddPluginFilters adds filters from a plugin
+func AddPluginFilters(filters map[string]interface{}) {
+	for name, filter := range filters {
+		// Skip filters that are not of type Filter or already in the filter map
+		if _, ok := filter.(Filter); !ok || filterMap[name] != nil {
+			continue
+		}
+
+		filterMap[name] = func(token string) Filter {
+			return filter.(Filter)
+		}
+	}
+}
