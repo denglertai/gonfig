@@ -42,6 +42,17 @@ func TestProcessValue(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "Simple Env Var Lookup with file pointer with filter",
+			args: args{
+				value: "${BLA_BLUB|upper}",
+			},
+			envVars: map[string]string{
+				"BLA_BLUB": "@" + path.Join(workingDir, "testdata", "file.txt"),
+			},
+			want:    "HI",
+			wantErr: false,
+		},
+		{
 			name: "Simple Env Var Lookup with filter",
 			args: args{
 				value: "${BLA_BLUB|upper}",
