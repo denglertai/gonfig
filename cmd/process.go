@@ -4,22 +4,31 @@ Copyright © 2024 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"os"
+
 	"github.com/denglertai/gonfig/internal/file"
 	"github.com/spf13/cobra"
 )
 
+var output string
+
 // processCmd represents the process command
 var processCmd = &cobra.Command{
 	Use:   "process",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "Processes a file",
+	Long:  `Processes a file and outputs the result to the dersired output. Defaults to stdout`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		processor := file.NewFileProcessor(configSettings.File, configSettings.FileType, cmd.OutOrStdout())
+		var o = os.Stdout
+		if output != "-" {
+			f, err := os.Create(output)
+			if err != nil {
+				return err
+			}
+			defer f.Close()
+			o = f
+		}
+
+		processor := file.NewFileProcessor(configSettings.File, configSettings.FileType, o)
 		err := processor.Process()
 		if err != nil {
 			return err
@@ -31,6 +40,8 @@ to quickly create a Cobra application.`,
 
 func init() {
 	configCmd.AddCommand(processCmd)
+
+	processCmd.Flags().StringVarP(&output, "output", "o", "-", "Output file (defaults to stdout)")
 
 	// Here you will define your flags and configuration settings.
 
