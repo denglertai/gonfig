@@ -37,8 +37,8 @@ func init() {
 	// is called directly, e.g.:
 	// configCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 
-	configCmd.Flags().StringVarP(&configSettings.File, "file", "f", "", "Path to the configuration file")
+	configCmd.PersistentFlags().StringVarP(&configSettings.File, "file", "f", "", "Path to the configuration file")
 	configCmd.MarkFlagRequired("file")
 
-	configCmd.Flags().StringVarP(&fileType, "file-type", "t", "", "Type of file to be read. If not set, the file type will be inferred from the file extension")
+	configCmd.PersistentFlags().StringVarP(&fileType, "file-type", "t", "", "Type of file to be read. If not set, the file type will be inferred from the file extension")
 }
