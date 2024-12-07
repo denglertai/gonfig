@@ -1,6 +1,6 @@
 # gonfig
 
-gonfig is a project intended to process different typs of config files and fill their contents using environment variables
+gonfig is a project intended to process different types of config files and fill their contents using environment variables
 
 ## Plugins
 
