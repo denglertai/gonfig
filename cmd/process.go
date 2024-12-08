@@ -41,7 +41,7 @@ var processCmd = &cobra.Command{
 func init() {
 	configCmd.AddCommand(processCmd)
 
-	processCmd.Flags().StringVarP(&output, "output", "o", "-", "Output file (defaults to stdout)")
+	processCmd.Flags().StringVarP(&output, "output", "o", "-", "Controls where to put the results (defaults to stdout)")
 
 	// Here you will define your flags and configuration settings.
 

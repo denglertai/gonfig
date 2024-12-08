@@ -32,8 +32,8 @@ func (j *HierarchicalConfigEntry) GetValue() string {
 
 // SetValue sets the value of the configuration entry
 func (j *HierarchicalConfigEntry) SetValue(value string) {
+	j.edited = j.value != value
 	j.value = value
-	j.edited = true
 }
 
 func (j *HierarchicalConfigEntry) getConvertedValue() (interface{}, error) {
@@ -45,6 +45,8 @@ func (j *HierarchicalConfigEntry) getConvertedValue() (interface{}, error) {
 		return strconv.ParseFloat(j.value, 64)
 	case string:
 		return j.value, nil
+	case bool:
+		return strconv.ParseBool(j.value)
 	}
 
 	return nil, fmt.Errorf("unsupported type: %T", j.originalValue)
