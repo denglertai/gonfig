@@ -4,6 +4,8 @@ Copyright © 2024 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"bytes"
+	"fmt"
 	"os"
 
 	"github.com/denglertai/gonfig/internal/file"
@@ -11,6 +13,8 @@ import (
 )
 
 var output string
+var inline bool
+var overwriteExistingFile bool
 
 // processCmd represents the process command
 var processCmd = &cobra.Command{
@@ -18,20 +22,35 @@ var processCmd = &cobra.Command{
 	Short: "Processes a file",
 	Long:  `Processes a file and outputs the result to the dersired output. Defaults to stdout`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		var o = os.Stdout
+		// In case we want to write the output to the source file directly
+		if inline {
+			output = configSettings.File
+			overwriteExistingFile = true
+		}
+
+		// Store the output temporarily in a buffer
+		var o = new(bytes.Buffer)
+		processor := file.NewFileProcessor(configSettings.File, configSettings.FileType, o)
+		err := processor.Process()
+		if err != nil {
+			return err
+		}
+
 		if output != "-" {
+			// If the file exists and we don't want to overwrite it, return an error
+			if _, err := os.Stat(output); err == nil && !overwriteExistingFile {
+				return ErrFileExists(fmt.Errorf("file %s already exists; Use -w / --overwrite if this is intended", output))
+			}
+
 			f, err := os.Create(output)
 			if err != nil {
 				return err
 			}
 			defer f.Close()
-			o = f
-		}
-
-		processor := file.NewFileProcessor(configSettings.File, configSettings.FileType, o)
-		err := processor.Process()
-		if err != nil {
-			return err
+			_, err = f.Write(o.Bytes())
+			if err != nil {
+				return err
+			}
 		}
 
 		return nil
@@ -43,13 +62,9 @@ func init() {
 
 	processCmd.Flags().StringVarP(&output, "output", "o", "-", "Controls where to put the results (defaults to stdout)")
 
-	// Here you will define your flags and configuration settings.
+	processCmd.Flags().BoolVarP(&inline, "inline", "i", false, "Controls if the output should get written to the source file directly (defaults to false)")
 
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// processCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// processCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	processCmd.Flags().BoolVarP(&overwriteExistingFile, "overwrite", "w", false, "Controls if the output should overwrite the source file (defaults to false). This implies -i (--inline). If the source file does not exist, it will be created.")
 }
+
+type ErrFileExists error
