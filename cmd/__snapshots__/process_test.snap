@@ -54,6 +54,15 @@
 [Test/JSON_AutoDiscover - 1]
 {
   "quiz": {
+    "list": {
+      "list": [
+        "123",
+        "123.123",
+        "true",
+        "string",
+        "%^&*()_+"
+      ]
+    },
     "maths": {
       "q1": {
         "answer": "12",
@@ -103,6 +112,15 @@
 [Test/JSON_Explicit - 1]
 {
   "quiz": {
+    "list": {
+      "list": [
+        "123",
+        "123.123",
+        "true",
+        "string",
+        "%^&*()_+"
+      ]
+    },
     "maths": {
       "q1": {
         "answer": "12",
@@ -150,10 +168,72 @@
 ---
 
 [Test/YAML_AutoDiscover - 1]
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+spec:
+  replicas: "123"
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    list:
+      - "123"
+      - "123.123"
+      - string
+      - "true"
+      - '%^&*()_+'
+    metadata:
+      labels:
+        app: nginx
+        bool: "true"
+        float: "123.123"
+        int: "123"
+        special_characters: '%^&*()_+'
+        string: string
+    spec:
+      containers:
+        - image: nginx:1.14.2
+          imagePullPolicy: '%^&*()_+'
+          name: nginx
+          ports:
+            - containerPort: 80
 
 ---
 
 [Test/YAML_Explicit - 1]
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+spec:
+  replicas: "123"
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    list:
+      - "123"
+      - "123.123"
+      - string
+      - "true"
+      - '%^&*()_+'
+    metadata:
+      labels:
+        app: nginx
+        bool: "true"
+        float: "123.123"
+        int: "123"
+        special_characters: '%^&*()_+'
+        string: string
+    spec:
+      containers:
+        - image: nginx:1.14.2
+          imagePullPolicy: '%^&*()_+'
+          name: nginx
+          ports:
+            - containerPort: 80
 
 ---
 

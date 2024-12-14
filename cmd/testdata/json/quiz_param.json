@@ -41,6 +41,15 @@
             "bool": "${BOOL|to_bool}",
             "string": "${STRING}",
             "special_characters": "${SPECIAL_CHARACTERS}"
+        },
+        "list": {
+            "list": [
+                "${INT|to_int}",
+                "${FLOAT|to_float}",
+                "${BOOL|to_bool}",
+                "${STRING}",
+                "${SPECIAL_CHARACTERS}"
+            ]
         }
     }
 }

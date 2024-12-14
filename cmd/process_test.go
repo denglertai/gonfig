@@ -44,12 +44,12 @@ func Test(t *testing.T) {
 		},
 		{
 			desc:     "YAML AutoDiscover",
-			file:     path.Join(wd, "./testdata/yaml/quiz_param.yaml"),
+			file:     path.Join(wd, "./testdata/yaml/deployment_param.yaml"),
 			fileType: general.Undefined,
 		},
 		{
 			desc:     "YAML Explicit",
-			file:     path.Join(wd, "./testdata/yaml/quiz_param.yaml"),
+			file:     path.Join(wd, "./testdata/yaml/deployment_param.yaml"),
 			fileType: general.YAML,
 		},
 		{

@@ -133,7 +133,8 @@ func (j *JsonConfigFileHandler) handleChildren(container *gabs.Container, path s
 
 	// Must be a value
 	if len(children) == 0 {
-		j.appendEntry(path, hierarchy[len(hierarchy)-1], hierarchy, container.Data())
+		copiedHierarchy := append(make([]string, 0), hierarchy...)
+		j.appendEntry(path, copiedHierarchy[len(copiedHierarchy)-1], copiedHierarchy, container.Data())
 	}
 
 	return nil
