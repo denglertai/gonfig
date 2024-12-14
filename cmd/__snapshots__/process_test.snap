@@ -1,5 +1,5 @@
 
-[Test/XML_AutoDiscover - 1]
+[TestStdout/XML_AutoDiscover - 1]
 <?xml version="1.0"?>
 <customers>
    <customer id="246">
@@ -25,7 +25,7 @@
 </customers>
 ---
 
-[Test/XML_Explicit - 1]
+[TestStdout/XML_Explicit - 1]
 <?xml version="1.0"?>
 <customers>
    <customer id="246">
@@ -51,7 +51,7 @@
 </customers>
 ---
 
-[Test/JSON_AutoDiscover - 1]
+[TestStdout/JSON_AutoDiscover - 1]
 {
   "quiz": {
     "list": {
@@ -109,7 +109,7 @@
 }
 ---
 
-[Test/JSON_Explicit - 1]
+[TestStdout/JSON_Explicit - 1]
 {
   "quiz": {
     "list": {
@@ -167,7 +167,7 @@
 }
 ---
 
-[Test/YAML_AutoDiscover - 1]
+[TestStdout/YAML_AutoDiscover - 1]
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -202,7 +202,7 @@ spec:
 
 ---
 
-[Test/YAML_Explicit - 1]
+[TestStdout/YAML_Explicit - 1]
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -237,7 +237,7 @@ spec:
 
 ---
 
-[Test/PROPERTIES_AutoDiscover - 1]
+[TestStdout/PROPERTIES_AutoDiscover - 1]
 database.url = jdbc:mysql://localhost:3306/mydatabase
 database.username = test
 database.password = password
@@ -253,7 +253,277 @@ inty.mc.int.int = 123
 
 ---
 
-[Test/PROPERTIES_Explicit - 1]
+[TestStdout/PROPERTIES_Explicit - 1]
+database.url = jdbc:mysql://localhost:3306/mydatabase
+database.username = test
+database.password = password
+port = 9000
+server.host = 127.0.0.1
+server.port = 8080
+bool.x = true
+bla.blub = YOYOYO
+special.characters = %^&*()_+
+floaty.mc.float.float = 123.123
+stringy.mc.string.string = string
+inty.mc.int.int = 123
+
+---
+
+[TestFile/XML_AutoDiscover - 1]
+<?xml version="1.0"?>
+<customers>
+   <customer id="246">
+      <name>YOYOYO</name>
+      <address>
+         <street>true</street>
+         <city>Framingham</city>
+         <state>MA</state>
+         <zip>01701</zip>
+      </address>
+      <address>
+         <street>720 Prospect</street>
+         <city>string</city>
+         <state>MA</state>
+         <zip>123.123</zip>
+      </address>
+      <address ding="%^&amp;*()_+">
+         <street>120 Ridge</street>
+         <state>%^&amp;*()_+</state>
+         <zip>01760</zip>
+      </address>
+   </customer>
+</customers>
+---
+
+[TestFile/XML_Explicit - 1]
+<?xml version="1.0"?>
+<customers>
+   <customer id="246">
+      <name>YOYOYO</name>
+      <address>
+         <street>true</street>
+         <city>Framingham</city>
+         <state>MA</state>
+         <zip>01701</zip>
+      </address>
+      <address>
+         <street>720 Prospect</street>
+         <city>string</city>
+         <state>MA</state>
+         <zip>123.123</zip>
+      </address>
+      <address ding="%^&amp;*()_+">
+         <street>120 Ridge</street>
+         <state>%^&amp;*()_+</state>
+         <zip>01760</zip>
+      </address>
+   </customer>
+</customers>
+---
+
+[TestFile/JSON_AutoDiscover - 1]
+{
+  "quiz": {
+    "list": {
+      "list": [
+        "123",
+        "123.123",
+        "true",
+        "string",
+        "%^&*()_+"
+      ]
+    },
+    "maths": {
+      "q1": {
+        "answer": "12",
+        "options": [
+          "10",
+          "11",
+          "12",
+          "13"
+        ],
+        "question": "5 + 7 = ?"
+      },
+      "q2": {
+        "answer": "4",
+        "options": [
+          "1",
+          "2",
+          "3",
+          "4"
+        ],
+        "question": "12 - 8 = ?"
+      }
+    },
+    "sport": {
+      "q1": {
+        "answer": "Huston Rocket",
+        "options": [
+          "New York Bulls",
+          "%^&*()_+",
+          "Golden State Warriros",
+          "Huston Rocket"
+        ],
+        "question": "Which one is correct team name in NBA?"
+      }
+    },
+    "test": {
+      "bla_blub": "yoyoyo",
+      "bool": "true",
+      "float": "123.123",
+      "int": "123",
+      "special_characters": "%^&*()_+",
+      "string": "string"
+    }
+  }
+}
+---
+
+[TestFile/JSON_Explicit - 1]
+{
+  "quiz": {
+    "list": {
+      "list": [
+        "123",
+        "123.123",
+        "true",
+        "string",
+        "%^&*()_+"
+      ]
+    },
+    "maths": {
+      "q1": {
+        "answer": "12",
+        "options": [
+          "10",
+          "11",
+          "12",
+          "13"
+        ],
+        "question": "5 + 7 = ?"
+      },
+      "q2": {
+        "answer": "4",
+        "options": [
+          "1",
+          "2",
+          "3",
+          "4"
+        ],
+        "question": "12 - 8 = ?"
+      }
+    },
+    "sport": {
+      "q1": {
+        "answer": "Huston Rocket",
+        "options": [
+          "New York Bulls",
+          "%^&*()_+",
+          "Golden State Warriros",
+          "Huston Rocket"
+        ],
+        "question": "Which one is correct team name in NBA?"
+      }
+    },
+    "test": {
+      "bla_blub": "yoyoyo",
+      "bool": "true",
+      "float": "123.123",
+      "int": "123",
+      "special_characters": "%^&*()_+",
+      "string": "string"
+    }
+  }
+}
+---
+
+[TestFile/YAML_AutoDiscover - 1]
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+spec:
+  replicas: "123"
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    list:
+      - "123"
+      - "123.123"
+      - string
+      - "true"
+      - '%^&*()_+'
+    metadata:
+      labels:
+        app: nginx
+        bool: "true"
+        float: "123.123"
+        int: "123"
+        special_characters: '%^&*()_+'
+        string: string
+    spec:
+      containers:
+        - image: nginx:1.14.2
+          imagePullPolicy: '%^&*()_+'
+          name: nginx
+          ports:
+            - containerPort: 80
+
+---
+
+[TestFile/YAML_Explicit - 1]
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+spec:
+  replicas: "123"
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    list:
+      - "123"
+      - "123.123"
+      - string
+      - "true"
+      - '%^&*()_+'
+    metadata:
+      labels:
+        app: nginx
+        bool: "true"
+        float: "123.123"
+        int: "123"
+        special_characters: '%^&*()_+'
+        string: string
+    spec:
+      containers:
+        - image: nginx:1.14.2
+          imagePullPolicy: '%^&*()_+'
+          name: nginx
+          ports:
+            - containerPort: 80
+
+---
+
+[TestFile/PROPERTIES_AutoDiscover - 1]
+database.url = jdbc:mysql://localhost:3306/mydatabase
+database.username = test
+database.password = password
+port = 9000
+server.host = 127.0.0.1
+server.port = 8080
+bool.x = true
+bla.blub = YOYOYO
+special.characters = %^&*()_+
+floaty.mc.float.float = 123.123
+stringy.mc.string.string = string
+inty.mc.int.int = 123
+
+---
+
+[TestFile/PROPERTIES_Explicit - 1]
 database.url = jdbc:mysql://localhost:3306/mydatabase
 database.username = test
 database.password = password
