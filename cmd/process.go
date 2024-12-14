@@ -51,6 +51,9 @@ var processCmd = &cobra.Command{
 			if err != nil {
 				return err
 			}
+		} else {
+			// Dump the content to stdout
+			os.Stdout.Write(o.Bytes())
 		}
 
 		return nil
