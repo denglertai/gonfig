@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<customers>
+   <customer id="${INT|to_int|multiply(m=2)}">
+      <name>${BLA_BLUB|upper}</name>
+      <address>
+         <street>${BOOL}</street>
+         <city>Framingham</city>
+         <state>MA</state>
+         <zip>01701</zip>
+      </address>
+      <address>
+         <street>720 Prospect</street>
+         <city>${STRING}</city>
+         <state>MA</state>
+         <zip>${FLOAT}</zip>
+      </address>
+      <address ding="${SPECIAL_CHARACTERS}">
+         <street>120 Ridge</street>
+         <state>${SPECIAL_CHARACTERS}</state>
+         <zip>01760</zip>
+      </address>
+   </customer>
+</customers>

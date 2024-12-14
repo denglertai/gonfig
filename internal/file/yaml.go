@@ -47,6 +47,7 @@ func setInner(location interface{}, value interface{}, hierarchy []string) error
 		if err != nil {
 			return err
 		}
+		l[hierarchy[0]] = currentLocation
 	case []interface{}:
 		// If the current location is a list, we need to go deeper
 		if len(hierarchy) == 0 {
@@ -63,6 +64,15 @@ func setInner(location interface{}, value interface{}, hierarchy []string) error
 			l[index] = value
 			return nil
 		}
+
+		// If the current location is a map, we need to go deeper
+		currentLocation := l[index]
+		remainingHierarchy := hierarchy[1:]
+		err = setInner(currentLocation, value, remainingHierarchy)
+		if err != nil {
+			return err
+		}
+		l[index] = currentLocation
 	default:
 		return fmt.Errorf("unsupported type: %T", l)
 	}
@@ -122,6 +132,8 @@ func (y *YamlConfigFileHandler) handleEntry(path string, key string, hierarchy [
 		y.appendEntry(path, key, hierarchy, v)
 	case string:
 		y.appendEntry(path, key, hierarchy, v)
+	case bool:
+		y.appendEntry(path, key, hierarchy, v)
 	case map[interface{}]interface{}:
 		// Convert the map to a map[string]interface{}
 		m := make(map[string]interface{})
@@ -143,7 +155,8 @@ func (y *YamlConfigFileHandler) handleEntry(path string, key string, hierarchy [
 		for i, item := range v {
 			is := strconv.Itoa(i)
 			currentPath := appendToPath(path, is)
-			currentHierarchy := append(hierarchy, is)
+			copiedHierarchy := append(make([]string, 0), hierarchy...)
+			currentHierarchy := append(copiedHierarchy, is)
 			err := y.handleEntry(currentPath, is, currentHierarchy, item)
 			if err != nil {
 				return err

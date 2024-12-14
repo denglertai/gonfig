@@ -8,6 +8,7 @@ import (
 	"path"
 
 	"github.com/denglertai/gonfig/internal/general"
+	"github.com/denglertai/gonfig/internal/value"
 )
 
 // ConfigEntry represents a single configuration entry
@@ -73,7 +74,13 @@ func (fp *FileProcessor) Process() error {
 	}
 
 	for entry := range entries {
-		fmt.Print(entry)
+		newVal, err := value.ProcessValue(entry.GetValue())
+
+		if err != nil {
+			return err
+		}
+
+		entry.SetValue(fmt.Sprintf("%v", newVal))
 	}
 
 	return handler.Write(fp.Output)
@@ -83,6 +90,8 @@ func (fp *FileProcessor) Process() error {
 func (fp *FileProcessor) getFileProcessor() (ConfigFileHandler, error) {
 	if fp.FileType == general.Undefined {
 		ext := path.Ext(fp.FileName)
+		// strip the leading dot
+		ext = ext[1:]
 		fp.FileType = general.FileType(ext)
 	}
 
