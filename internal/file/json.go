@@ -25,6 +25,11 @@ func (j *HierarchicalConfigEntry) Key() string {
 	return j.key
 }
 
+// Path returns the path of the configuration entry
+func (j *HierarchicalConfigEntry) Path() string {
+	return j.path
+}
+
 // GetValue returns the value of the configuration entry
 func (j *HierarchicalConfigEntry) GetValue() string {
 	return j.value

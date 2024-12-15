@@ -4,17 +4,21 @@ import (
 	"fmt"
 	"io"
 	"iter"
+	"log/slog"
 	"os"
 	"path"
 
 	"github.com/denglertai/gonfig/internal/general"
 	"github.com/denglertai/gonfig/internal/value"
+	"github.com/denglertai/gonfig/pkg/logging"
 )
 
 // ConfigEntry represents a single configuration entry
 type ConfigEntry interface {
 	// Key returns the key of the configuration entry
 	Key() string
+	// Path returns the path of the configuration entry
+	Path() string
 	// GetValue returns the value of the configuration entry
 	GetValue() string
 	// SetValue sets the value of the configuration entry
@@ -43,6 +47,14 @@ type FileProcessor struct {
 
 // NewFileProcessor creates a new file processor
 func NewFileProcessor(fileName string, fileType general.FileType, output io.Writer) *FileProcessor {
+	if fileType == general.Undefined {
+		ext := path.Ext(fileName)
+		// strip the leading dot
+		ext = ext[1:]
+		fileType = general.FileType(ext)
+		logging.Debug("File type not provided, using the file extension", "file", fileName, "type", fileType)
+	}
+
 	return &FileProcessor{
 		FileName: fileName,
 		FileType: fileType,
@@ -52,8 +64,11 @@ func NewFileProcessor(fileName string, fileType general.FileType, output io.Writ
 
 // Process processes the file
 func (fp *FileProcessor) Process() error {
+	fileGroup := slog.Group("file", "name", fp.FileName, "type", fp.FileType)
+
 	handler, err := fp.getFileProcessor()
 	if err != nil {
+		logging.Error("Error initializing file processor", "err", err, fileGroup)
 		return err
 	}
 
@@ -65,21 +80,27 @@ func (fp *FileProcessor) Process() error {
 
 	err = handler.Read(file)
 	if err != nil {
+		logging.Error("Failed to read the file", "err", err, fileGroup)
 		return err
 	}
 
 	entries, err := handler.Process()
 	if err != nil {
+		logging.Error("Failed to process the file", "err", err, fileGroup)
 		return err
 	}
 
 	for entry := range entries {
+		logging.Debug("Processing entry", "entry", entry.Path(), fileGroup)
+
 		newVal, err := value.ProcessValue(entry.GetValue())
 
 		if err != nil {
+			logging.Error("Failed to process the value", "err", err, "entry", entry.Path(), fileGroup)
 			return err
 		}
 
+		logging.Debug("Setting new value", "entry", entry.Path(), "value", newVal, fileGroup)
 		entry.SetValue(fmt.Sprintf("%v", newVal))
 	}
 
@@ -88,13 +109,6 @@ func (fp *FileProcessor) Process() error {
 
 // getFileProcessor returns the file processor based on the file type
 func (fp *FileProcessor) getFileProcessor() (ConfigFileHandler, error) {
-	if fp.FileType == general.Undefined {
-		ext := path.Ext(fp.FileName)
-		// strip the leading dot
-		ext = ext[1:]
-		fp.FileType = general.FileType(ext)
-	}
-
 	switch fp.FileType {
 	case general.YAML:
 		return NewYamlConfigFileHandler(), nil

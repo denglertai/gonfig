@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/denglertai/gonfig/internal/file"
+	"github.com/denglertai/gonfig/pkg/logging"
 	"github.com/spf13/cobra"
 )
 
@@ -24,12 +25,14 @@ var processCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// In case we want to write the output to the source file directly
 		if inline {
+			logging.Debug("Inline processing enabled")
 			output = configSettings.File
 			overwriteExistingFile = true
 		}
 
 		// Store the output temporarily in a buffer
 		var o = new(bytes.Buffer)
+		logging.Info("Processing file", "file", configSettings.File, "type", configSettings.FileType)
 		processor := file.NewFileProcessor(configSettings.File, configSettings.FileType, o)
 		err := processor.Process()
 		if err != nil {
@@ -41,6 +44,9 @@ var processCmd = &cobra.Command{
 			if _, err := os.Stat(output); err == nil && !overwriteExistingFile {
 				return ErrFileExists(fmt.Errorf("file %s already exists; Use -w / --overwrite if this is intended", output))
 			}
+
+			// Write the output to the file
+			logging.Info("Writing output", "file", output)
 
 			f, err := os.Create(output)
 			if err != nil {

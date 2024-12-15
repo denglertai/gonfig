@@ -25,6 +25,11 @@ func (p *PropertiesConfigEntry) Key() string {
 	return p.key
 }
 
+// Path returns the path of the configuration entry
+func (p *PropertiesConfigEntry) Path() string {
+	return p.key
+}
+
 // GetValue returns the value of the configuration entry
 func (p *PropertiesConfigEntry) GetValue() string {
 	return p.val

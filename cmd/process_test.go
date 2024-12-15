@@ -87,7 +87,7 @@ func TestStdout(t *testing.T) {
 			t.Setenv("SPECIAL_CHARACTERS", "%^&*()_+")
 
 			// Take the path of the file and pass it as an argument to the command and see if it works
-			args := []string{"config", "process", "-f", tC.file, "-o", "-"}
+			args := []string{"config", "process", "-f", tC.file, "-o", "-", "-l", "trace", "-s"}
 
 			if tC.fileType != general.Undefined {
 				args = append(args, "-t", string(tC.fileType))
@@ -179,7 +179,7 @@ func TestFile(t *testing.T) {
 			}()
 
 			// Take the path of the file and pass it as an argument to the command and see if it works
-			args := []string{"config", "process", "-f", tC.file, "-o", fileName, "-w"}
+			args := []string{"config", "process", "-f", tC.file, "-o", fileName, "-w", "-l", "trace", "-s"}
 
 			if tC.fileType != general.Undefined {
 				args = append(args, "-t", string(tC.fileType))
@@ -283,7 +283,7 @@ func TestFileOverwrite(t *testing.T) {
 			file.Close()
 
 			// Take the path of the file and pass it as an argument to the command and see if it works
-			args := []string{"config", "process", "-f", fileName, "-i"}
+			args := []string{"config", "process", "-f", fileName, "-i", "-l", "trace", "-s"}
 
 			if tC.fileType != general.Undefined {
 				args = append(args, "-t", string(tC.fileType))
