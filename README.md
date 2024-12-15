@@ -2,6 +2,19 @@
 
 gonfig is a project intended to process different types of config files and fill their contents using environment variables
 
+## Usage
+
+
+
+## Logging
+
+Logging is being done using `log/slog` package. 
+Within `./pkg/logging` are some wrapper functions to also support additional log levels `trace` and `fatal`.
+The latter automatically exits with `1`.
+
+Logging may be configured using the switches `-log-level` / `l` and `-log-source` / `-s` on the cli itself.
+Since the cli outputs to stdout, all logs are being written to stderr.
+
 ## Plugins
 
 Plugins are expected to be located in `./plugins/` and are loaded dynamically on startup by walking through the directory looking for files ending with `.so`.

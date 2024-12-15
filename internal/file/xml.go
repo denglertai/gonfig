@@ -14,11 +14,23 @@ type XmlAttributeConfigEntry struct {
 	attribute *etree.Attr
 	value     string
 	edited    bool
+	pathBuilt bool
+	path      string
 }
 
 // Key returns the key of the configuration entry
 func (x *XmlAttributeConfigEntry) Key() string {
 	return x.attribute.Key
+}
+
+// Path returns the path of the configuration entry
+func (x *XmlAttributeConfigEntry) Path() string {
+	if !x.pathBuilt {
+		x.path = fmt.Sprintf("%s@%s", x.attribute.Element().GetPath(), x.attribute.Key)
+		x.pathBuilt = true
+	}
+
+	return x.path
 }
 
 // GetValue returns the value of the configuration entry
@@ -34,12 +46,24 @@ func (x *XmlAttributeConfigEntry) SetValue(value string) {
 
 // XmlConfigEntry represents a single configuration entry for an element
 type XmlElementConfigEntry struct {
-	element *etree.Element
+	element   *etree.Element
+	pathBuilt bool
+	path      string
 }
 
 // Key returns the key of the configuration entry
 func (x *XmlElementConfigEntry) Key() string {
 	return x.element.Tag
+}
+
+// Path returns the path of the configuration entry
+func (x *XmlElementConfigEntry) Path() string {
+	if !x.pathBuilt {
+		x.path = x.element.GetPath()
+		x.pathBuilt = true
+	}
+
+	return x.element.GetPath()
 }
 
 // GetValue returns the value of the configuration entry

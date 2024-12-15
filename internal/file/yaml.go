@@ -108,6 +108,7 @@ func (y *YamlConfigFileHandler) Read(source io.Reader) (err error) {
 		return err
 	}
 	err = y.handleChildren(y.container, "", []string{})
+
 	return err
 }
 
