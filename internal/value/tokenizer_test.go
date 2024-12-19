@@ -4,6 +4,8 @@ import (
 	"os"
 	"path"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestProcessValue(t *testing.T) {
@@ -77,7 +79,7 @@ func TestProcessValue(t *testing.T) {
 		{
 			name: "Simple Env Var Lookup with conversion and multiplication",
 			args: args{
-				value: "${BLA_BLUB|to_int|multiply(m=\"2\")}",
+				value: `${BLA_BLUB|to_int|multiply(m=2)}`,
 			},
 			envVars: map[string]string{
 				"BLA_BLUB": "123",
@@ -99,6 +101,51 @@ func TestProcessValue(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Errorf("ProcessValue() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestComplexValues(t *testing.T) {
+	testCases := []struct {
+		desc    string
+		input   string
+		want    string
+		wantErr bool
+	}{
+		{
+			desc:  "Prefix URL test",
+			input: "xx${TEST1}",
+			want:  "xxhttp://url.tld",
+		},
+		{
+			desc:  "Whitespace URL path test",
+			input: "${TEST1} - ${TEST2} / ${TEST3}",
+			want:  "http://url.tld - path / something",
+		},
+		{
+			desc:  "Build URL",
+			input: "${TEST1}/${TEST2}?param1=value&param2=${TEST3}",
+			want:  "http://url.tld/path?param1=value&param2=something",
+		},
+		{
+			desc:  "Concat TEST1 TEST2 TEST3",
+			input: "${TEST1}${TEST2}${TEST3}",
+			want:  "http://url.tldpathsomething",
+		},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			t.Setenv("TEST1", "http://url.tld")
+			t.Setenv("TEST2", "path")
+			t.Setenv("TEST3", "something")
+
+			result, err := ProcessValue(tC.input)
+			if tC.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tC.want, result)
 			}
 		})
 	}
