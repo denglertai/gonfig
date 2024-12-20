@@ -3,21 +3,38 @@ version: 2
 
 project_name: gonfig
 
-archives:
-  - builds:
-    - default
-    format: tar.gz
-    format_overrides:
-      - # Which GOOS to override the format for.
-        goos: windows
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
 
-        # The format to use for the given GOOS.
-        #
-        # Valid options are `tar.gz`, `tgz`, `tar.xz`, `txz`, tar`, `gz`, `zip`, `binary`, and `none`.
+archives:
+  - format: tar.gz
+    # this name template makes the OS and Arch compatible with the results of `uname`.
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    # use zip for windows archives
+    format_overrides:
+      - goos: windows
         format: zip
     files:
-      - LICENSE.txt
-      - CHANGELOG.md
+      - LICENSE
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+
 sboms:
   - artifacts: binary
     args: ["$artifact", "--output", "cyclonedx-json=$document"]
