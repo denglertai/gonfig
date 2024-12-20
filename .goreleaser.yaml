@@ -1,0 +1,20 @@
+archives:
+  - builds:
+    - default
+    format: tar.gz
+    format_overrides:
+      - # Which GOOS to override the format for.
+        goos: windows
+
+        # The format to use for the given GOOS.
+        #
+        # Valid options are `tar.gz`, `tgz`, `tar.xz`, `txz`, tar`, `gz`, `zip`, `binary`, and `none`.
+        format: zip
+    files:
+      - LICENSE.txt
+      - CHANGELOG.md
+sboms:
+  - artifacts: any
+    args: ["$artifact", "--output", "cyclonedx-json=$document"]
+    documents:
+      - "${artifact}.cyclonedx.sbom.json"
