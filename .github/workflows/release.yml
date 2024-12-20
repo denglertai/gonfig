@@ -1,11 +1,10 @@
 name: goreleaser
 
 on:
-  pull_request:
   push:
-    # run only against tags
-    tags:
-      - "*"
+    # Pattern matched against refs/tags
+    tags:        
+      - '**'           # Push events to every tag including hierarchical tags like v1.0/beta
 
 permissions:
   contents: write
