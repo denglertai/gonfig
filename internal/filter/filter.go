@@ -4,6 +4,12 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"golang.org/x/crypto/bcrypt"
+)
+
+const (
+	bcryptFilterKey = "bcrypt"
 )
 
 // Filter provides a basic abstraction for being able to process input and transform or validate it as needed
@@ -190,6 +196,19 @@ func init() {
 				}
 
 				return value.(int) * m, nil
+			},
+		}
+	}
+
+	filterMap[bcryptFilterKey] = func(token string) Filter {
+		return &FuncFilter{
+			fn: func(value any, _ map[string]string) (any, error) {
+				hash, err := bcrypt.GenerateFromPassword([]byte(value.(string)), bcrypt.DefaultCost)
+				if err != nil {
+					return "", err
+				}
+
+				return string(hash), nil
 			},
 		}
 	}
