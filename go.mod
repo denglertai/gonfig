@@ -4,7 +4,7 @@ go 1.23.3
 
 require (
 	github.com/beevik/etree v1.4.1
-	github.com/bzick/tokenizer v1.4.7
+	github.com/bzick/tokenizer v1.4.9
 	github.com/samber/lo v1.47.0
 	gopkg.in/yaml.v3 v3.0.1
 )
