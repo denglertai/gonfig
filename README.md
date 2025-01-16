@@ -128,13 +128,22 @@ In this case the value for `ENV_VAR` will be read, afterwards the filters `filte
 
 This may also be used as part of substrings 
 ```console
-$  https://${DOMAIN}/search?${QUERY | url_escape}
+$ gonfig value https://${DOMAIN}/search?${QUERY | url_escape}
 https://google.com/search?q=Nanowar+of+Steel+-+HelloWorld.java
 ```
 Note: The filter `url_escape` does not exist. But it may be added either to the list of default filters or as a plugin.
 
 ## Future goals
 
+Docs:
+* Improve documentation
+
+Stability:
+* Improve error handling
+* More tests
+* More useful logging
+
+Filters:
 * Datatype conversion: Write the values back to the file with the correct datatypes applied (int, string, bool, ...) while respecting the possibilities of the given file type
 * Validation: 
   * Ensure that a value is filled (required values)
