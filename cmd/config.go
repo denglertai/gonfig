@@ -15,7 +15,7 @@ var configCmd = &cobra.Command{
 	Short:            "",
 	Long:             ``,
 	TraverseChildren: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		configSettings.FileType = general.FileType(fileType)
 		return nil
 	},

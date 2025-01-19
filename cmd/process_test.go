@@ -202,6 +202,84 @@ func TestFile(t *testing.T) {
 	}
 }
 
+// TestPassingExtension tests the case where the user passes a file with a different extension than the actual file type
+func TestPassingExtension(t *testing.T) {
+	wd, err := os.Getwd()
+	assert.NoError(t, err)
+
+	testCases := []struct {
+		desc     string
+		file     string
+		fileType general.FileType
+		wantErr  bool
+	}{
+		{
+			desc:     "XML Explicit",
+			file:     path.Join(wd, "./testdata/xml/customers_param.xml"),
+			fileType: general.XML,
+		},
+		{
+			desc:     "JSON Explicit",
+			file:     path.Join(wd, "./testdata/json/quiz_param.json"),
+			fileType: general.JSON,
+		},
+		{
+			desc:     "YAML Explicit",
+			file:     path.Join(wd, "./testdata/yaml/deployment_param.yaml"),
+			fileType: general.YAML,
+		},
+		{
+			desc:     "PROPERTIES Explicit",
+			file:     path.Join(wd, "./testdata/properties/props_param.properties"),
+			fileType: general.PROPERTIES,
+		},
+	}
+
+	t.Setenv("BLA_BLUB", "yoyoyo")
+	t.Setenv("INT", "123")
+	t.Setenv("FLOAT", "123.123")
+	t.Setenv("BOOL", "true")
+	t.Setenv("STRING", "string")
+	t.Setenv("SPECIAL_CHARACTERS", "%^&*()_+")
+
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			tmp := os.TempDir()
+			file, err := os.CreateTemp(tmp, "gonfig-test-*")
+			assert.NoError(t, err)
+			fileName := file.Name()
+
+			c, err := os.ReadFile(tC.file)
+			assert.NoError(t, err)
+
+			_, err = file.Write(c)
+			assert.NoError(t, err)
+
+			file.Close()
+			defer func() {
+				os.Remove(fileName)
+			}()
+
+			// Take the path of the file and pass it as an argument to the command and see if it works
+			args := []string{"config", "process", "-f", fileName, "-i", "-l", "trace", "-s", "-t", string(tC.fileType)}
+
+			rootCmd.SetArgs(args)
+			err = rootCmd.Execute()
+			assert.NoError(t, err)
+
+			// Read the file and compare it with the snapshot
+			file, err = os.Open(fileName)
+			assert.NoError(t, err)
+			stat, err := file.Stat()
+			assert.NoError(t, err)
+			res := make([]byte, stat.Size())
+			file.Read(res)
+
+			snaps.MatchSnapshot(t, string(res))
+		})
+	}
+}
+
 func TestFileOverwrite(t *testing.T) {
 	wd, err := os.Getwd()
 	assert.NoError(t, err)
