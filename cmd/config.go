@@ -6,6 +6,7 @@ package cmd
 import (
 	"github.com/denglertai/gonfig/internal/config"
 	"github.com/denglertai/gonfig/internal/general"
+	"github.com/denglertai/gonfig/pkg/logging"
 	"github.com/spf13/cobra"
 )
 
@@ -15,14 +16,33 @@ var configCmd = &cobra.Command{
 	Short:            "",
 	Long:             ``,
 	TraverseChildren: true,
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		configSettings.FileType = general.FileType(fileType)
-		return nil
-	},
 }
 
-var configSettings = config.NewSettings()
+func getConfigSettings(args []string) *config.Settings {
+	err := configCmd.ParseFlags(args)
+	logging.Error("Error parsing flags", "error", err)
+
+	configSettings := config.NewSettings()
+
+	configSettings.File = fileName
+
+	if len(fileType) > 0 {
+		configSettings.FileType = general.FileType(fileType)
+	} else {
+		configSettings.FileType = general.Undefined
+	}
+
+	// Unset the global variables after reading the values to prevent them from being reused in subsequent tests
+	fileType = ""
+	fileName = ""
+
+	logging.Debug("Config settings", "settings", configSettings)
+
+	return configSettings
+}
+
 var fileType string
+var fileName string
 
 func init() {
 	rootCmd.AddCommand(configCmd)
@@ -37,7 +57,7 @@ func init() {
 	// is called directly, e.g.:
 	// configCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 
-	configCmd.PersistentFlags().StringVarP(&configSettings.File, "file", "f", "", "Path to the configuration file")
+	configCmd.PersistentFlags().StringVarP(&fileName, "file", "f", "", "Path to the configuration file")
 	configCmd.MarkFlagRequired("file")
 
 	configCmd.PersistentFlags().StringVarP(&fileType, "file-type", "t", "", "Type of file to be read. If not set, the file type will be inferred from the file extension")

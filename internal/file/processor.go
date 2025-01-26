@@ -52,7 +52,7 @@ func NewFileProcessor(fileName string, fileType general.FileType, output io.Writ
 		// strip the leading dot
 		ext = ext[1:]
 		fileType = general.FileType(ext)
-		logging.Debug("File type not provided, using the file extension", "file", fileName, "type", fileType)
+		logging.Debug("File type not provided, using the file's extension", "file", fileName, "type", fileType)
 	}
 
 	return &FileProcessor{
