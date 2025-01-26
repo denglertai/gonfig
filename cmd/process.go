@@ -19,10 +19,15 @@ var overwriteExistingFile bool
 
 // processCmd represents the process command
 var processCmd = &cobra.Command{
-	Use:   "process",
-	Short: "Processes a file",
-	Long:  `Processes a file and outputs the result to the dersired output. Defaults to stdout`,
+	Use:              "process",
+	Short:            "Processes a file",
+	Long:             `Processes a file and outputs the result to the dersired output. Defaults to stdout`,
+	TraverseChildren: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		configSettings := getConfigSettings(args)
+
+		logging.Info("RunE", "command", cmd.Name(), "args", args, "configSettings", configSettings)
+
 		// In case we want to write the output to the source file directly
 		if inline {
 			logging.Debug("Inline processing enabled")
