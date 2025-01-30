@@ -3,7 +3,7 @@ module github.com/denglertai/gonfig
 go 1.23.5
 
 require (
-	github.com/beevik/etree v1.4.1
+	github.com/beevik/etree v1.5.0
 	github.com/bzick/tokenizer v1.4.10
 	github.com/samber/lo v1.49.1
 	gopkg.in/yaml.v3 v3.0.1
