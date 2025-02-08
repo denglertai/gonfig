@@ -961,3 +961,73 @@ Random User with spaces:
   hash: 0819afba2ba9206442ddea68249ff02a
 
 ---
+
+[TestFile/YML_AutoDiscover - 1]
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+spec:
+  replicas: "123"
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    list:
+      - "123"
+      - "123.123"
+      - string
+      - "true"
+      - '%^&*()_+'
+    metadata:
+      labels:
+        app: nginx
+        bool: "true"
+        float: "123.123"
+        int: "123"
+        special_characters: '%^&*()_+'
+        string: string
+    spec:
+      containers:
+        - image: nginx:1.14.2
+          imagePullPolicy: '%^&*()_+'
+          name: nginx
+          ports:
+            - containerPort: 80
+
+---
+
+[TestFile/YML_Explicit - 1]
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+spec:
+  replicas: "123"
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    list:
+      - "123"
+      - "123.123"
+      - string
+      - "true"
+      - '%^&*()_+'
+    metadata:
+      labels:
+        app: nginx
+        bool: "true"
+        float: "123.123"
+        int: "123"
+        special_characters: '%^&*()_+'
+        string: string
+    spec:
+      containers:
+        - image: nginx:1.14.2
+          imagePullPolicy: '%^&*()_+'
+          name: nginx
+          ports:
+            - containerPort: 80
+
+---

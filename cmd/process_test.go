@@ -148,6 +148,16 @@ func TestFile(t *testing.T) {
 			fileType: general.YAML,
 		},
 		{
+			desc:     "YML AutoDiscover",
+			file:     path.Join(wd, "./testdata/yaml/deployment_param.yml"),
+			fileType: general.Undefined,
+		},
+		{
+			desc:     "YML Explicit",
+			file:     path.Join(wd, "./testdata/yaml/deployment_param.yml"),
+			fileType: general.YML,
+		},
+		{
 			desc:     "PROPERTIES AutoDiscover",
 			file:     path.Join(wd, "./testdata/properties/props_param.properties"),
 			fileType: general.Undefined,
