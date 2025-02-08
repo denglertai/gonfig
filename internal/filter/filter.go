@@ -1,6 +1,8 @@
 package filter
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"os"
 	"strconv"
 	"strings"
@@ -10,6 +12,7 @@ import (
 
 const (
 	bcryptFilterKey = "bcrypt"
+	md5FilterKey    = "md5"
 )
 
 // Filter provides a basic abstraction for being able to process input and transform or validate it as needed
@@ -209,6 +212,20 @@ func init() {
 				}
 
 				return string(hash), nil
+			},
+		}
+	}
+
+	filterMap[md5FilterKey] = func(token string) Filter {
+		return &FuncFilter{
+			fn: func(value any, _ map[string]string) (any, error) {
+				hash := md5.New()
+				_, err := hash.Write([]byte(value.(string)))
+				if err != nil {
+					return "", err
+				}
+				// return the md5 hash as a string
+				return hex.EncodeToString(hash.Sum(nil)), nil
 			},
 		}
 	}

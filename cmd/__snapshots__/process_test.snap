@@ -943,3 +943,21 @@ stringy.mc.string.string = string
 inty.mc.int.int = 123
 
 ---
+
+[TestYamlMove/YAML_AutoDiscover - 1]
+Random User with spaces:
+  backend_roles:
+    - admin
+  description: Demo admin user
+  hash: 0819afba2ba9206442ddea68249ff02a
+
+---
+
+[TestYamlMove/YAML_Explicit - 1]
+Random User with spaces:
+  backend_roles:
+    - admin
+  description: Demo admin user
+  hash: 0819afba2ba9206442ddea68249ff02a
+
+---

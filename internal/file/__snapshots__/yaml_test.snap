@@ -44,3 +44,21 @@ spec:
             - containerPort: 80
 
 ---
+
+[TestYamlKeyTree - 1]
+${USERNAME}:
+  backend_roles:
+    - admin
+  description: Demo admin user
+  hash: ${PASSWORD | bcrypt}
+
+---
+
+[TestYamlKeyTreeEdit - 1]
+${USERNAME}:
+  description: Demo admin user
+  frontend_roles:
+    - admin
+  hash: ${PASSWORD | bcrypt}
+
+---
