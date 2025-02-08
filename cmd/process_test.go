@@ -383,3 +383,72 @@ func TestFileOverwrite(t *testing.T) {
 		})
 	}
 }
+
+func TestYamlMove(t *testing.T) {
+	wd, err := os.Getwd()
+	assert.NoError(t, err)
+
+	testCases := []struct {
+		desc     string
+		file     string
+		fileType general.FileType
+		wantErr  bool
+	}{
+		{
+			desc:     "YAML AutoDiscover",
+			file:     path.Join(wd, "./testdata/yaml/key.yaml"),
+			fileType: general.Undefined,
+		},
+		{
+			desc:     "YAML Explicit",
+			file:     path.Join(wd, "./testdata/yaml/key.yaml"),
+			fileType: general.YAML,
+		},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			t.Setenv("PASSWORD", "adjkgadjgjagdjdag")
+			t.Setenv("USERNAME", "Random User with spaces")
+
+			tmp := os.TempDir()
+			file, err := os.CreateTemp(tmp, fmt.Sprintf("gonfig-test-*%s", path.Ext(tC.file)))
+			assert.NoError(t, err)
+			fileName := file.Name()
+
+			// Copy the file to the temp file
+			source, err := os.Open(tC.file) //open the source file
+			assert.NoError(t, err)
+			defer source.Close()
+
+			defer func() {
+				file.Close()
+				os.Remove(fileName)
+			}()
+
+			_, err = io.Copy(file, source) //copy the contents of source to destination file
+			assert.NoError(t, err)
+			file.Close()
+
+			// Take the path of the file and pass it as an argument to the command and see if it works
+			args := []string{"config", "process", "-f", fileName, "-i", "-l", "trace", "-s"}
+
+			if tC.fileType != general.Undefined {
+				args = append(args, "-t", string(tC.fileType))
+			}
+
+			rootCmd.SetArgs(args)
+			err = rootCmd.Execute()
+			assert.NoError(t, err)
+
+			// Read the file and compare it with the snapshot
+			file, err = os.Open(fileName)
+			assert.NoError(t, err)
+			stat, err := file.Stat()
+			assert.NoError(t, err)
+			res := make([]byte, stat.Size())
+			file.Read(res)
+
+			snaps.MatchSnapshot(t, string(res))
+		})
+	}
+}

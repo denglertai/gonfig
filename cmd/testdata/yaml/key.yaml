@@ -1,0 +1,5 @@
+${USERNAME}:
+  hash: "${PASSWORD | md5}"
+  backend_roles:
+  - "admin"
+  description: "Demo admin user"

@@ -1,0 +1,5 @@
+${USERNAME}:
+  hash: "${PASSWORD | bcrypt}"
+  backend_roles:
+  - "admin"
+  description: "Demo admin user"

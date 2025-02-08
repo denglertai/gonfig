@@ -10,11 +10,18 @@ import (
 	"github.com/samber/lo"
 )
 
+// hierachicalConfigBase represents a base configuration entry
+type hierachicalConfigBase interface {
+	ConfigEntry
+	isEdited() bool
+}
+
 // HierarchicalConfigEntry represents a single configuration entry
 type HierarchicalConfigEntry struct {
+	hierachicalConfigBase
+	edited        bool
 	originalValue interface{}
 	value         string
-	edited        bool
 	path          string
 	key           string
 	hierarchy     []string
@@ -37,7 +44,7 @@ func (j *HierarchicalConfigEntry) GetValue() string {
 
 // SetValue sets the value of the configuration entry
 func (j *HierarchicalConfigEntry) SetValue(value string) {
-	j.edited = j.value != value
+	j.edited = j.edited || j.value != value
 	j.value = value
 }
 
@@ -55,6 +62,48 @@ func (j *HierarchicalConfigEntry) getConvertedValue() (interface{}, error) {
 	}
 
 	return nil, fmt.Errorf("unsupported type: %T", j.originalValue)
+}
+
+// isEdited returns whether the configuration entry has been edited
+func (j *HierarchicalConfigEntry) isEdited() bool {
+	return j.edited
+}
+
+// HierarchicalConfigKey represents a single configuration entry's key
+type HierarchicalConfigKey struct {
+	hierachicalConfigBase
+	edited        bool
+	originalValue interface{}
+	value         string
+	path          string
+	key           string
+	hierarchy     []string
+}
+
+// Key returns the key of the configuration entry
+func (j *HierarchicalConfigKey) Key() string {
+	return j.key
+}
+
+// Path returns the path of the configuration entry
+func (j *HierarchicalConfigKey) Path() string {
+	return j.path
+}
+
+// GetValue returns the value of the configuration entry
+func (j *HierarchicalConfigKey) GetValue() string {
+	return j.value
+}
+
+// SetValue sets the value of the configuration entry
+func (j *HierarchicalConfigKey) SetValue(value string) {
+	j.edited = j.edited || j.value != value
+	j.value = value
+}
+
+// isEdited returns whether the configuration entry has been edited
+func (j *HierarchicalConfigKey) isEdited() bool {
+	return j.edited
 }
 
 // hierarchicalConfigHandler represents a basic configuration handler for hierarchical configuration files
@@ -147,6 +196,18 @@ func (j *JsonConfigFileHandler) handleChildren(container *gabs.Container, path s
 
 func (j *hierarchicalConfigHandler) appendEntry(path, key string, hierarchy []string, value interface{}) {
 	entry := &HierarchicalConfigEntry{
+		path:          path,
+		key:           key,
+		originalValue: value,
+		value:         fmt.Sprintf("%v", value),
+		hierarchy:     hierarchy,
+	}
+
+	j.entries = append(j.entries, entry)
+}
+
+func (j *hierarchicalConfigHandler) appendKey(path, key string, hierarchy []string, value interface{}) {
+	entry := &HierarchicalConfigKey{
 		path:          path,
 		key:           key,
 		originalValue: value,
