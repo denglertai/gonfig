@@ -26,7 +26,7 @@ to quickly create a Cobra application.`,
 				return err
 			}
 
-			cmd.Print(result)
+			cmd.OutOrStdout().Write([]byte(result.(string)))
 		}
 
 		return nil
