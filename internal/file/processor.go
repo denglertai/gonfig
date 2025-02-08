@@ -111,6 +111,8 @@ func (fp *FileProcessor) Process() error {
 func (fp *FileProcessor) getFileProcessor() (ConfigFileHandler, error) {
 	switch fp.FileType {
 	case general.YAML:
+		fallthrough
+	case general.YML:
 		return NewYamlConfigFileHandler(), nil
 	case general.JSON:
 		return NewJsonConfigFileHandler(), nil

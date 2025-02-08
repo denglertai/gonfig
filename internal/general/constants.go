@@ -10,6 +10,8 @@ const (
 	JSON FileType = "json"
 	// YAML represents a YAML file
 	YAML FileType = "yaml"
+	// YML represents a YML file
+	YML FileType = "yml"
 	// XML represents an XML file
 	XML FileType = "xml"
 	// PROPERTIES represents a properties file
