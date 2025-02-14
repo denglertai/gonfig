@@ -21,6 +21,8 @@ github.com/gkampitakis/go-snaps v0.5.9 h1:jO2Fe2q2fhLNcMQjYh/EAGUzrZiIdwD/CkM8+Q
 github.com/gkampitakis/go-snaps v0.5.9/go.mod h1:PcKmy8q5Se7p48ywpogN5Td13reipz1Iivah4wrTIvY=
 github.com/gkampitakis/go-snaps v0.5.10 h1:yZ6YrFAkXpJaKZ5Bjee+NKXCd2l4e+1HjBz1/dnGzd4=
 github.com/gkampitakis/go-snaps v0.5.10/go.mod h1:PcKmy8q5Se7p48ywpogN5Td13reipz1Iivah4wrTIvY=
+github.com/gkampitakis/go-snaps v0.5.11 h1:LFG0ggUKR+KEiiaOvFCmLgJ5NO2zf93AxxddkBn3LdQ=
+github.com/gkampitakis/go-snaps v0.5.11/go.mod h1:PcKmy8q5Se7p48ywpogN5Td13reipz1Iivah4wrTIvY=
 github.com/goccy/go-yaml v1.15.13 h1:Xd87Yddmr2rC1SLLTm2MNDcTjeO/GYo0JGiww6gSTDg=
 github.com/goccy/go-yaml v1.15.13/go.mod h1:XBurs7gK8ATbW4ZPGKgcbrY1Br56PdM69F7LkFRi1kA=
 github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2s0bqwp9tc8=
