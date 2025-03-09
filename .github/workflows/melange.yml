@@ -45,6 +45,7 @@ jobs:
         repository: denglertai/apk
         ref: 'gh-pages'
         path: apk
+        token: '${{ secrets.APK_REPO_TOKEN }}'
 
     - name: Run melange
       run: melange build melange.yaml --out-dir ./apk --arch=x86_64
