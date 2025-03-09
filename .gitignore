@@ -25,3 +25,8 @@ go.work.sum
 .env
 
 dist/
+
+# Melange
+melange.rsa
+packages/
+apk/
