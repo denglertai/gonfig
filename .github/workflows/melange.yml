@@ -22,7 +22,7 @@ jobs:
         go-version: stable
         
     - name: Set up melange
-      run: go install github.com/chainguard-dev/melange/cmd/melange@latest
+      run: go install chainguard.dev/melange@latest
 
     - name: Checkout
       uses: actions/checkout@v4
