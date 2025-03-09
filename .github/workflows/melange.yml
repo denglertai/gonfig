@@ -1,0 +1,54 @@
+name: melange
+
+on:
+  push:
+    # Pattern matched against refs/tags
+    tags:        
+      - '**'           # Push events to every tag including hierarchical tags like v1.0/beta
+
+permissions:
+  contents: write
+  # packages: write
+  # issues: write
+  # id-token: write
+
+jobs:
+  melange:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: stable
+        
+    - name: Set up melange
+      run: go install github.com/chainguard-dev/melange/cmd/melange@latest
+
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Store melange signing rsa key
+      run: echo "${{ secrets.MELANGE_RSA_KEY }}" > melange.rsa 
+  
+    - name: clone apk repository
+      uses: actions/checkout@v4
+      with:
+        repository: denglertai/apk
+        ref: 'gh-pages'
+        path: apk
+
+    - name: Run melange
+      run: melange build melange.yaml --out-dir ./apk
+    
+    - name: Commit changes
+      run: |
+        cd apk
+        git config --global user.email "${{ github.actor }}"
+        git config --global user.name "${{ github.actor }}@users.noreply.github.com"
+        git add .
+        git commit -m "Update apk for gonfig@${{ github.ref }}"
+        git push
+      env:
+        GITHUB_TOKEN: "${{ secrets.APK_REPO_TOKEN }}"

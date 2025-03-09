@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=https://github.com/chainguard-dev/melange/raw/refs/heads/main/pkg/config/schema.json
+package:
+  name: gonfig
+  version: 0.0.4
+  epoch: 0
+  description: |
+    A simple configuration library for Go. It supports JSON, YAML, XML and PROPERTIES files.
+  target-architecture:
+    - amd64
+    - x86_64
+    - arm64
+
+environment:
+  contents:
+    repositories:
+      - https://packages.wolfi.dev/os
+    keyring:
+      - https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
+      - ./melange.rsa.pub
+    packages:
+    - go
+    - git
+    - syft
+
+pipeline:
+  - name: goreleaser
+    uses: goreleaser/build
+    with:
+      snapshot: "true"
