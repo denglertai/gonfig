@@ -44,15 +44,15 @@ jobs:
       with:
         repository: denglertai/apk
         ref: 'gh-pages'
-        path: ${{ runner.temp }}/apk
+        path: ./apk
         token: '${{ secrets.APK_REPO_TOKEN }}'
 
     - name: Run melange
-      run: melange build melange.yaml --out-dir ${{ runner.temp }}/apk --arch=x86_64 --signing-key ${{ runner.temp }}/melange.rsa
+      run: melange build melange.yaml --out-dir ./apk --arch=x86_64 --signing-key ${{ runner.temp }}/melange.rsa
     
     - name: Commit changes
       run: |
-        cd ${{ runner.temp }}/apk
+        cd ./apk
         git config --global user.email "${{ github.actor }}"
         git config --global user.name "${{ github.actor }}@users.noreply.github.com"
         git add .
