@@ -29,8 +29,12 @@ jobs:
       with:
         fetch-depth: 0
 
-    - name: Store melange signing rsa key
-      run: echo "${{ secrets.MELANGE_RSA_KEY }}" > melange.rsa 
+    - name: Prepare melange build
+      run: | 
+        echo "${{ secrets.MELANGE_RSA_KEY }}" > melange.rsa 
+        
+        sudo apt-get update -y
+        sudo apt-get install -y bubblewrap
   
     - name: clone apk repository
       uses: actions/checkout@v4
@@ -40,7 +44,7 @@ jobs:
         path: apk
 
     - name: Run melange
-      run: melange build melange.yaml --out-dir ./apk
+      run: melange build melange.yaml --out-dir ./apk --arch=x86_64
     
     - name: Commit changes
       run: |
