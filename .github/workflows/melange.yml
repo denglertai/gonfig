@@ -31,7 +31,7 @@ jobs:
 
     - name: Prepare melange build
       run: | 
-        echo "${{ secrets.MELANGE_RSA_KEY }}" > melange.rsa 
+        echo "${{ secrets.MELANGE_RSA_KEY }}" > ${{ runner.temp }}/melange.rsa 
         
         sudo apt-get update -y
         sudo apt-get install -y bubblewrap
@@ -44,15 +44,15 @@ jobs:
       with:
         repository: denglertai/apk
         ref: 'gh-pages'
-        path: apk
+        path: ${{ runner.temp }}/apk
         token: '${{ secrets.APK_REPO_TOKEN }}'
 
     - name: Run melange
-      run: melange build melange.yaml --out-dir ./apk --arch=x86_64
+      run: melange build melange.yaml --out-dir ${{ runner.temp }}/apk --arch=x86_64 --signing-key ${{ runner.temp }}/melange.rsa
     
     - name: Commit changes
       run: |
-        cd apk
+        cd ${{ runner.temp }}/apk
         git config --global user.email "${{ github.actor }}"
         git config --global user.name "${{ github.actor }}@users.noreply.github.com"
         git add .
