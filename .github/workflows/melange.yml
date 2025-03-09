@@ -35,6 +35,9 @@ jobs:
         
         sudo apt-get update -y
         sudo apt-get install -y bubblewrap
+
+        sudo sysctl -w kernel.apparmor_restrict_unprivileged_unconfined=0
+        sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
   
     - name: clone apk repository
       uses: actions/checkout@v4
