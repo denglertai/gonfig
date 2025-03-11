@@ -52,7 +52,7 @@ jobs:
     
     - name: Commit changes
       run: |
-        cp ./melange.rsa.pub cd ./apk/melange.rsa.pub
+        cp ./melange.rsa.pub ./apk/melange.rsa.pub
 
         cd ./apk
         git config --global user.email "${{ github.actor }}"
