@@ -6,6 +6,43 @@ The idea for creating this was while having to handle application's config files
 
 An example would be `&` (ampersand) within `xml` files which has to be escaped with `&amp;`
 
+## Installation
+
+Installing `gonfig` can currently be done by downloading the latest release from [https://github.com/denglertai/gonfig/releases/latest](https://github.com/denglertai/gonfig/releases/latest) 
+
+Installing the apk from [https://denglertai.github.io/apk/](https://denglertai.github.io/apk/).
+```bash
+# Add the repository to the list of apk repositories
+$ echo "https://denglertai.github.io/apk/" >> /etc/apk/repositories
+# Download the key used for signing the packages
+$ curl https://denglertai.github.io/apk/melange.rsa.pub > /etc/apk/keys/denglertai.rsa.pub
+# Update the package list
+$ apk update
+# Install gonfig
+$ apk add gonfig
+```
+
+Using [apko](https://github.com/chainguard-dev/apko/) for building images:
+```yaml
+contents:
+  keyring:
+    - https://denglertai.github.io/apk/melange.rsa.pub
+  repositories:
+    - https://denglertai.github.io/apk/
+  packages:
+    - gonfig
+accounts:
+  groups:
+    - groupname: nonroot
+      gid: 65532
+  users:
+    - username: nonroot
+      uid: 65532
+  run-as: 65532
+entrypoint:
+  command: /usr/bin/gonfig
+```
+
 ## Usage
 
 `gonfig` may just be used as any other CLI by simply invoking it.
