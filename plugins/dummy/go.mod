@@ -1,3 +1,3 @@
 module github.com/denglertai/gonfig/plugins/dummy
 
-go 1.24.1
+go 1.24.2
