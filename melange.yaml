@@ -23,7 +23,7 @@ environment:
     - syft
 
 pipeline:
-  - name: goreleaser
-    uses: goreleaser/build
+  - uses: go/build
     with:
-      snapshot: "true"
+      packages: .
+      output: gonfig
