@@ -13,7 +13,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/goccy/go-yaml v1.18.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	golang.org/x/text v0.25.0 // indirect
+	golang.org/x/text v0.26.0 // indirect
 )
 
 require (
@@ -34,5 +34,5 @@ require (
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
-	golang.org/x/crypto v0.38.0
+	golang.org/x/crypto v0.39.0
 )
