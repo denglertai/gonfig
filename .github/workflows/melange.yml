@@ -25,7 +25,7 @@ jobs:
       run: go install chainguard.dev/melange@latest
 
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         fetch-depth: 0
 
@@ -40,7 +40,7 @@ jobs:
         sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
   
     - name: clone apk repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         repository: denglertai/apk
         ref: 'gh-pages'
