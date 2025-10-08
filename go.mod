@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/beevik/etree v1.6.0
 	github.com/bzick/tokenizer v1.4.10
-	github.com/samber/lo v1.51.0
+	github.com/samber/lo v1.52.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
