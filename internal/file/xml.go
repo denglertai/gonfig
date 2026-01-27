@@ -7,6 +7,7 @@ import (
 	"iter"
 
 	"github.com/beevik/etree"
+	"github.com/denglertai/gonfig/internal/value"
 )
 
 // XmlConfigEntry represents a single configuration entry for an attribute
@@ -49,6 +50,7 @@ type XmlElementConfigEntry struct {
 	element   *etree.Element
 	pathBuilt bool
 	path      string
+	fromCData bool
 }
 
 // Key returns the key of the configuration entry
@@ -95,6 +97,8 @@ func (x *XmlConfigFileHandler) Read(source io.Reader) error {
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(source)
 
+	// Enable PreserveCData to keep CDATA sections intact
+	x.document.ReadSettings.PreserveCData = true
 	err := x.document.ReadFromBytes(buf.Bytes())
 
 	if err != nil {
@@ -120,8 +124,24 @@ func (x *XmlConfigFileHandler) Read(source io.Reader) error {
 // handleChildElements recursively processes the child elements and their attributes
 func (x *XmlConfigFileHandler) handleChildElements(elements []*etree.Element) {
 	for _, element := range elements {
+		fromCData := false
+		for _, child := range element.Child {
+			if cdata, ok := child.(*etree.CharData); ok && cdata.IsCData() {
+				processed := cdata.Data
+				if val, err := value.ProcessValue(cdata.Data); err == nil {
+					if str, ok := val.(string); ok {
+						processed = str
+					}
+				}
+				element.SetText(processed)
+				fromCData = true
+				break
+			}
+		}
+
 		x.entries = append(x.entries, &XmlElementConfigEntry{
-			element: element,
+			element:   element,
+			fromCData: fromCData,
 		})
 
 		for _, attr := range element.Attr {
@@ -149,14 +169,20 @@ func (x *XmlConfigFileHandler) Process() (iter.Seq[ConfigEntry], error) {
 func (x *XmlConfigFileHandler) Write(target io.Writer) error {
 	// Need to re-process all Attribute entries to ensure they are written to the document
 	for _, entry := range x.entries {
-		if attr, ok := entry.(*XmlAttributeConfigEntry); !ok {
-			continue
-		} else if attr.edited {
-			attr.attribute.Element().CreateAttr(attr.attribute.Key, attr.value)
+		if attr, ok := entry.(*XmlAttributeConfigEntry); ok {
+			if attr.edited {
+				attr.attribute.Element().CreateAttr(attr.attribute.Key, attr.value)
+			}
+		}
+		if elem, ok := entry.(*XmlElementConfigEntry); ok {
+			val := elem.element.Text()
+			if elem.fromCData {
+				elem.element.SetCData(val)
+			} else {
+				elem.element.SetText(val)
+			}
 		}
 	}
-
 	_, err := x.document.WriteTo(target)
-
 	return err
 }
