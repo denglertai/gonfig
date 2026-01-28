@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <appender name="STDOUTJSON" class="ch.qos.logback.core.ConsoleAppender">
+		<encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+			<providers>
+				<pattern>
+					<omitEmptyFields>true</omitEmptyFields>
+					<pattern>
+						<![CDATA[
+						{
+						  "timestamp": "%date{ISO8601}",
+						  "logger": "%logger{0}",
+						  "service_name": "${SERVICE_NAME}",
+						  "component": "Component",
+						  "level": "%level",
+						  "thread": "%thread",
+						  "ndc": "%X{NDC}",
+						  "message": "%message",
+						  "traceId": "%mdc{traceId}"
+						}
+						]]>
+					</pattern>
+				</pattern>
+			</providers>
+		</encoder>
+	</appender>
+</configuration>
