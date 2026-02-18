@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/denglertai/gonfig/pkg/logging"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -44,6 +45,8 @@ type EnvVarFilter struct {
 
 // Process replaces the value with the value of an environment variable
 func (f *EnvVarFilter) Process(_ any) (any, error) {
+	logging.Debug("Processing EnvVarFilter", "envVar", f.envVar)
+
 	value, found := os.LookupEnv(f.envVar)
 	if !found {
 		return "", nil
@@ -69,6 +72,7 @@ func (f *FileInterceptorFilter) Process(value any) (any, error) {
 
 	if strings.HasPrefix(s, "@") {
 		path := s[1:]
+		logging.Debug("Processing FileInterceptorFilter", "path", path)
 		if _, err := os.Stat(path); err != nil {
 			return value, nil
 		}
@@ -91,6 +95,7 @@ func NewFileInterceptorFilter() *FileInterceptorFilter {
 
 // ApplyFilters applies a list of filters to a value
 func ApplyFilters(value any, filters []Filter) (any, error) {
+	logging.Debug("Applying filters", "filters", len(filters))
 	for _, filter := range filters {
 		var err error
 		value, err = filter.Process(value)
@@ -98,6 +103,7 @@ func ApplyFilters(value any, filters []Filter) (any, error) {
 			return "", err
 		}
 	}
+	logging.Debug("Finished applying filters")
 
 	return value, nil
 }
@@ -110,7 +116,7 @@ type notFoundFilter struct {
 
 // Process returns the filter name as the value
 func (f notFoundFilter) Process(value any) (any, error) {
-	// ToDo: Log info  that filter was not found
+	logging.Warn("Filter not found, returning original value", "filter", f.filter)
 	return value, nil
 }
 
@@ -119,6 +125,8 @@ var filterMap = map[string]func(string) Filter{}
 
 // NewFilter creates a new filter based on the provided token
 func NewFilter(token string) Filter {
+	logging.Debug("Creating filter", "token", token)
+
 	if constructor, found := filterMap[token]; found {
 		return constructor(token)
 	}
