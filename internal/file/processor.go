@@ -120,6 +120,8 @@ func (fp *FileProcessor) getFileProcessor() (ConfigFileHandler, error) {
 		return NewXmlConfigFileHandler(), nil
 	case general.PROPERTIES:
 		return NewPropertiesConfigFileHandler(), nil
+	case general.PLAIN:
+		return NewPlainFileProcessor(), nil
 	default:
 		return nil, fmt.Errorf("unsupported file type: %v", fp.FileType)
 	}
