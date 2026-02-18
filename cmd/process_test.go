@@ -167,6 +167,11 @@ func TestFile(t *testing.T) {
 			file:     path.Join(wd, "./testdata/properties/props_param.properties"),
 			fileType: general.PROPERTIES,
 		},
+		{
+			desc:     "PLAIN Shell Script",
+			file:     path.Join(wd, "./testdata/plain/test.sh"),
+			fileType: general.PLAIN,
+		},
 	}
 	for _, tC := range testCases {
 		t.Run(tC.desc, func(t *testing.T) {

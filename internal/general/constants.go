@@ -16,4 +16,6 @@ const (
 	XML FileType = "xml"
 	// PROPERTIES represents a properties file
 	PROPERTIES FileType = "properties"
+	// PLAIN represents a plain text file
+	PLAIN FileType = "plain"
 )
