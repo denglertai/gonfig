@@ -7,10 +7,19 @@ import (
 	"strings"
 
 	"github.com/denglertai/gonfig/internal/filter"
+	"github.com/denglertai/gonfig/pkg/logging"
 	pkgplugin "github.com/denglertai/gonfig/pkg/plugin"
 )
 
 func InitPlugins() {
+	wd, err := os.Getwd()
+	if err != nil {
+		logging.Error("Failed to get current working directory", "error", err)
+		return
+	}
+
+	logging.Trace("Starting loading plugins", "pwd", wd)
+
 	filepath.Walk("plugins", func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -24,6 +33,7 @@ func InitPlugins() {
 		// Load the plugin
 		plugin, err := plugin.Open(path)
 		if err != nil {
+			logging.Error("Failed to load plugin", "path", path, "error", err)
 			return err
 		}
 
@@ -33,6 +43,9 @@ func InitPlugins() {
 		if err == nil {
 			filters := (*pf).Filters()
 			filter.AddPluginFilters(filters)
+			logging.Debug("Loaded filter plugin", "plugin", path, "filters", len(filters))
+		} else {
+			logging.Error("Failed to lookup PluginFilter", "path", path, "error", err)
 		}
 
 		// Lookup for PluginCommand
@@ -44,6 +57,8 @@ func InitPlugins() {
 
 		return nil
 	})
+
+	logging.Trace("Finished loading plugins", "pwd", wd)
 }
 
 func lookUpSymbol[M any](plugin *plugin.Plugin, symbolName string) (*M, error) {
