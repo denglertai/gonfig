@@ -24,6 +24,10 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: stable
+      - name: Install Linux ARM64 cross-toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu
       - name: Install Zig for CGO cross-compilation
         run: |
           wget -q https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz
