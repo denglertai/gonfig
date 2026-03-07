@@ -1,15 +1,90 @@
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# GoReleaser configuration using Zig for CGO cross-compilation
 version: 2
 
 project_name: gonfig
 
+before:
+  hooks:
+    # Install zig if not present (optional)
+    # - go install github.com/dosgo/zigtool/zig@latest
+
 builds:
-  - env:
-      - CGO_ENABLED=0
+  # Linux AMD64
+  - id: linux-amd64
+    env:
+      - CGO_ENABLED=1
+      - CC=zig cc -target x86_64-linux-gnu
+      - CXX=zig c++ -target x86_64-linux-gnu
     goos:
       - linux
-      - windows
+    goarch:
+      - amd64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+
+  # Linux ARM64
+  - id: linux-arm64
+    env:
+      - CGO_ENABLED=1
+      - CC=zig cc -target aarch64-linux-gnu
+      - CXX=zig c++ -target aarch64-linux-gnu
+    goos:
+      - linux
+    goarch:
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+
+  # macOS AMD64
+  - id: darwin-amd64
+    env:
+      - CGO_ENABLED=1
+      - CC=zig cc -target x86_64-macos
+      - CXX=zig c++ -target x86_64-macos
+    goos:
       - darwin
+    goarch:
+      - amd64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+
+  # macOS ARM64
+  - id: darwin-arm64
+    env:
+      - CGO_ENABLED=1
+      - CC=zig cc -target aarch64-macos
+      - CXX=zig c++ -target aarch64-macos
+    goos:
+      - darwin
+    goarch:
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+
+  # Windows AMD64
+  - id: windows-amd64
+    env:
+      - CGO_ENABLED=1
+      - CC=zig cc -target x86_64-windows-gnu
+      - CXX=zig c++ -target x86_64-windows-gnu
+    goos:
+      - windows
+    goarch:
+      - amd64
+    flags:
+      - -trimpath
+      - -buildmode=exe
+    ldflags:
+      - -s -w
 
 archives:
   - format: tar.gz

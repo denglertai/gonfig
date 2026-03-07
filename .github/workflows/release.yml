@@ -24,6 +24,14 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: stable
+      - name: Install Zig for CGO cross-compilation
+        run: |
+          wget -q https://ziglang.org/download/0.15.2/zig-linux-x86_64-0.15.2.tar.xz
+          tar xf zig-linux-x86_64-0.15.2.tar.xz
+          sudo mv zig-linux-x86_64-0.15.2 /usr/local/zig
+          echo "/usr/local/zig" >> $GITHUB_PATH
+      - name: Verify Zig installation
+        run: zig version
       - name: Verify tag does not already exist as release
         run: |
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
@@ -36,7 +44,7 @@ jobs:
         uses: anchore/sbom-action/download-syft@latest # installs syft
       # More assembly might be required: Docker logins, GPG, etc.
       # It all depends on your needs.
-      - name: Run GoReleaser
+      - name: Run GoReleaser with Zig
         uses: goreleaser/goreleaser-action@v7
         with:
           # either 'goreleaser' (default) or 'goreleaser-pro'
