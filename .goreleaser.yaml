@@ -24,8 +24,9 @@ builds:
   - id: linux-arm64
     env:
       - CGO_ENABLED=1
-      - CC=zig cc -target aarch64-linux-gnu
-      - CXX=zig c++ -target aarch64-linux-gnu
+      - CC=aarch64-linux-gnu-gcc
+      - CXX=aarch64-linux-gnu-g++
+      - CGO_LDFLAGS=-fuse-ld=gold
     goos:
       - linux
     goarch:
@@ -85,7 +86,7 @@ release:
   header: |
     ## Release {{ .Tag }}
     
-    Multi-architecture binaries built with CGO enabled using Zig {{ .Env.ZIG_VERSION | default "0.15.2" }}
+    Multi-architecture binaries built with CGO enabled
   footer: |
     **Full Changelog**: https://github.com/denglertai/gonfig/compare/{{ .PreviousTag }}...{{ .Tag }}
 
