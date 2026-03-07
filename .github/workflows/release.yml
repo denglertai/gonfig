@@ -68,3 +68,61 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-macos:
+    needs: goreleaser
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-13
+            goarch: amd64
+            archive_arch: x86_64
+          - runner: macos-latest
+            goarch: arm64
+            archive_arch: arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: stable
+      - name: Build Darwin binary with CGO
+        run: |
+          mkdir -p dist/darwin-${{ matrix.goarch }}
+          CGO_ENABLED=1 GOOS=darwin GOARCH=${{ matrix.goarch }} \
+            go build -trimpath -ldflags "-s -w" -o dist/darwin-${{ matrix.goarch }}/gonfig .
+          cp LICENSE dist/darwin-${{ matrix.goarch }}/LICENSE
+          tar -C dist/darwin-${{ matrix.goarch }} -czf dist/gonfig_Darwin_${{ matrix.archive_arch }}.tar.gz gonfig LICENSE
+      - name: Upload Darwin archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: darwin-${{ matrix.goarch }}
+          path: dist/gonfig_Darwin_${{ matrix.archive_arch }}.tar.gz
+
+  upload-macos-assets:
+    needs: build-macos
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Darwin archives
+        uses: actions/download-artifact@v4
+        with:
+          path: dist-macos
+      - name: Upload Darwin archives to release
+        run: |
+          set -euo pipefail
+          mapfile -t existing < <(gh release view "${GITHUB_REF_NAME}" --json assets --jq '.assets[].name')
+          shopt -s globstar nullglob
+          for file in dist-macos/**/*.tar.gz; do
+            name=$(basename "$file")
+            if printf '%s\n' "${existing[@]}" | grep -qx "$name"; then
+              echo "Skipping existing asset: $name"
+            else
+              echo "Uploading asset: $name"
+              gh release upload "${GITHUB_REF_NAME}" "$file"
+            fi
+          done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
