@@ -32,12 +32,25 @@ jobs:
           echo "/usr/local/zig" >> $GITHUB_PATH
       - name: Verify Zig installation
         run: zig version
-      - name: Verify tag does not already exist as release
+      - name: Set Zig version env var
+        run: echo "ZIG_VERSION=$(zig version)" >> $GITHUB_ENV
+      - name: Check if release already exists
+        id: release-check
         run: |
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
-            echo "Release for tag ${GITHUB_REF_NAME} already exists. Aborting."
-            exit 1
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "⚠️  Release for tag ${GITHUB_REF_NAME} already exists"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "✅ No existing release found"
           fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Delete existing release if present
+        if: steps.release-check.outputs.exists == 'true'
+        run: |
+          echo "Deleting existing release ${GITHUB_REF_NAME}..."
+          gh release delete "${GITHUB_REF_NAME}" --yes --cleanup-tag=false
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Setup syft
@@ -54,11 +67,3 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Create draft release (immutable)
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          draft: true
-          generate_release_notes: true
-          files: |
-            dist/*
