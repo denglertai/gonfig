@@ -11,9 +11,9 @@ Zig provides a simple, single-toolchain cross-compilation experience for CGO:
 ```bash
 # Install Zig (version 0.11.0 or later, 0.15.2 recommended)
 # On Linux
-wget https://ziglang.org/download/0.15.2/zig-linux-x86_64-0.15.2.tar.xz
-tar xf zig-linux-x86_64-0.15.2.tar.xz
-sudo mv zig-linux-x86_64-0.15.2 /usr/local/zig
+wget https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz
+tar xf zig-x86_64-linux-0.15.2.tar.xz
+sudo mv zig-x86_64-linux-0.15.2 /usr/local/zig
 export PATH=$PATH:/usr/local/zig
 
 # On macOS
