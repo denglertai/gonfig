@@ -14,6 +14,7 @@ Zig provides a simple, single-toolchain cross-compilation experience for CGO:
 wget https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz
 tar xf zig-x86_64-linux-0.15.2.tar.xz
 sudo mv zig-x86_64-linux-0.15.2 /usr/local/zig
+rm zig-x86_64-linux-0.15.2.tar.xz
 export PATH=$PATH:/usr/local/zig
 
 # On macOS
