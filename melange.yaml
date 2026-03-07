@@ -9,7 +9,10 @@ package:
     - amd64
     - x86_64
     - arm64
-
+  copyright:
+    - license: MIT
+      license-path: ./LICENSE
+      
 environment:
   contents:
     repositories:
@@ -24,6 +27,8 @@ environment:
 
 pipeline:
   - uses: go/build
+    environment:
+      CGO_ENABLED: "1"
     with:
       packages: .
       output: gonfig
