@@ -80,7 +80,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-13
+          - runner: macos-latest
             goarch: amd64
             archive_arch: x86_64
           - runner: macos-latest
@@ -96,6 +96,13 @@ jobs:
       - name: Build Darwin binary with CGO
         run: |
           mkdir -p dist/darwin-${{ matrix.goarch }}
+          if [ "${{ matrix.goarch }}" = "amd64" ]; then
+            export CC="clang -target x86_64-apple-darwin"
+            export CXX="clang++ -target x86_64-apple-darwin"
+          else
+            export CC=clang
+            export CXX=clang++
+          fi
           CGO_ENABLED=1 GOOS=darwin GOARCH=${{ matrix.goarch }} \
             go build -trimpath -ldflags "-s -w" -o dist/darwin-${{ matrix.goarch }}/gonfig .
           cp LICENSE dist/darwin-${{ matrix.goarch }}/LICENSE
