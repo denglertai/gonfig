@@ -110,6 +110,20 @@ changelog:
       - "^docs:"
       - "^test:"
 
+release:
+  github:
+    owner: denglertai
+    name: gonfig
+  draft: true
+  prerelease: auto
+  make_latest: true
+  header: |
+    ## Release {{ .Tag }}
+    
+    Multi-architecture binaries built with CGO enabled using Zig {{ .Env.ZIG_VERSION | default "0.15.2" }}
+  footer: |
+    **Full Changelog**: https://github.com/denglertai/gonfig/compare/{{ .PreviousTag }}...{{ .Tag }}
+
 sboms:
   - artifacts: binary
     args: ["$artifact", "--output", "cyclonedx-json=$document"]
