@@ -189,7 +189,10 @@ Example config file:
 ```yaml
 log-level: debug
 log-source: true
+plugin-path: ./plugins
 ```
+
+`plugin-path` can be configured in `.gonfig.yaml` and is resolved relative to the current working directory when provided as a relative path.
 
 ### Examples
 
@@ -231,6 +234,12 @@ The plugin directory can be configured via:
 1. config file key `plugin-path`
 
 Default plugin directory: `./plugins` (relative to the current working directory)
+
+Example using an absolute plugin path in `.gonfig.yaml`:
+
+```yaml
+plugin-path: /opt/gonfig/plugins
+```
 
 By implementing plugins it is possible to extend gonfig by either supplying a set of `cobra.Commands` or a list of filters which may then be used within config files.
 
