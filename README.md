@@ -250,6 +250,63 @@ If a filter with a given name is already registered the next one will be skipped
 
 See [./plugins/dummy](./plugins/dummy/) for a simple example.
 
+## Releasing
+
+Releases are created by pushing a version tag. All build and publishing steps run in GitHub Actions (`release.yml` and `melange.yml`).
+
+Prerequisites:
+1. You are on `main` and it is fully synced with `origin/main`
+1. Your working tree has no uncommitted changes
+
+Recommended flow:
+
+1. Create a release preparation branch and update `melange.yaml` automatically:
+  ```bash
+  make prepare-release-branch VERSION=vX.Y.Z
+  ```
+  This creates `release/vX.Y.Z` by default, updates `package.version` in `melange.yaml` to `X.Y.Z`, commits, and pushes the branch.
+1. Open a PR from the release branch, review, and merge it into `main`.
+1. Switch back to `main` and pull latest merged changes:
+  ```bash
+  git switch main
+  git pull --ff-only origin main
+  ```
+1. Run tests:
+  ```bash
+  make test
+  ```
+1. Run a local dry-run build (no publish):
+  ```bash
+  make install-goreleaser
+  make release-dry-run
+  ```
+1. Draft a new release tag and push it:
+  ```bash
+  make release-draft
+  ```
+  `release-draft` reads `package.version` from `melange.yaml` and uses tag `v<package.version>`.
+
+What `release-draft` does:
+1. Verifies you are on `main` and `HEAD` matches `origin/main`
+1. Verifies the git working tree is clean
+1. Verifies `VERSION` uses semantic tag format `vX.Y.Z`
+1. Verifies `melange.yaml` version matches `VERSION` (without `v`)
+1. Runs tests
+1. Creates and pushes tag `VERSION`
+1. Triggers GitHub Actions workflows that build and publish release assets and APK updates
+
+Optional:
+1. Use a custom branch name:
+  ```bash
+  make prepare-release-branch VERSION=vX.Y.Z RELEASE_BRANCH=chore/release-vX.Y.Z
+  ```
+1. Override the release tag explicitly:
+  ```bash
+  make release-draft VERSION=vX.Y.Z
+  ```
+
+After the tag is pushed, monitor the workflow runs in GitHub Actions and verify the generated release assets and APK publication.
+
 ## Filters
 
 Filters are being used to process the values retrieved from environment variables.
