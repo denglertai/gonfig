@@ -43,6 +43,34 @@ entrypoint:
   command: /usr/bin/gonfig
 ```
 
+## Quick Start
+
+Create a minimal global config file:
+
+```yaml
+# .gonfig.yaml
+log-level: info
+log-source: false
+```
+
+Run with config from the current directory:
+
+```bash
+gonfig config process -f ./config.yaml
+```
+
+Or point to a dedicated config directory:
+
+```bash
+gonfig --config-path /etc/myapp config process -f ./config.yaml
+```
+
+You can override options at runtime with env vars or flags:
+
+```bash
+GONFIG_LOG_LEVEL=debug gonfig --log-level trace config process -f ./config.yaml
+```
+
 ## Usage
 
 `gonfig` may just be used as any other CLI by simply invoking it.
@@ -128,18 +156,90 @@ Usage:
     $2a$10$rX0TunRMPGlntJT6PKDgLuFYMud2gmTvDMFGhsTjpzYX7bLJeXF6G
     ```
 
-## Logging
+## Configuration
 
-Logging is being done using `log/slog` package. 
-Within `./pkg/logging` are some wrapper functions to also support additional log levels `trace` and `fatal`.
-The latter automatically exits with `1`.
+Global CLI configuration is loaded via `viper` from multiple sources.
 
-Logging may be configured using the switches `-log-level` / `l` and `-log-source` / `-s` on the cli itself.
-Since the cli outputs to stdout, all logs are being written to stderr.
+Order of precedence (highest to lowest):
+1. CLI flags
+1. Environment variables
+1. Config file (`.gonfig.yaml`)
+1. Built-in defaults
+
+### Options
+
+| Option | CLI flag | Environment variable | Default | Description |
+| --- | --- | --- | --- | --- |
+| Log level | `--log-level`, `-l` | `GONFIG_LOG_LEVEL` | `info` | Logging verbosity (`trace`, `debug`, `info`, `warn`, `error`, `fatal`) |
+| Include source location | `--log-source`, `-s` | `GONFIG_LOG_SOURCE` | `false` | Includes source location in log output |
+| Config directory | `--config-path` | `GONFIG_CONFIG_PATH` | empty | Directory that contains `.gonfig.yaml` |
+| Plugin directory | `--plugin-path` | `GONFIG_PLUGIN_PATH` | `./plugins` | Directory scanned recursively for plugin `.so` files |
+
+### Config File
+
+By default, `gonfig` searches for a `.gonfig.yaml` file in these directories:
+1. `$HOME`
+1. Current working directory (`.`)
+1. `/etc/gonfig`
+
+If `--config-path` (or `GONFIG_CONFIG_PATH`) is set, only that directory is used.
+
+Example config file:
+
+```yaml
+log-level: debug
+log-source: true
+plugin-path: ./plugins
+```
+
+`plugin-path` can be configured in `.gonfig.yaml` and is resolved relative to the current working directory when provided as a relative path.
+
+### Examples
+
+Set options via environment variables:
+
+```bash
+export GONFIG_LOG_LEVEL=debug
+export GONFIG_LOG_SOURCE=true
+gonfig config process -f ./config.yaml
+```
+
+Use a custom config directory:
+
+```bash
+gonfig --config-path /etc/myapp config process -f ./config.yaml
+```
+
+Override everything via CLI flag:
+
+```bash
+GONFIG_LOG_LEVEL=error gonfig --log-level trace config process -f ./config.yaml
+```
+
+### Logging Notes
+
+Logging is implemented with Go's `log/slog`.
+The wrappers in `./pkg/logging` also support `trace` and `fatal` levels.
+`fatal` exits with status code `1`.
+
+Since the CLI command output may be written to stdout, logs are written to stderr by default.
 
 ## Plugins
 
-Plugins are expected to be located in `./plugins/` and are loaded dynamically on startup by walking through the directory looking for files ending with `.so`.
+Plugins are loaded dynamically on startup by walking the configured plugin directory recursively and looking for files ending with `.so`.
+
+The plugin directory can be configured via:
+1. `--plugin-path`
+1. `GONFIG_PLUGIN_PATH`
+1. config file key `plugin-path`
+
+Default plugin directory: `./plugins` (relative to the current working directory)
+
+Example using an absolute plugin path in `.gonfig.yaml`:
+
+```yaml
+plugin-path: /opt/gonfig/plugins
+```
 
 By implementing plugins it is possible to extend gonfig by either supplying a set of `cobra.Commands` or a list of filters which may then be used within config files.
 
