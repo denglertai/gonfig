@@ -27,12 +27,14 @@ var rootCmd = &cobra.Command{
 		v.BindPFlag("log-level", cmd.PersistentFlags().Lookup("log-level"))
 		v.BindPFlag("log-source", cmd.PersistentFlags().Lookup("log-source"))
 		v.BindPFlag("config-path", cmd.PersistentFlags().Lookup("config-path"))
+		v.BindPFlag("plugin-path", cmd.PersistentFlags().Lookup("plugin-path"))
 
 		// Reload Viper after binding config-path flag to apply custom config path
 		v = config.SetupViper()
 		v.BindPFlag("log-level", cmd.PersistentFlags().Lookup("log-level"))
 		v.BindPFlag("log-source", cmd.PersistentFlags().Lookup("log-source"))
 		v.BindPFlag("config-path", cmd.PersistentFlags().Lookup("config-path"))
+		v.BindPFlag("plugin-path", cmd.PersistentFlags().Lookup("plugin-path"))
 
 		// Load into AppConfig
 		cfg := config.LoadAppConfig(v)
@@ -42,7 +44,7 @@ var rootCmd = &cobra.Command{
 		cmd.SetContext(ctx)
 
 		// Initialize the Plugin system
-		plugin.InitPlugins()
+		plugin.InitPlugins(cfg.PluginPath)
 
 		return logging.InitLogging(cfg.LogLevel, cfg.LogSource)
 	},
@@ -59,6 +61,7 @@ func GetAppConfig(cmd *cobra.Command) *config.AppConfig {
 		LogLevel:   "info",
 		LogSource:  false,
 		ConfigPath: "",
+		PluginPath: "./plugins",
 	}
 }
 
@@ -75,4 +78,5 @@ func init() {
 	rootCmd.PersistentFlags().StringP("log-level", "l", "info", "Log level (trace, debug, info, warn, error, fatal)")
 	rootCmd.PersistentFlags().BoolP("log-source", "s", false, "Whether to include source location in log output or not")
 	rootCmd.PersistentFlags().String("config-path", "", "Path to the directory containing .gonfig config file (env var: GONFIG_CONFIG_PATH)")
+	rootCmd.PersistentFlags().String("plugin-path", "./plugins", "Path to plugin directory (env var: GONFIG_PLUGIN_PATH)")
 }

@@ -11,17 +11,22 @@ import (
 	pkgplugin "github.com/denglertai/gonfig/pkg/plugin"
 )
 
-func InitPlugins() {
+func InitPlugins(pluginPath string) {
+	if pluginPath == "" {
+		pluginPath = "./plugins"
+	}
+
 	wd, err := os.Getwd()
 	if err != nil {
 		logging.Error("Failed to get current working directory", "error", err)
 		return
 	}
 
-	logging.Trace("Starting loading plugins", "pwd", wd)
+	logging.Trace("Starting loading plugins", "pwd", wd, "pluginPath", pluginPath)
 
-	filepath.Walk("plugins", func(path string, info os.FileInfo, err error) error {
+	filepath.Walk(pluginPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
+			logging.Debug("Failed to walk plugin path", "pluginPath", pluginPath, "error", err)
 			return err
 		}
 
@@ -58,7 +63,7 @@ func InitPlugins() {
 		return nil
 	})
 
-	logging.Trace("Finished loading plugins", "pwd", wd)
+	logging.Trace("Finished loading plugins", "pwd", wd, "pluginPath", pluginPath)
 }
 
 func lookUpSymbol[M any](plugin *plugin.Plugin, symbolName string) (*M, error) {

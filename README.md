@@ -173,6 +173,7 @@ Order of precedence (highest to lowest):
 | Log level | `--log-level`, `-l` | `GONFIG_LOG_LEVEL` | `info` | Logging verbosity (`trace`, `debug`, `info`, `warn`, `error`, `fatal`) |
 | Include source location | `--log-source`, `-s` | `GONFIG_LOG_SOURCE` | `false` | Includes source location in log output |
 | Config directory | `--config-path` | `GONFIG_CONFIG_PATH` | empty | Directory that contains `.gonfig.yaml` |
+| Plugin directory | `--plugin-path` | `GONFIG_PLUGIN_PATH` | `./plugins` | Directory scanned recursively for plugin `.so` files |
 
 ### Config File
 
@@ -222,7 +223,14 @@ Since the CLI command output may be written to stdout, logs are written to stder
 
 ## Plugins
 
-Plugins are expected to be located in `./plugins/` and are loaded dynamically on startup by walking through the directory looking for files ending with `.so`.
+Plugins are loaded dynamically on startup by walking the configured plugin directory recursively and looking for files ending with `.so`.
+
+The plugin directory can be configured via:
+1. `--plugin-path`
+1. `GONFIG_PLUGIN_PATH`
+1. config file key `plugin-path`
+
+Default plugin directory: `./plugins` (relative to the current working directory)
 
 By implementing plugins it is possible to extend gonfig by either supplying a set of `cobra.Commands` or a list of filters which may then be used within config files.
 

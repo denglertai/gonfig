@@ -1,6 +1,8 @@
 package config
 
 import (
+	"strings"
+
 	"github.com/denglertai/gonfig/internal/general"
 	"github.com/spf13/viper"
 )
@@ -26,6 +28,7 @@ type AppConfig struct {
 	LogLevel   string
 	LogSource  bool
 	ConfigPath string
+	PluginPath string
 }
 
 // LoadAppConfig loads configuration from multiple sources
@@ -35,6 +38,7 @@ func LoadAppConfig(v *viper.Viper) *AppConfig {
 		LogLevel:   v.GetString("log-level"),
 		LogSource:  v.GetBool("log-source"),
 		ConfigPath: v.GetString("config-path"),
+		PluginPath: v.GetString("plugin-path"),
 	}
 }
 
@@ -46,9 +50,11 @@ func SetupViper() *viper.Viper {
 	v.SetDefault("log-level", "info")
 	v.SetDefault("log-source", false)
 	v.SetDefault("config-path", "")
+	v.SetDefault("plugin-path", "./plugins")
 
 	// Environment variables
 	v.SetEnvPrefix("GONFIG")
+	v.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	v.AutomaticEnv() // Bind all env vars
 
 	// Config file search
