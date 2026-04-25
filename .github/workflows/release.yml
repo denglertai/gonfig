@@ -117,6 +117,8 @@ jobs:
     needs: build-macos
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
       - name: Download Darwin archives
         uses: actions/download-artifact@v8
         with:
