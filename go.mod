@@ -4,7 +4,7 @@ go 1.26
 
 require (
 	github.com/beevik/etree v1.7.0
-	github.com/bzick/tokenizer v1.4.10
+	github.com/bzick/tokenizer v1.5.1
 	github.com/samber/lo v1.53.0
 	github.com/spf13/viper v1.21.0
 	gopkg.in/yaml.v3 v3.0.1
