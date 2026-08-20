@@ -1,6 +1,6 @@
 module github.com/denglertai/gonfig
 
-go 1.26
+go 1.27
 
 require (
 	github.com/beevik/etree v1.7.1
