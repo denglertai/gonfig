@@ -46,5 +46,5 @@ require (
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
-	golang.org/x/crypto v0.55.0
+	golang.org/x/crypto v0.56.0
 )
