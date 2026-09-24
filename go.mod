@@ -4,7 +4,7 @@ go 1.27
 
 require (
 	github.com/Jeffail/gabs/v2 v2.7.0
-	github.com/beevik/etree v1.8.0
+	github.com/beevik/etree v1.8.1
 	github.com/bzick/tokenizer v1.5.1
 	github.com/gkampitakis/go-snaps v0.5.23
 	github.com/magiconair/properties v1.18.12
