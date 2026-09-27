@@ -2,8 +2,11 @@ package filter
 
 import (
 	"crypto/md5"
+	"encoding/base64"
 	"encoding/hex"
+	"fmt"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -12,8 +15,10 @@ import (
 )
 
 const (
-	bcryptFilterKey = "bcrypt"
-	md5FilterKey    = "md5"
+	bcryptFilterKey       = "bcrypt"
+	md5FilterKey          = "md5"
+	base64FilterKey       = "base64"
+	base64DecodeFilterKey = "base64_decode"
 )
 
 // Filter provides a basic abstraction for being able to process input and transform or validate it as needed
@@ -237,6 +242,86 @@ func init() {
 				}
 				// return the md5 hash as a string
 				return hex.EncodeToString(hash.Sum(nil)), nil
+			},
+		}
+	}
+
+	filterMap["base64"] = func(token string) Filter {
+		return &FuncFilter{
+			fn: func(value any, _ map[string]string) (any, error) {
+				return base64.StdEncoding.EncodeToString([]byte(value.(string))), nil
+			},
+		}
+	}
+
+	filterMap["base64_decode"] = func(token string) Filter {
+		return &FuncFilter{
+			fn: func(value any, _ map[string]string) (any, error) {
+				decoded, err := base64.StdEncoding.DecodeString(value.(string))
+				if err != nil {
+					return "", err
+				}
+				return string(decoded), nil
+			},
+		}
+	}
+
+	filterMap["replace"] = func(token string) Filter {
+		return &FuncFilter{
+			fn: func(value any, params map[string]string) (any, error) {
+				oldStr, ok1 := params["old"]
+				newStr, ok2 := params["new"]
+				if !ok1 || !ok2 {
+					return "", fmt.Errorf("replace filter requires 'old' and 'new' parameters")
+				}
+				return strings.ReplaceAll(value.(string), oldStr, newStr), nil
+			},
+		}
+	}
+
+	filterMap["regex"] = func(token string) Filter {
+		return &FuncFilter{
+			fn: func(value any, params map[string]string) (any, error) {
+				pattern, ok1 := params["pattern"]
+				replacement, ok2 := params["replacement"]
+				if !ok1 || !ok2 {
+					return "", fmt.Errorf("regex filter requires 'pattern' and 'replacement' parameters")
+				}
+
+				re, err := regexp.Compile(pattern)
+				if err != nil {
+					return "", err
+				}
+
+				return re.ReplaceAllString(value.(string), replacement), nil
+			},
+		}
+	}
+
+	filterMap["split"] = func(token string) Filter {
+		return &FuncFilter{
+			fn: func(value any, params map[string]string) (any, error) {
+				delimiter, ok := params["delimiter"]
+				if !ok {
+					return "", fmt.Errorf("split filter requires 'delimiter' parameter")
+				}
+				return strings.Split(value.(string), delimiter), nil
+			},
+		}
+	}
+
+	filterMap["join"] = func(token string) Filter {
+		return &FuncFilter{
+			fn: func(value any, params map[string]string) (any, error) {
+				delimiter, ok := params["delimiter"]
+				if !ok {
+					return "", fmt.Errorf("join filter requires 'delimiter' parameter")
+				}
+				parts, ok := value.([]string)
+				if !ok {
+					return "", fmt.Errorf("join filter expects a slice of strings")
+				}
+				return strings.Join(parts, delimiter), nil
 			},
 		}
 	}
