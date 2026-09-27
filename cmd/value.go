@@ -11,13 +11,10 @@ import (
 // valueCmd represents the value command
 var valueCmd = &cobra.Command{
 	Use:   "value",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "Extract or process a specific configuration value",
+	Long: `The value command allows you to extract and process individual configuration values.
+It supports various filters for transforming the output, such as uppercasing, lowercasing,
+trimming whitespace, or applying cryptographic functions like bcrypt or md5.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		for _, arg := range args {
 			result, err := value.ProcessValue(arg)
