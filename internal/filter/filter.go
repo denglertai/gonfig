@@ -49,6 +49,7 @@ func (f *EnvVarFilter) Process(_ any) (any, error) {
 
 	value, found := os.LookupEnv(f.envVar)
 	if !found {
+		// if the environment variable is not found, return an empty string and continue
 		return "", nil
 	}
 
@@ -74,11 +75,13 @@ func (f *FileInterceptorFilter) Process(value any) (any, error) {
 		path := s[1:]
 		logging.Debug("Processing FileInterceptorFilter", "path", path)
 		if _, err := os.Stat(path); err != nil {
+			// if the file does not exist, return an empty string and continue
 			return value, nil
 		}
 
 		file, err := os.ReadFile(path)
 		if err != nil {
+			// if the file exists but cannot be read, return and empty string and the error as is
 			return "", err
 		}
 

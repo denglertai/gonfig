@@ -29,13 +29,6 @@ var rootCmd = &cobra.Command{
 		v.BindPFlag("config-path", cmd.PersistentFlags().Lookup("config-path"))
 		v.BindPFlag("plugin-path", cmd.PersistentFlags().Lookup("plugin-path"))
 
-		// Reload Viper after binding config-path flag to apply custom config path
-		v = config.SetupViper()
-		v.BindPFlag("log-level", cmd.PersistentFlags().Lookup("log-level"))
-		v.BindPFlag("log-source", cmd.PersistentFlags().Lookup("log-source"))
-		v.BindPFlag("config-path", cmd.PersistentFlags().Lookup("config-path"))
-		v.BindPFlag("plugin-path", cmd.PersistentFlags().Lookup("plugin-path"))
-
 		// Load into AppConfig
 		cfg := config.LoadAppConfig(v)
 
