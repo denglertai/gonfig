@@ -20,7 +20,10 @@ var configCmd = &cobra.Command{
 
 func getConfigSettings(args []string) *config.Settings {
 	err := configCmd.ParseFlags(args)
-	logging.Error("Error parsing flags", "error", err)
+
+	if err != nil {
+		logging.Error("Error parsing flags", "error", err)
+	}
 
 	configSettings := config.NewSettings()
 
