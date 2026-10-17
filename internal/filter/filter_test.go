@@ -170,6 +170,7 @@ func TestPluginFiltersDoNotShareParams(t *testing.T) {
 	assert.Equal(t, "first", result)
 }
 
+// TestStringManipulationFilters checks the encoding, replacing, URL and list filters, including their params and errors
 func TestStringManipulationFilters(t *testing.T) {
 	testCases := []struct {
 		desc     string
@@ -301,6 +302,7 @@ func TestFragmentFilter(t *testing.T) {
 	assert.Equal(t, Fragment{Text: "5"}, result)
 }
 
+// TestFragmentFilterWithLists checks that lists become fragments containing JSON arrays, which YAML and JSON files insert as lists
 func TestFragmentFilterWithLists(t *testing.T) {
 	result, err := NewFilter("fragment").Process([]string{"alpha", "beta", `with "quotes", commas`})
 	assert.NoError(t, err)

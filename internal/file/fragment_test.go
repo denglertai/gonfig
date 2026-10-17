@@ -25,6 +25,7 @@ func processFragment(t *testing.T, fileType general.FileType, content string, fr
 	return output.String(), err
 }
 
+// TestFragments checks inserting and merging fragments for each file type, including lists, empty fragments and errors
 func TestFragments(t *testing.T) {
 	testCases := []struct {
 		desc     string
