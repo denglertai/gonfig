@@ -414,7 +414,7 @@ Order of precedence (highest to lowest):
 | Log level | `--log-level`, `-l` | `GONFIG_LOG_LEVEL` | `info` | Logging verbosity (`trace`, `debug`, `info`, `warn`, `error`, `fatal`) |
 | Include source location | `--log-source`, `-s` | `GONFIG_LOG_SOURCE` | `false` | Includes source location in log output |
 | Config directory | `--config-path` | `GONFIG_CONFIG_PATH` | empty | Directory that contains `.gonfig.yaml` |
-| Plugin directory | `--plugin-path` | `GONFIG_PLUGIN_PATH` | `./plugins` | Directory scanned recursively for plugin `.so` files |
+| Plugin directory | `--plugin-path` | `GONFIG_PLUGIN_PATH` | `./plugins` | Directory scanned recursively for executable plugins (`gonfig-plugin-*`) and deprecated Go plugins (`.so` files) |
 | Log values | `--log-values` | `GONFIG_LOG_VALUES` | `false` | Includes processed values in debug logs, error messages of filters and the parser messages of invalid fragments. Values may contain secrets, so only use it for debugging; gonfig warns on startup while it is enabled |
 | Fail on missing variables | `--fail-on-missing` | `GONFIG_FAIL_ON_MISSING` | `false` | Fails for [environment variables that are not set](./FILTERS.md#missing-variables) instead of using empty strings, unless the placeholder provides a default |
 | Allow unknown filters | `--allow-unknown-filters` | `GONFIG_ALLOW_UNKNOWN_FILTERS` | `false` | Passes values on unchanged with a warning instead of failing for [unknown filters](./FILTERS.md#order-of-operations). This may write secrets that were meant to be hashed or encrypted |
@@ -497,10 +497,10 @@ To include the values for debugging, enable `log-values` with `--log-values`, `G
 
 ## Plugins
 
-Plugins add custom filters. They are Go plugins (`.so` files) loaded on startup from the plugin directory, which defaults to `./plugins` and may be changed with `--plugin-path`, `GONFIG_PLUGIN_PATH` or `plugin-path` in `.gonfig.yaml`.
+Plugins add custom filters. They are separate executables named `gonfig-plugin-*`, which gonfig starts from the plugin directory and talks to over stdin and stdout. The plugin directory defaults to `./plugins` and may be changed with `--plugin-path`, `GONFIG_PLUGIN_PATH` or `plugin-path` in `.gonfig.yaml`.
 
-Plugins only work on Linux and macOS and have to be built with the same Go version and build flags as the gonfig binary.
-See [PLUGINS.md](./PLUGINS.md) for how plugins work, a step-by-step guide and examples, and [plugins/dummy](./plugins/dummy/) for a minimal plugin.
+Plugins don't depend on the Go version or build flags of the gonfig binary and may be written in any language. Go plugins (`.so` files) are still loaded, but deprecated.
+See [PLUGINS.md](./PLUGINS.md) for how plugins work, a step-by-step guide, examples and the migration from Go plugins, and [plugins/dummy](./plugins/dummy/) for a minimal plugin.
 
 ## Benchmarks
 

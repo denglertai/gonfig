@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"plugin"
+	"runtime"
 	"strings"
 
 	"github.com/denglertai/gonfig/internal/filter"
@@ -13,8 +15,12 @@ import (
 	pkgplugin "github.com/denglertai/gonfig/pkg/plugin"
 )
 
-// InitPlugins loads all plugins (.so files) found in the plugin path.
-// Plugins that fail to load are logged and skipped, so they don't prevent other plugins from loading.
+// running are the executable plugins started by InitPlugins, which ClosePlugins stops
+var running []*processPlugin
+
+// InitPlugins starts all executable plugins (gonfig-plugin-*) and loads all Go plugins (.so files) found in the
+// plugin path. Plugins that fail to start or load are logged and skipped, so they don't prevent other plugins from
+// loading. ClosePlugins stops the executable plugins again.
 func InitPlugins(pluginPath string) {
 	if pluginPath == "" {
 		pluginPath = "./plugins"
@@ -26,14 +32,26 @@ func InitPlugins(pluginPath string) {
 		if err != nil {
 			return err
 		}
-
-		// Skip directories and non .so files
-		if d.IsDir() || !strings.HasSuffix(path, ".so") {
+		if d.IsDir() {
 			return nil
 		}
 
-		if err := loadPlugin(path); err != nil {
-			logging.Error("Failed to load plugin", "path", path, "error", err)
+		switch {
+		case strings.HasSuffix(path, ".so"):
+			logging.Debug("Loading deprecated Go plugin, see PLUGINS.md for migrating to an executable plugin", "path", path)
+			if err := loadPlugin(path); err != nil {
+				logging.Error("Failed to load plugin", "path", path, "error", err)
+			}
+		case strings.HasPrefix(d.Name(), executablePrefix):
+			// Stat follows symbolic links, so linked plugins are started as well
+			info, err := os.Stat(path)
+			if err != nil || !isExecutablePlugin(d.Name(), info.Mode(), runtime.GOOS) {
+				logging.Debug("Skipping file that is not executable", "path", path)
+				return nil
+			}
+			if err := runPlugin(path); err != nil {
+				logging.Error("Failed to start plugin", "path", path, "error", err)
+			}
 		}
 
 		return nil
@@ -48,7 +66,38 @@ func InitPlugins(pluginPath string) {
 	logging.Trace("Finished loading plugins", "pluginPath", pluginPath)
 }
 
-// loadPlugin loads a single plugin and registers the filters it provides
+// ClosePlugins stops the executable plugins started by InitPlugins and removes their filters, so plugins can be
+// started again, e.g. by the next command run in the same process
+func ClosePlugins() {
+	for _, p := range running {
+		filter.RemovePluginFilters(p.filters)
+		p.close()
+	}
+	running = nil
+}
+
+// runPlugin starts an executable plugin and registers the filters it provides
+func runPlugin(path string) error {
+	p, names, err := startPlugin(path)
+	if err != nil {
+		return err
+	}
+	running = append(running, p)
+
+	filters := make(map[string]any, len(names))
+	for _, name := range names {
+		filters[name] = &remoteFilter{plugin: p, name: name}
+	}
+	p.filters = filter.AddPluginFilters(filters)
+	logging.Debug("Started filter plugin", "plugin", path, "filters", len(p.filters))
+
+	return nil
+}
+
+// loadPlugin loads a single Go plugin and registers the filters it provides.
+// It uses the deprecated PluginFilter, since loading the deprecated Go plugins is what it exists for.
+//
+//nolint:staticcheck
 func loadPlugin(path string) error {
 	p, err := plugin.Open(path)
 	if err != nil {

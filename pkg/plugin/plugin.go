@@ -1,15 +1,14 @@
+// Package plugin provides what filter plugins need: Serve runs a plugin executable that gonfig talks to over
+// stdin and stdout, and the protocol types describe the messages for plugins written in other languages.
+// See PLUGINS.md for how plugins work.
 package plugin
 
-import "github.com/spf13/cobra"
-
-// PluginFilter represents a filter plugin and is expected to provide a set of filters that can be applied to a configuration file
+// PluginFilter represents a filter plugin built as a Go plugin (.so file) and is expected to provide a set of filters
+// that can be applied to a configuration file.
+//
+// Deprecated: Go plugins have to be built with exactly the same Go version and flags as gonfig. Build an executable
+// plugin with Serve instead, which takes the same map of filters.
 type PluginFilter interface {
 	// Filters returns a set of filters that can be applied to a configuration file
 	Filters() map[string]interface{}
-}
-
-// PluginCommand represents a command plugin and is expected to provide a cobra.Command that can be used to extend the CLI
-type PluginCommand interface {
-	// Commands returns a set of cobra.Commands that can be used to extend the CLI
-	Commands() []*cobra.Command
 }

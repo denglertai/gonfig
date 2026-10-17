@@ -724,8 +724,9 @@ func init() {
 	}
 }
 
-// AddPluginFilters adds filters from a plugin
-func AddPluginFilters(filters map[string]interface{}) {
+// AddPluginFilters adds filters from a plugin and returns the names of the added ones
+func AddPluginFilters(filters map[string]interface{}) []string {
+	added := make([]string, 0, len(filters))
 	for name, filter := range filters {
 		// Skip filters that are not of type Filter or already in the filter map
 		if _, ok := filter.(Filter); !ok {
@@ -740,6 +741,15 @@ func AddPluginFilters(filters map[string]interface{}) {
 		filterMap[name] = func(token string) Filter {
 			return cloneFilter(filter.(Filter))
 		}
+		added = append(added, name)
+	}
+	return added
+}
+
+// RemovePluginFilters removes filters added by AddPluginFilters, e.g. when their plugin is stopped
+func RemovePluginFilters(names []string) {
+	for _, name := range names {
+		delete(filterMap, name)
 	}
 }
 
