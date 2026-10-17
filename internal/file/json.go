@@ -9,6 +9,7 @@ import (
 	"iter"
 	"slices"
 	"strconv"
+	"strings"
 )
 
 // jsonKind represents the kind of a JSON node
@@ -31,8 +32,9 @@ type jsonNode struct {
 	value any
 }
 
-// JsonConfigEntry represents a single scalar value of a JSON document
+// JsonConfigEntry represents a single scalar value or a key containing a placeholder of a JSON document
 type JsonConfigEntry struct {
+	// node is the scalar, or the value of the key for keys
 	node   *jsonNode
 	key    string
 	path   string
@@ -40,6 +42,12 @@ type JsonConfigEntry struct {
 	edited bool
 	// typed holds a number (json.Number) or boolean set by SetTypedValue, which is written instead of value
 	typed any
+	// handler collects the entries of inserted fragments
+	handler *JsonConfigFileHandler
+	// isKey, parent and parentPath mark a key of the object parent at parentPath
+	isKey      bool
+	parent     *jsonNode
+	parentPath string
 }
 
 // Key returns the key of the configuration entry
@@ -57,17 +65,24 @@ func (j *JsonConfigEntry) GetValue() string {
 	return j.value
 }
 
-// SetValue sets the value of the configuration entry
+// SetValue sets the value of the configuration entry, or renames the key
 func (j *JsonConfigEntry) SetValue(value string) {
+	if j.isKey {
+		j.parent.keys[slices.Index(j.parent.children, j.node)] = value
+		j.value = value
+		return
+	}
+
 	j.edited = j.edited || j.value != value
 	j.value = value
 	j.typed = nil
 }
 
-// SetTypedValue sets a number or boolean, which replaces the original value regardless of its type
+// SetTypedValue sets a number or boolean, which replaces the original value regardless of its type.
+// Keys are always strings, so they are not set.
 func (j *JsonConfigEntry) SetTypedValue(value any) bool {
 	tv, ok := newTypedValue(value)
-	if !ok {
+	if !ok || j.isKey {
 		return false
 	}
 
@@ -78,6 +93,68 @@ func (j *JsonConfigEntry) SetTypedValue(value any) bool {
 	j.value = tv.text
 	j.edited = true
 	return true
+}
+
+// SetFragment replaces a value by the fragment, or merges the fragment into the object containing a key.
+// An empty fragment replaces a value by null, or removes a key.
+func (j *JsonConfigEntry) SetFragment(text string) ([]ConfigEntry, error) {
+	fragment, err := parseJsonFragment(text)
+	if err != nil {
+		return nil, err
+	}
+
+	if j.isKey {
+		return j.mergeFragment(fragment)
+	}
+
+	if fragment == nil {
+		fragment = &jsonNode{kind: jsonScalar}
+	}
+
+	// Replace the node in place, so the parent refers to the fragment
+	*j.node = *fragment
+	j.edited = false
+	j.typed = nil
+	return j.handler.collectEntries(func() { j.handler.handleNode(j.node, j.path, j.key) }), nil
+}
+
+// mergeFragment merges the fragment into the object containing the key and removes the key
+func (j *JsonConfigEntry) mergeFragment(fragment *jsonNode) ([]ConfigEntry, error) {
+	if j.node.kind != jsonScalar || j.node.value != nil {
+		return nil, errors.New("a key with a fragment must have the value null")
+	}
+	if fragment != nil && fragment.kind != jsonObject {
+		return nil, errors.New("a fragment used as a key has to be an object")
+	}
+
+	i := slices.Index(j.parent.children, j.node)
+	j.parent.keys = slices.Delete(j.parent.keys, i, i+1)
+	j.parent.children = slices.Delete(j.parent.children, i, i+1)
+	if fragment == nil {
+		return nil, nil
+	}
+
+	return j.handler.collectEntries(func() { j.handler.mergeObjects(j.parent, fragment, j.parentPath) }), nil
+}
+
+// parseJsonFragment parses a fragment, or returns nil for an empty fragment
+func parseJsonFragment(text string) (*jsonNode, error) {
+	if strings.TrimSpace(text) == "" {
+		return nil, nil
+	}
+
+	decoder := json.NewDecoder(strings.NewReader(text))
+	decoder.UseNumber()
+
+	fragment, err := decodeJsonNode(decoder)
+	if err != nil {
+		return nil, fmt.Errorf("invalid JSON fragment: %w", err)
+	}
+	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
+		return nil, errors.New("invalid JSON fragment: unexpected data after the top-level JSON value")
+	}
+
+	return fragment, nil
 }
 
 // getConvertedValue converts the value to the type of the original value
@@ -179,8 +256,8 @@ func decodeJsonNode(decoder *json.Decoder) (*jsonNode, error) {
 func (j *JsonConfigFileHandler) handleNode(node *jsonNode, path string, key string) {
 	switch node.kind {
 	case jsonObject:
-		for i, child := range node.children {
-			j.handleNode(child, appendToPath(path, node.keys[i]), node.keys[i])
+		for i := range node.children {
+			j.handleObjectChild(node, i, path)
 		}
 	case jsonArray:
 		for i, child := range node.children {
@@ -194,11 +271,73 @@ func (j *JsonConfigFileHandler) handleNode(node *jsonNode, path string, key stri
 		}
 
 		j.entries = append(j.entries, &JsonConfigEntry{
-			node:  node,
-			key:   key,
-			path:  path,
-			value: value,
+			node:    node,
+			key:     key,
+			path:    path,
+			value:   value,
+			handler: j,
 		})
+	}
+}
+
+// handleObjectChild collects the entries of the key and value at index i of the object
+func (j *JsonConfigFileHandler) handleObjectChild(object *jsonNode, i int, path string) {
+	key, child := object.keys[i], object.children[i]
+	currentPath := appendToPath(path, key)
+
+	// Keys may contain placeholders as well
+	if strings.Contains(key, "${") {
+		j.entries = append(j.entries, &JsonConfigEntry{
+			node:       child,
+			key:        key,
+			path:       currentPath,
+			value:      key,
+			handler:    j,
+			isKey:      true,
+			parent:     object,
+			parentPath: path,
+		})
+	}
+
+	j.handleNode(child, currentPath, key)
+}
+
+// collectEntries returns the entries added while inserting a fragment
+func (j *JsonConfigFileHandler) collectEntries(insert func()) []ConfigEntry {
+	before := len(j.entries)
+	insert()
+	return slices.Clone(j.entries[before:])
+}
+
+// mergeObjects deep merges the source object into the target object: objects are merged recursively,
+// other values of the source replace the ones of the target, and new keys are appended in the order of the source
+func (j *JsonConfigFileHandler) mergeObjects(target *jsonNode, source *jsonNode, path string) {
+	// Index the keys of the target once, so merging takes linear instead of quadratic time for large objects.
+	// The first occurrence of a duplicate key is used.
+	index := make(map[string]int, len(target.keys))
+	for i, key := range target.keys {
+		if _, found := index[key]; !found {
+			index[key] = i
+		}
+	}
+
+	for i, key := range source.keys {
+		child := source.children[i]
+		currentPath := appendToPath(path, key)
+
+		k, found := index[key]
+		switch {
+		case !found:
+			target.keys = append(target.keys, key)
+			target.children = append(target.children, child)
+			index[key] = len(target.children) - 1
+			j.handleObjectChild(target, len(target.children)-1, path)
+		case target.children[k].kind == jsonObject && child.kind == jsonObject:
+			j.mergeObjects(target.children[k], child, currentPath)
+		default:
+			target.children[k] = child
+			j.handleNode(child, currentPath, key)
+		}
 	}
 }
 

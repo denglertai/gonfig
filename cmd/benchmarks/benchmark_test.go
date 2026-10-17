@@ -244,3 +244,81 @@ func BenchmarkProcessValue(b *testing.B) {
 		})
 	}
 }
+
+// fragmentMapping returns a YAML or JSON mapping with n keys named prefix0 to prefixN, each holding a nested mapping,
+// or n XML elements
+func fragmentMapping(fileType general.FileType, n int, prefix string) string {
+	entries := make([]string, n)
+	for i := range entries {
+		switch fileType {
+		case general.JSON:
+			entries[i] = fmt.Sprintf(`"%s%d": {"value": %d}`, prefix, i, i)
+		case general.XML:
+			entries[i] = fmt.Sprintf(`<%s id="%d"><value>%d</value></%s>`, prefix, i, i, prefix)
+		default:
+			entries[i] = fmt.Sprintf("%s%d:\n  value: %d", prefix, i, i)
+		}
+	}
+
+	switch fileType {
+	case general.JSON:
+		return strings.Join(entries, ", ")
+	case general.XML:
+		return strings.Join(entries, "")
+	default:
+		return strings.Join(entries, "\n")
+	}
+}
+
+// BenchmarkProcessFragment inserts fragments with n keys into YAML and JSON files, or n elements into XML files.
+// The "value" variants replace a value or the content of an XML element by the fragment, the "merge" variants merge
+// the fragment into a mapping with n keys, of which half are overwritten by the fragment and half are added.
+func BenchmarkProcessFragment(b *testing.B) {
+	for _, fileType := range []general.FileType{general.YAML, general.JSON, general.XML} {
+		for _, mode := range []string{"value", "merge"} {
+			// XML only supports fragments as the content of elements
+			if fileType == general.XML && mode == "merge" {
+				continue
+			}
+
+			for _, n := range []int{1000, 10000} {
+				b.Run(fmt.Sprintf("%s/%s/%d", fileType, mode, n), func(b *testing.B) {
+					fragment := fragmentMapping(fileType, n/2, "key") + "\n" + fragmentMapping(fileType, n/2, "new")
+					content := "root: ${BENCH_FRAGMENT | fragment}\n"
+					if mode == "merge" {
+						target := strings.ReplaceAll(fragmentMapping(fileType, n, "key"), "\n", "\n  ")
+						content = "root:\n  " + target + "\n  ${BENCH_FRAGMENT | fragment}:\n"
+					}
+
+					if fileType == general.XML {
+						fragment = fragmentMapping(fileType, n, "entry")
+						content = "<root><entries>${BENCH_FRAGMENT | fragment}</entries></root>"
+					}
+
+					if fileType == general.JSON {
+						fragment = "{" + strings.ReplaceAll(fragment, "\n", ", ") + "}"
+						content = `{"root": "${BENCH_FRAGMENT | fragment}"}`
+						if mode == "merge" {
+							content = `{"root": {` + fragmentMapping(fileType, n, "key") + `, "${BENCH_FRAGMENT | fragment}": null}}`
+						}
+					}
+					b.Setenv("BENCH_FRAGMENT", fragment)
+
+					path := filepath.Join(b.TempDir(), "config."+string(fileType))
+					if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+						b.Fatal(err)
+					}
+
+					b.ReportAllocs()
+					sampler := startHeapSampler()
+					for b.Loop() {
+						if err := file.NewFileProcessor(path, fileType, io.Discard).Process(); err != nil {
+							b.Fatal(err)
+						}
+					}
+					sampler.Stop(b)
+				})
+			}
+		}
+	}
+}

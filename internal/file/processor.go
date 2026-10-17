@@ -9,6 +9,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/denglertai/gonfig/internal/filter"
 	"github.com/denglertai/gonfig/internal/general"
 	"github.com/denglertai/gonfig/internal/value"
 	"github.com/denglertai/gonfig/pkg/logging"
@@ -101,36 +102,75 @@ func (fp *FileProcessor) Process() error {
 	}
 
 	for entry := range entries {
-		current := entry.GetValue()
-
-		// Most entries do not contain any placeholders, so skip them before doing any further work
-		if !strings.Contains(current, "${") {
-			continue
+		if err := fp.processEntry(entry, true, fileGroup); err != nil {
+			return err
 		}
-
-		logging.Debug("Processing entry", "entry", entryPath{entry}, fileGroup)
-
-		newVal, err := value.ProcessValue(current)
-
-		if err != nil {
-			return fmt.Errorf("failed to process the value of %s in %s: %w", entry.Path(), fp.FileName, err)
-		}
-
-		logging.Debug("Setting new value", "entry", entryPath{entry}, "value", newVal, fileGroup)
-
-		newText, ok := newVal.(string)
-		if !ok {
-			// Write non-string results (e.g. of to_int) with their type if the file type supports it, otherwise as text
-			if typed, ok := entry.(TypedConfigEntry); ok && typed.SetTypedValue(newVal) {
-				continue
-			}
-			newText = fmt.Sprint(newVal)
-		}
-		entry.SetValue(newText)
 	}
 
 	if err := handler.Write(fp.Output); err != nil {
 		return fmt.Errorf("failed to write %s: %w", fp.FileName, err)
+	}
+
+	return nil
+}
+
+// processEntry replaces the placeholders of the entry. If fragments are allowed, an entry may be replaced by
+// a fragment, whose entries are processed as well, but must not contain further fragments.
+func (fp *FileProcessor) processEntry(entry ConfigEntry, allowFragments bool, fileGroup slog.Attr) error {
+	current := entry.GetValue()
+
+	// Most entries do not contain any placeholders, so skip them before doing any further work
+	if !strings.Contains(current, "${") {
+		return nil
+	}
+
+	logging.Debug("Processing entry", "entry", entryPath{entry}, fileGroup)
+
+	newVal, err := value.ProcessValue(current)
+
+	if err != nil {
+		return fmt.Errorf("failed to process the value of %s in %s: %w", entry.Path(), fp.FileName, err)
+	}
+
+	logging.Debug("Setting new value", "entry", entryPath{entry}, "value", newVal, fileGroup)
+
+	if fragment, isFragment := newVal.(filter.Fragment); isFragment {
+		return fp.insertFragment(entry, fragment, allowFragments, fileGroup)
+	}
+
+	newText, ok := newVal.(string)
+	if !ok {
+		// Write non-string results (e.g. of to_int) with their type if the file type supports it, otherwise as text
+		if typed, ok := entry.(TypedConfigEntry); ok && typed.SetTypedValue(newVal) {
+			return nil
+		}
+		newText = fmt.Sprint(newVal)
+	}
+	entry.SetValue(newText)
+
+	return nil
+}
+
+// insertFragment inserts the fragment in place of the entry and processes the entries of the fragment
+func (fp *FileProcessor) insertFragment(entry ConfigEntry, fragment filter.Fragment, allowFragments bool, fileGroup slog.Attr) error {
+	if !allowFragments {
+		return fmt.Errorf("failed to process the value of %s in %s: fragments cannot contain further fragments", entry.Path(), fp.FileName)
+	}
+
+	fragmentEntry, ok := entry.(FragmentConfigEntry)
+	if !ok {
+		return fmt.Errorf("failed to process the value of %s in %s: fragments are not supported here, only for YAML and JSON values and keys and the content of XML elements", entry.Path(), fp.FileName)
+	}
+
+	inserted, err := fragmentEntry.SetFragment(fragment.Text)
+	if err != nil {
+		return fmt.Errorf("failed to insert the fragment of %s in %s: %w", entry.Path(), fp.FileName, err)
+	}
+
+	for _, insertedEntry := range inserted {
+		if err := fp.processEntry(insertedEntry, false, fileGroup); err != nil {
+			return err
+		}
 	}
 
 	return nil

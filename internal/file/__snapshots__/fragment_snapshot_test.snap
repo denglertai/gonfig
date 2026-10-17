@@ -1,0 +1,262 @@
+
+[TestFragmentSnapshots/yaml_value_replaced_by_a_JSON_list - 1]
+file (config.yaml):
+# Logging configuration
+logging:
+  level: info # default level
+  appenders: ${FRAGMENT | fragment} # set per environment
+
+FRAGMENT:
+[{"type": "console"}, {"type": "file", "path": "/var/log/app.log", "maxSize": "100"}]
+
+result:
+# Logging configuration
+logging:
+  level: info # default level
+  appenders: # set per environment
+    - type: console
+    - type: file
+      path: /var/log/app.log
+      maxSize: "100"
+---
+
+[TestFragmentSnapshots/yaml_value_replaced_by_a_YAML_mapping_with_a_literal_block - 1]
+file (config.yaml):
+job:
+  name: backup
+  steps: ${FRAGMENT | fragment}
+
+FRAGMENT:
+prepare: mkdir -p /backup
+run: |
+  tar czf /backup/data.tgz /data
+  echo done
+retries: 3
+
+result:
+job:
+  name: backup
+  steps:
+    prepare: mkdir -p /backup
+    run: |
+      tar czf /backup/data.tgz /data
+      echo done
+    retries: 3
+---
+
+[TestFragmentSnapshots/yaml_key_merging_environment_overrides - 1]
+file (config.yaml):
+database:
+  host: localhost # development
+  port: 5432
+  pool:
+    timeout: 30
+    size: 5
+  replicas: [db-1, db-2]
+  ${FRAGMENT | fragment}:
+cache:
+  enabled: false
+
+FRAGMENT:
+host: db.prod
+pool:
+  size: 20
+replicas: [db-prod-1]
+ssl:
+  mode: require
+
+result:
+database:
+  host: db.prod # development
+  port: 5432
+  pool:
+    timeout: 30
+    size: 20
+  replicas:
+    - db-prod-1
+  ssl:
+    mode: require
+cache:
+  enabled: false
+---
+
+[TestFragmentSnapshots/yaml_fragment_with_placeholders - 1]
+file (config.yaml):
+service:
+  name: api
+  ${FRAGMENT | fragment}:
+
+FRAGMENT:
+port: ${FRAGMENT_PORT | to_int}
+password: ${FRAGMENT_SECRET | base64}
+url: http://localhost:${FRAGMENT_PORT}/health
+
+result:
+service:
+  name: api
+  port: 8080
+  password: czNjcmV0
+  url: http://localhost:8080/health
+---
+
+[TestFragmentSnapshots/yaml_empty_fragments - 1]
+file (config.yaml):
+optional: ${FRAGMENT | fragment}
+settings:
+  a: 1
+  ${FRAGMENT | fragment}:
+
+FRAGMENT:
+(empty)
+
+result:
+optional:
+settings:
+  a: 1
+---
+
+[TestFragmentSnapshots/yaml_multiple_documents - 1]
+file (config.yaml):
+kind: Deployment
+metadata:
+  name: api
+/-/-/-/
+kind: ConfigMap
+data: ${FRAGMENT | fragment}
+
+FRAGMENT:
+{"LOG_LEVEL": "debug", "WORKERS": "4"}
+
+result:
+kind: Deployment
+metadata:
+  name: api
+/-/-/-/
+kind: ConfigMap
+data:
+  LOG_LEVEL: debug
+  WORKERS: "4"
+---
+
+[TestFragmentSnapshots/json_value_replaced_by_a_list - 1]
+file (config.json):
+{
+  "logging": {
+    "level": "info",
+    "appenders": "${FRAGMENT | fragment}"
+  }
+}
+
+FRAGMENT:
+[{"type": "console"}, {"type": "file", "path": "/var/log/app.log"}]
+
+result:
+{
+  "logging": {
+    "level": "info",
+    "appenders": [
+      {
+        "type": "console"
+      },
+      {
+        "type": "file",
+        "path": "/var/log/app.log"
+      }
+    ]
+  }
+}
+---
+
+[TestFragmentSnapshots/json_key_merging_environment_overrides - 1]
+file (config.json):
+{
+  "database": {
+    "host": "localhost",
+    "port": 5432,
+    "pool": {"timeout": 30, "size": 5},
+    "${FRAGMENT | fragment}": null
+  }
+}
+
+FRAGMENT:
+{"host": "db.prod", "pool": {"size": 20}, "ssl": true, "${FRAGMENT_PORT}_port": "${FRAGMENT_PORT | to_int}"}
+
+result:
+{
+  "database": {
+    "host": "db.prod",
+    "port": 5432,
+    "pool": {
+      "timeout": 30,
+      "size": 20
+    },
+    "ssl": true,
+    "8080_port": 8080
+  }
+}
+---
+
+[TestFragmentSnapshots/xml_element_content_replaced_by_elements - 1]
+file (config.xml):
+<?xml version="1.0"?>
+<server>
+  <!-- data sources are set per environment -->
+  <resources>${FRAGMENT | fragment}</resources>
+</server>
+
+FRAGMENT:
+<datasource name="main" url="jdbc:postgresql://db/app?ssl=true&amp;user=app"/>
+<datasource name="readonly"><password>${FRAGMENT_SECRET}</password></datasource>
+
+result:
+<?xml version="1.0"?>
+<server>
+  <!-- data sources are set per environment -->
+  <resources><datasource name="main" url="jdbc:postgresql://db/app?ssl=true&amp;user=app"/>
+<datasource name="readonly"><password>s3cret</password></datasource></resources>
+</server>
+---
+
+[TestFragmentSnapshots/error_for_a_nested_fragment - 1]
+file (config.yaml):
+outer: ${FRAGMENT | fragment}
+
+FRAGMENT:
+inner: ${FRAGMENT | fragment}
+
+result:
+error: failed to process the value of outer.inner in config.yaml: fragments cannot contain further fragments
+---
+
+[TestFragmentSnapshots/error_for_a_fragment_embedded_into_text - 1]
+file (config.yaml):
+key: prefix ${FRAGMENT | fragment}
+
+FRAGMENT:
+a: 1
+
+result:
+error: failed to process the value of key in config.yaml: the fragment of ${FRAGMENT | fragment} has to make up the whole value
+---
+
+[TestFragmentSnapshots/error_for_a_yaml_key_with_a_value - 1]
+file (config.yaml):
+${FRAGMENT | fragment}: value
+
+FRAGMENT:
+a: 1
+
+result:
+error: failed to insert the fragment of ${FRAGMENT | fragment} in config.yaml: a key with a fragment must not have a value
+---
+
+[TestFragmentSnapshots/error_for_a_properties_file - 1]
+file (config.properties):
+key=${FRAGMENT | fragment}
+
+FRAGMENT:
+a=1
+
+result:
+error: failed to process the value of key in config.properties: fragments are not supported here, only for YAML and JSON values and keys and the content of XML elements
+---

@@ -5,6 +5,7 @@ import (
 	"path"
 	"testing"
 
+	"github.com/denglertai/gonfig/internal/filter"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -274,4 +275,17 @@ func FuzzProcessValue(f *testing.F) {
 		// Any input has to be processed without panicking
 		_, _ = ProcessValue(value)
 	})
+}
+
+func TestProcessValueWithFragments(t *testing.T) {
+	t.Setenv("FRAGMENT_TEST", "a: 1")
+
+	// A fragment making up the whole value is returned as is, so file types can insert it
+	result, err := ProcessValue("${FRAGMENT_TEST | fragment}")
+	assert.NoError(t, err)
+	assert.Equal(t, filter.Fragment{Text: "a: 1"}, result)
+
+	// Fragments cannot be embedded into text
+	_, err = ProcessValue("key: ${FRAGMENT_TEST | fragment}")
+	assert.EqualError(t, err, "the fragment of ${FRAGMENT_TEST | fragment} has to make up the whole value")
 }

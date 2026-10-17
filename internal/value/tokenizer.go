@@ -69,6 +69,11 @@ func ProcessValue(value string) (any, error) {
 			return nil, err
 		}
 
+		// A fragment is a structure, which cannot be embedded into text
+		if _, isFragment := filtered.(filter.Fragment); isFragment {
+			return nil, fmt.Errorf("the fragment of %s has to make up the whole value", p.token)
+		}
+
 		// Results of other types than string are embedded into the surrounding text as text
 		s, ok := filtered.(string)
 		if !ok {

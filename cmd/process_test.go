@@ -598,3 +598,28 @@ func TestInvalidConfigFile(t *testing.T) {
 		})
 	}
 }
+
+func TestFragmentFromTemplate(t *testing.T) {
+	t.Setenv("FRAGMENT_LOGGING", "")
+	t.Setenv("FRAGMENT_LEVEL", "debug")
+
+	dir := t.TempDir()
+	fragmentFile := path.Join(dir, "logging.yaml")
+	assert.NoError(t, os.WriteFile(fragmentFile, []byte("level: ${FRAGMENT_LEVEL}\nappenders: [console]\n"), 0o644))
+
+	// The template reads the fragment from a file by default
+	configDir := t.TempDir()
+	config := "templates:\n  placeholders:\n    logging:\n      env: FRAGMENT_LOGGING\n      default: \"@" + fragmentFile + "\"\n"
+	assert.NoError(t, os.WriteFile(path.Join(configDir, ".gonfig.yaml"), []byte(config), 0o644))
+
+	fileName := path.Join(dir, "config.yaml")
+	assert.NoError(t, os.WriteFile(fileName, []byte("logging: ${@logging | fragment}\n"), 0o644))
+
+	resetFlags(t)
+	rootCmd.SetArgs([]string{"--config-path", configDir, "config", "process", "-f", fileName, "-i"})
+	assert.NoError(t, rootCmd.Execute())
+
+	result, err := os.ReadFile(fileName)
+	assert.NoError(t, err)
+	assert.Equal(t, "logging:\n  level: debug\n  appenders:\n    - console\n", string(result))
+}

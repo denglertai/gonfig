@@ -108,6 +108,17 @@ func NewFileInterceptorFilter() *FileInterceptorFilter {
 	return &FileInterceptorFilter{}
 }
 
+// Fragment is a structure to be inserted into a config file, e.g. a YAML mapping or XML elements.
+// The text is parsed by the file type the fragment is inserted into.
+type Fragment struct {
+	Text string
+}
+
+// String returns the text of the fragment, e.g. for filters following the fragment filter
+func (f Fragment) String() string {
+	return f.Text
+}
+
 // DefaultValueFilter replaces empty values, e.g. of environment variables that are not set, by a default value
 type DefaultValueFilter struct {
 	value string
@@ -463,6 +474,14 @@ func init() {
 			fn: stringFunc(func(s string, _ map[string]string) (string, error) {
 				return base64.StdEncoding.EncodeToString([]byte(s)), nil
 			}),
+		}
+	}
+
+	filterMap["fragment"] = func(token string) Filter {
+		return &FuncFilter{
+			fn: func(value any, _ map[string]string) (any, error) {
+				return Fragment{Text: toString(value)}, nil
+			},
 		}
 	}
 
