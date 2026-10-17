@@ -27,7 +27,7 @@ func TestLogLevelFlagIsApplied(t *testing.T) {
 func TestDefaultAppConfig(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Chdir(t.TempDir())
-	for _, key := range []string{"GONFIG_LOG_LEVEL", "GONFIG_LOG_SOURCE", "GONFIG_CONFIG_PATH", "GONFIG_PLUGIN_PATH", "GONFIG_ALLOW_UNKNOWN_FILTERS"} {
+	for _, key := range []string{"GONFIG_LOG_LEVEL", "GONFIG_LOG_SOURCE", "GONFIG_CONFIG_PATH", "GONFIG_PLUGIN_PATH", "GONFIG_ALLOW_UNKNOWN_FILTERS", "GONFIG_LOG_VALUES"} {
 		// Viper ignores empty environment variables
 		t.Setenv(key, "")
 	}
@@ -73,6 +73,7 @@ func TestDefaultAppConfig(t *testing.T) {
 
 // TestLogValuesFlagIsApplied checks that --log-values and GONFIG_LOG_VALUES enable logging values in the file processor
 func TestLogValuesFlagIsApplied(t *testing.T) {
+	t.Setenv("GONFIG_LOG_VALUES", "")
 	t.Cleanup(func() { file.SetLogValues(false) })
 
 	resetFlags(t)
