@@ -7,7 +7,6 @@ import (
 	"iter"
 
 	"github.com/beevik/etree"
-	"github.com/denglertai/gonfig/internal/value"
 )
 
 // XmlConfigEntry represents a single configuration entry for an attribute
@@ -127,13 +126,9 @@ func (x *XmlConfigFileHandler) handleChildElements(elements []*etree.Element) {
 		fromCData := false
 		for _, child := range element.Child {
 			if cdata, ok := child.(*etree.CharData); ok && cdata.IsCData() {
-				processed := cdata.Data
-				if val, err := value.ProcessValue(cdata.Data); err == nil {
-					if str, ok := val.(string); ok {
-						processed = str
-					}
-				}
-				element.SetText(processed)
+				// Expose the CDATA content as the element's text; it is processed
+				// together with all other entries and written back as CDATA
+				element.SetText(cdata.Data)
 				fromCData = true
 				break
 			}
