@@ -135,42 +135,12 @@ func processStream(stream *tokenizer.Stream) ([]ApplyableTokenParam, error) {
 
 		if currentToken.Is(tokenizer.TokenString) {
 			if currentToken.StringSettings().Key == TokenParam {
+				token := currentToken.ValueString()
 				param := TokenFilterParam{
-					token:   currentToken.ValueString(),
+					token:   token,
 					start:   currentToken.Offset(),
-					end:     currentToken.Offset() + len(currentToken.ValueString()),
-					filters: make([]filter.Filter, 0),
-				}
-
-				filterStream := filterParser.ParseString(param.token[2 : len(param.token)-1])
-
-				defer filterStream.Close()
-				for filterStream.IsValid() {
-					filterToken := filterStream.CurrentToken()
-
-					// Skip filter separator
-					if filterToken.Is(TokenFilterSeparator) {
-						filterStream.GoNext()
-						continue
-					}
-
-					// The first token is always the name of the env var
-					// Thus append the env var filter and the file interceptor filter
-					if len(param.filters) == 0 {
-						param.filters = append(param.filters, filter.NewEnvVarFilter(filterToken.ValueString()), filter.NewFileInterceptorFilter())
-					} else if filterToken.Is(tokenizer.TokenKeyword) {
-						// Other tokens have to be filters
-						param.filters = append(param.filters, filter.NewFilter(filterToken.ValueString()))
-					} else if filterToken.Is(tokenizer.TokenString) && filterToken.StringSettings().Key == TokenParam {
-						// Parse the Params for the filter and apply it to the last generated filter
-						lastFilter, acceptsParams := param.filters[len(param.filters)-1].(filter.FilterParams)
-						if acceptsParams {
-							params := parseKV(filterToken.ValueString())
-							lastFilter.AcceptParams(params)
-						}
-					}
-
-					filterStream.GoNext()
+					end:     currentToken.Offset() + len(token),
+					filters: parseFilters(token[2 : len(token)-1]),
 				}
 
 				logging.Debug("Found param", "param", param.token, "start", param.start, "end", param.end)
@@ -183,4 +153,39 @@ func processStream(stream *tokenizer.Stream) ([]ApplyableTokenParam, error) {
 	}
 
 	return result, nil
+}
+
+// parseFilters parses the content of a placeholder, e.g. "ENV_VAR | filter(key=value)", into the filters to apply
+func parseFilters(content string) []filter.Filter {
+	filters := make([]filter.Filter, 0)
+
+	filterStream := filterParser.ParseString(content)
+	defer filterStream.Close()
+
+	for ; filterStream.IsValid(); filterStream.GoNext() {
+		filterToken := filterStream.CurrentToken()
+
+		// Skip filter separator
+		if filterToken.Is(TokenFilterSeparator) {
+			continue
+		}
+
+		// The first token is always the name of the env var
+		// Thus append the env var filter and the file interceptor filter
+		if len(filters) == 0 {
+			filters = append(filters, filter.NewEnvVarFilter(filterToken.ValueString()), filter.NewFileInterceptorFilter())
+		} else if filterToken.Is(tokenizer.TokenKeyword) {
+			// Other tokens have to be filters
+			filters = append(filters, filter.NewFilter(filterToken.ValueString()))
+		} else if filterToken.Is(tokenizer.TokenString) && filterToken.StringSettings().Key == TokenParam {
+			// Parse the Params for the filter and apply it to the last generated filter
+			lastFilter, acceptsParams := filters[len(filters)-1].(filter.FilterParams)
+			if acceptsParams {
+				params := parseKV(filterToken.ValueString())
+				lastFilter.AcceptParams(params)
+			}
+		}
+	}
+
+	return filters
 }
