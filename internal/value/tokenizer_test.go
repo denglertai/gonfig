@@ -220,3 +220,52 @@ func TestProcessValueWithInvalidFilterParams(t *testing.T) {
 		assert.Error(t, err, value)
 	}
 }
+
+func TestProcessValueEdgeCases(t *testing.T) {
+	t.Setenv("EDGE_TEST", "x")
+	t.Setenv("EDGE_TEST_INT", "5")
+
+	testCases := []struct {
+		desc  string
+		value string
+		want  any
+	}{
+		{desc: "unclosed placeholder", value: "a${EDGE_TEST", want: "a${EDGE_TEST"},
+		{desc: "unclosed placeholder after placeholder", value: "${EDGE_TEST}${", want: "x${"},
+		{desc: "unclosed params", value: "${EDGE_TEST|upper(}", want: "X"},
+		{desc: "empty placeholder", value: "${}", want: "${}"},
+		{desc: "closing bracket after placeholder", value: "${EDGE_TEST}}", want: "x}"},
+		{desc: "dollar before placeholder", value: "$${EDGE_TEST}", want: "$x"},
+		{desc: "escaped closing bracket", value: `${EDGE_TEST|replace(\},y)}`, want: "x"},
+		{desc: "placeholders without separator", value: "${EDGE_TEST|upper}${EDGE_TEST}", want: "Xx"},
+		{desc: "non-string result of last placeholder", value: "a ${EDGE_TEST_INT|to_int}", want: 5},
+		{desc: "non-string result followed by string", value: "${EDGE_TEST_INT|to_int} ${EDGE_TEST}", want: "${EDGE_TEST_INT|to_int} x"},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			result, err := ProcessValue(tC.value)
+			assert.NoError(t, err)
+			assert.Equal(t, tC.want, result)
+		})
+	}
+}
+
+func TestFindPlaceholders(t *testing.T) {
+	placeholders := findPlaceholders(`a ${A} b ${B|replace(\},x)} ${C`)
+
+	assert.Equal(t, []placeholder{
+		{token: "${A}", start: 2, end: 6},
+		{token: `${B|replace(\},x)}`, start: 9, end: 27},
+	}, placeholders)
+	assert.Equal(t, `B|replace(\},x)`, placeholders[1].content())
+}
+
+func FuzzProcessValue(f *testing.F) {
+	for _, value := range []string{"${A}", "a${A", "${A}${", "${A|replace(}", `${A|regex(\(x\),y)}`, "${${A}}", "${\\"} {
+		f.Add(value)
+	}
+	f.Fuzz(func(t *testing.T, value string) {
+		// Any input has to be processed without panicking
+		_, _ = ProcessValue(value)
+	})
+}

@@ -69,8 +69,8 @@ func NewFileProcessor(fileName string, fileType general.FileType, output io.Writ
 //  1. getFileProcessor selects the ConfigFileHandler for the file type
 //  2. Read parses the file into the handler's document
 //  3. Process flattens the document into a list of entries
-//  4. every entry's value is passed to value.ProcessValue, which replaces its placeholders,
-//     and the result is set on the entry, updating the document
+//  4. every entry's value containing a placeholder is passed to value.ProcessValue, which replaces
+//     its placeholders, and the result is set on the entry, updating the document
 //  5. Write serializes the updated document to the output
 //
 // Since only the values of entries are changed, everything else in the document is kept
@@ -101,9 +101,16 @@ func (fp *FileProcessor) Process() error {
 	}
 
 	for entry := range entries {
-		logging.Debug("Processing entry", "entry", entry.Path(), fileGroup)
+		current := entry.GetValue()
 
-		newVal, err := value.ProcessValue(entry.GetValue())
+		// Most entries do not contain any placeholders, so skip them before doing any further work
+		if !strings.Contains(current, "${") {
+			continue
+		}
+
+		logging.Debug("Processing entry", "entry", entryPath{entry}, fileGroup)
+
+		newVal, err := value.ProcessValue(current)
 
 		if err != nil {
 			return fmt.Errorf("failed to process the value of %s in %s: %w", entry.Path(), fp.FileName, err)
@@ -111,8 +118,13 @@ func (fp *FileProcessor) Process() error {
 
 		// Entries store text, so non-string results (e.g. of to_int) are formatted.
 		// Handlers may convert the text back to the original type, e.g. JSON numbers.
-		logging.Debug("Setting new value", "entry", entry.Path(), "value", newVal, fileGroup)
-		entry.SetValue(fmt.Sprintf("%v", newVal))
+		newText, ok := newVal.(string)
+		if !ok {
+			newText = fmt.Sprint(newVal)
+		}
+
+		logging.Debug("Setting new value", "entry", entryPath{entry}, "value", newVal, fileGroup)
+		entry.SetValue(newText)
 	}
 
 	if err := handler.Write(fp.Output); err != nil {
@@ -120,6 +132,17 @@ func (fp *FileProcessor) Process() error {
 	}
 
 	return nil
+}
+
+// entryPath logs the path of an entry. The path is only computed if the log record is written,
+// since computing it is expensive for some file types, e.g. XML.
+type entryPath struct {
+	entry ConfigEntry
+}
+
+// LogValue returns the path of the entry
+func (p entryPath) LogValue() slog.Value {
+	return slog.StringValue(p.entry.Path())
 }
 
 // appendToPath appends the key to the dot separated path

@@ -1,4 +1,4 @@
-.PHONY: build build-all release prepare-release-branch release-draft release-dry-run snapshot clean install-deps install-zig install-goreleaser test check-clean check-main-up-to-date check-version-format check-melange-version
+.PHONY: build build-all release prepare-release-branch release-draft release-dry-run snapshot clean install-deps install-zig install-goreleaser test bench profile check-clean check-main-up-to-date check-version-format check-melange-version
 
 MELANGE_VERSION := $(strip $(shell awk '/^  version:/ {print $$2; exit}' melange.yaml))
 VERSION ?= v$(MELANGE_VERSION)
@@ -158,6 +158,17 @@ install-zig:
 # Test
 test:
 	go test ./...
+
+# Run the benchmarks, e.g. make bench BENCH=ProcessFile/yaml
+BENCH ?= .
+bench:
+	go test -run '^$$' -bench '$(BENCH)' -benchmem ./cmd/benchmarks
+
+# Profile the benchmarks and open the CPU profile, e.g. make profile BENCH=ProcessFile/yaml
+profile:
+	go test -run '^$$' -bench '$(BENCH)' -benchmem -cpuprofile cpu.out -memprofile mem.out -o benchmarks.test ./cmd/benchmarks
+	@echo "Inspect the memory profile with: go tool pprof -http=: benchmarks.test mem.out"
+	go tool pprof -http=: benchmarks.test cpu.out
 
 # Install goreleaser if not present
 install-goreleaser:

@@ -21,6 +21,7 @@ czNjciZ0
 - [Filters](#filters)
 - [Configuration](#configuration)
 - [Plugins](#plugins)
+- [Benchmarks](#benchmarks)
 - [Releasing](#releasing)
 
 ## Features
@@ -412,6 +413,21 @@ Plugins add custom filters. They are Go plugins (`.so` files) loaded on startup 
 
 Plugins only work on Linux and macOS and have to be built with the same Go version and build flags as the gonfig binary.
 See [PLUGINS.md](./PLUGINS.md) for how plugins work, a step-by-step guide and examples, and [plugins/dummy](./plugins/dummy/) for a minimal plugin.
+
+## Benchmarks
+
+Benchmarks for processing config files of at least 1 MiB per file type and for single values with filter chains are located in [cmd/benchmarks](./cmd/benchmarks/).
+
+```bash
+# Run all benchmarks
+make bench
+# Run a subset of the benchmarks
+make bench BENCH=ProcessFile/yaml
+# Profile the benchmarks and open the CPU profile in pprof
+make profile BENCH=ProcessFile/yaml
+```
+
+See [cmd/benchmarks/README.md](./cmd/benchmarks/README.md) for comparing runs, baseline metrics and known bottlenecks.
 
 ## Releasing
 
