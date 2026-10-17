@@ -1,9 +1,9 @@
 package file
 
 import (
-	"bytes"
 	"io"
 	"iter"
+	"slices"
 
 	"github.com/magiconair/properties"
 )
@@ -52,10 +52,12 @@ func (p *PropertiesFileHandler) Read(source io.Reader) (err error) {
 		IgnoreMissing:    true,
 	}
 
-	buf := new(bytes.Buffer)
-	buf.ReadFrom(source)
+	data, err := io.ReadAll(source)
+	if err != nil {
+		return err
+	}
 
-	props, err := ldr.LoadBytes(buf.Bytes())
+	props, err := ldr.LoadBytes(data)
 
 	if err != nil {
 		return err
@@ -79,13 +81,7 @@ func (p *PropertiesFileHandler) Process() (iter.Seq[ConfigEntry], error) {
 		p.wrapped = append(p.wrapped, &wrapped)
 	}
 
-	return func(yield func(ConfigEntry) bool) {
-		for _, entry := range p.wrapped {
-			if !yield(entry) {
-				break
-			}
-		}
-	}, nil
+	return slices.Values(p.wrapped), nil
 }
 
 // Write writes the configuration file
@@ -94,7 +90,8 @@ func (p *PropertiesFileHandler) Write(destination io.Writer) (err error) {
 		p.props.Set(w.Key(), w.GetValue())
 	}
 
-	_, err = p.props.Write(destination, properties.UTF8)
+	// Write including the comments of the original file
+	_, err = p.props.WriteComment(destination, "# ", properties.UTF8)
 
 	return err
 }

@@ -238,10 +238,13 @@ spec:
 ---
 
 [TestStdout/PROPERTIES_AutoDiscover - 1]
+# Database Configuration
 database.url = jdbc:mysql://localhost:3306/mydatabase
 database.username = test
 database.password = password
 port = 9000
+
+# Server Configuration
 server.host = 127.0.0.1
 server.port = 8080
 bool.x = true
@@ -254,10 +257,13 @@ inty.mc.int.int = 123
 ---
 
 [TestStdout/PROPERTIES_Explicit - 1]
+# Database Configuration
 database.url = jdbc:mysql://localhost:3306/mydatabase
 database.username = test
 database.password = password
 port = 9000
+
+# Server Configuration
 server.host = 127.0.0.1
 server.port = 8080
 bool.x = true
@@ -508,10 +514,13 @@ spec:
 ---
 
 [TestFile/PROPERTIES_AutoDiscover - 1]
+# Database Configuration
 database.url = jdbc:mysql://localhost:3306/mydatabase
 database.username = test
 database.password = password
 port = 9000
+
+# Server Configuration
 server.host = 127.0.0.1
 server.port = 8080
 bool.x = true
@@ -524,10 +533,13 @@ inty.mc.int.int = 123
 ---
 
 [TestFile/PROPERTIES_Explicit - 1]
+# Database Configuration
 database.url = jdbc:mysql://localhost:3306/mydatabase
 database.username = test
 database.password = password
 port = 9000
+
+# Server Configuration
 server.host = 127.0.0.1
 server.port = 8080
 bool.x = true
@@ -778,10 +790,13 @@ spec:
 ---
 
 [TestFileOverwrite/PROPERTIES_AutoDiscover - 1]
+# Database Configuration
 database.url = jdbc:mysql://localhost:3306/mydatabase
 database.username = test
 database.password = password
 port = 9000
+
+# Server Configuration
 server.host = 127.0.0.1
 server.port = 8080
 bool.x = true
@@ -794,10 +809,13 @@ inty.mc.int.int = 123
 ---
 
 [TestFileOverwrite/PROPERTIES_Explicit - 1]
+# Database Configuration
 database.url = jdbc:mysql://localhost:3306/mydatabase
 database.username = test
 database.password = password
 port = 9000
+
+# Server Configuration
 server.host = 127.0.0.1
 server.port = 8080
 bool.x = true
@@ -929,10 +947,13 @@ spec:
 ---
 
 [TestPassingExtension/PROPERTIES_Explicit - 1]
+# Database Configuration
 database.url = jdbc:mysql://localhost:3306/mydatabase
 database.username = test
 database.password = password
 port = 9000
+
+# Server Configuration
 server.host = 127.0.0.1
 server.port = 8080
 bool.x = true
