@@ -154,7 +154,12 @@ func parseJsonFragment(text string) (*jsonNode, error) {
 
 	fragment, err := decodeJsonNode(decoder)
 	if err != nil {
-		return nil, fmt.Errorf("invalid JSON fragment: %w", err)
+		location := ""
+		var syntaxError *json.SyntaxError
+		if errors.As(err, &syntaxError) {
+			location = fmt.Sprintf("at offset %d", syntaxError.Offset)
+		}
+		return nil, fragmentError("JSON", location, err)
 	}
 	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
 		return nil, errors.New("invalid JSON fragment: unexpected data after the top-level JSON value")

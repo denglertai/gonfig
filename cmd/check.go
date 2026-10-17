@@ -18,7 +18,7 @@ var checkCmd = &cobra.Command{
 	Use:   "check",
 	Short: "Check a file for missing variables and errors without writing it",
 	Long: `Processes a file like process, but writes nothing and reports every entry containing placeholders
-with the environment variables and templates it uses. Values are never printed.
+with the environment variables and templates it uses. Values are not printed unless --log-values is set.
 
 The check fails, with exit code 1, if processing the file would fail or if a variable is not set
 and the placeholder provides no default, independent of --fail-on-missing.`,

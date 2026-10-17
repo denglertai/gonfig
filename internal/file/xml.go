@@ -1,6 +1,7 @@
 package file
 
 import (
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -124,7 +125,13 @@ func parseXmlFragment(text string) (*etree.Element, error) {
 
 	wrapped := "<gonfig-fragment>" + xmlDeclarationRe.ReplaceAllString(text, "") + "</gonfig-fragment>"
 	if err := document.ReadFromString(wrapped); err != nil {
-		return nil, fmt.Errorf("invalid XML fragment: %w", err)
+		// The wrapping element is on the same line, so the line number matches the fragment
+		location := ""
+		var syntaxError *xml.SyntaxError
+		if errors.As(err, &syntaxError) {
+			location = fmt.Sprintf("on line %d", syntaxError.Line)
+		}
+		return nil, fragmentError("XML", location, err)
 	}
 
 	return document.Root(), nil

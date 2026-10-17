@@ -3,9 +3,9 @@ package file
 import (
 	"cmp"
 	"errors"
-	"fmt"
 	"io"
 	"iter"
+	"regexp"
 	"slices"
 	"strconv"
 
@@ -120,11 +120,19 @@ func (y *YamlConfigEntry) mergeFragment(fragment *yaml.Node) ([]ConfigEntry, err
 	return y.handler.collectEntries(func() { y.handler.mergeMappings(y.parent, fragment, y.parentPath) }), nil
 }
 
+// yamlErrorLineRe matches the line number at the start of a YAML syntax error, which is the only part of the
+// message that never quotes the parsed text
+var yamlErrorLineRe = regexp.MustCompile(`^yaml: line (\d+):`)
+
 // parseYamlFragment parses the first document of a fragment, or returns nil for an empty fragment
 func parseYamlFragment(text string) (*yaml.Node, error) {
 	var document yaml.Node
 	if err := yaml.Unmarshal([]byte(text), &document); err != nil {
-		return nil, fmt.Errorf("invalid YAML fragment: %w", err)
+		location := ""
+		if match := yamlErrorLineRe.FindStringSubmatch(err.Error()); match != nil {
+			location = "on line " + match[1]
+		}
+		return nil, fragmentError("YAML", location, err)
 	}
 	if len(document.Content) == 0 {
 		return nil, nil

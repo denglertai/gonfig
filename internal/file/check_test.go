@@ -86,7 +86,7 @@ func TestCheckFragments(t *testing.T) {
 		{Path: "outer", Variables: []VariableReport{{Name: "CHECK_FRAGMENT", Status: VariableSet}}},
 		{Path: "outer.inner", Variables: []VariableReport{{Name: "CHECK_INNER", Status: VariableMissing}}},
 		{Path: "outer.nested", Variables: []VariableReport{{Name: "CHECK_NESTED", Status: VariableSet}}, Error: "fragments cannot contain further fragments"},
-		{Path: "invalid", Variables: []VariableReport{{Name: "CHECK_INVALID", Status: VariableSet}}, Error: "invalid YAML fragment: yaml: line 1: did not find expected ',' or ']'"},
+		{Path: "invalid", Variables: []VariableReport{{Name: "CHECK_INVALID", Status: VariableSet}}, Error: "invalid YAML fragment on line 1"},
 	}, report.Entries)
 }
 

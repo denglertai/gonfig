@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"os"
 	"path"
+	"strings"
 	"testing"
 
+	"github.com/denglertai/gonfig/internal/filter"
 	"github.com/denglertai/gonfig/internal/general"
 	"github.com/stretchr/testify/assert"
 )
@@ -311,6 +313,67 @@ func TestFragments(t *testing.T) {
 			}
 			assert.NoError(t, err)
 			assert.Equal(t, tC.want, output)
+		})
+	}
+}
+
+// TestFragmentErrorsWithoutValues checks that errors of invalid fragments only name the format and location, since the
+// messages of the parsers may quote parts of the fragment, unless values are allowed in errors
+func TestFragmentErrorsWithoutValues(t *testing.T) {
+	testCases := []struct {
+		desc     string
+		fileType general.FileType
+		content  string
+		fragment string
+		want     string
+		// wantWithValues is the error if values are allowed in errors
+		wantWithValues string
+	}{
+		{
+			desc:           "unknown YAML anchor",
+			fileType:       general.YAML,
+			content:        "a: ${FRAGMENT | fragment}\n",
+			fragment:       "pw: *s3cret",
+			want:           "invalid YAML fragment",
+			wantWithValues: "invalid YAML fragment: yaml: unknown anchor 's3cret' referenced",
+		},
+		{
+			desc:           "YAML syntax error",
+			fileType:       general.YAML,
+			content:        "a: ${FRAGMENT | fragment}\n",
+			fragment:       "a: 1\nb: 2\n  pw: s3cret",
+			want:           "invalid YAML fragment on line 3",
+			wantWithValues: "invalid YAML fragment: yaml: line 3: mapping values are not allowed in this context",
+		},
+		{
+			desc:           "JSON syntax error",
+			fileType:       general.JSON,
+			content:        `{"a": "${FRAGMENT | fragment}"}`,
+			fragment:       `{"pw": s3cret}`,
+			want:           "invalid JSON fragment at offset 8",
+			wantWithValues: "invalid JSON fragment: invalid character 's' looking for beginning of value",
+		},
+		{
+			desc:           "unknown XML entity",
+			fileType:       general.XML,
+			content:        "<r><a>${FRAGMENT | fragment}</a></r>",
+			fragment:       "<pw>\n&s3cret;</pw>",
+			want:           "invalid XML fragment on line 2",
+			wantWithValues: "invalid XML fragment: XML syntax error on line 2: invalid character entity &s3cret;",
+		},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			_, err := processFragment(t, tC.fileType, tC.content, tC.fragment)
+			assert.ErrorContains(t, err, tC.want)
+			assert.NotContains(t, err.Error(), "s3cret")
+			assert.True(t, strings.HasSuffix(err.Error(), tC.want), err.Error())
+
+			filter.SetValuesInErrors(true)
+			t.Cleanup(func() { filter.SetValuesInErrors(false) })
+
+			_, err = processFragment(t, tC.fileType, tC.content, tC.fragment)
+			assert.ErrorContains(t, err, tC.wantWithValues)
 		})
 	}
 }
