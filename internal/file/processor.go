@@ -151,7 +151,10 @@ func (fp *FileProcessor) processEntry(entry ConfigEntry, allowFragments bool, fi
 	return nil
 }
 
-// insertFragment inserts the fragment in place of the entry and processes the entries of the fragment
+// insertFragment inserts the fragment in place of the entry and processes the entries of the fragment.
+// It returns an error when allowFragments is false or the entry does not support fragments.
+// Placeholders in inserted entries are processed with further fragments disabled.
+// Insertion and placeholder processing errors are returned; inserted content is not rolled back.
 func (fp *FileProcessor) insertFragment(entry ConfigEntry, fragment filter.Fragment, allowFragments bool, fileGroup slog.Attr) error {
 	if !allowFragments {
 		return fmt.Errorf("failed to process the value of %s in %s: fragments cannot contain further fragments", entry.Path(), fp.FileName)

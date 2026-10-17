@@ -81,6 +81,8 @@ func (x *XmlElementConfigEntry) SetValue(value string) {
 
 // SetFragment replaces the content of the element by the fragment, which may consist of several elements and text.
 // An empty fragment removes the content.
+// It returns entries for the inserted child elements and their attributes for placeholder processing.
+// It returns an error if f.IsList is set or f.Text cannot be parsed as XML content.
 func (x *XmlElementConfigEntry) SetFragment(f filter.Fragment) ([]ConfigEntry, error) {
 	// XML has no lists, so a JSON array would only become text
 	if f.IsList {

@@ -99,6 +99,10 @@ func (j *JsonConfigEntry) SetTypedValue(value any) bool {
 
 // SetFragment replaces a value by the fragment, or merges the fragment into the object containing a key.
 // An empty fragment replaces a value by null, or removes a key.
+// f.Text must contain a single JSON value; whitespace-only text is empty.
+// A key must have a null value, and a nonempty fragment used as a key must be an object.
+// It returns the inserted entries for placeholder processing, or an error for invalid JSON,
+// trailing data, or violations of the key requirements.
 func (j *JsonConfigEntry) SetFragment(f filter.Fragment) ([]ConfigEntry, error) {
 	fragment, err := parseJsonFragment(f.Text)
 	if err != nil {

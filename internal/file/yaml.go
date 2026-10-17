@@ -71,6 +71,10 @@ func (y *YamlConfigEntry) SetTypedValue(value any) bool {
 
 // SetFragment replaces a value by the fragment, or merges the fragment into the mapping containing a key.
 // An empty fragment replaces a value by null, or removes a key.
+// Only the first YAML document in f.Text is used; JSON arrays are also accepted.
+// A key must have a null value, and a nonempty fragment used as a key must be a mapping.
+// It returns the inserted entries for placeholder processing, or an error for invalid YAML
+// or violations of the key requirements.
 func (y *YamlConfigEntry) SetFragment(f filter.Fragment) ([]ConfigEntry, error) {
 	fragment, err := parseYamlFragment(f.Text)
 	if err != nil {
