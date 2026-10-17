@@ -116,14 +116,16 @@ func (fp *FileProcessor) Process() error {
 			return fmt.Errorf("failed to process the value of %s in %s: %w", entry.Path(), fp.FileName, err)
 		}
 
-		// Entries store text, so non-string results (e.g. of to_int) are formatted.
-		// Handlers may convert the text back to the original type, e.g. JSON numbers.
+		logging.Debug("Setting new value", "entry", entryPath{entry}, "value", newVal, fileGroup)
+
 		newText, ok := newVal.(string)
 		if !ok {
+			// Write non-string results (e.g. of to_int) with their type if the file type supports it, otherwise as text
+			if typed, ok := entry.(TypedConfigEntry); ok && typed.SetTypedValue(newVal) {
+				continue
+			}
 			newText = fmt.Sprint(newVal)
 		}
-
-		logging.Debug("Setting new value", "entry", entryPath{entry}, "value", newVal, fileGroup)
 		entry.SetValue(newText)
 	}
 

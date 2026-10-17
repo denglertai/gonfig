@@ -67,8 +67,8 @@ func TestFileProcessorProcessesEntries(t *testing.T) {
 	err := NewFileProcessor(file, general.Undefined, &output).Process()
 
 	assert.NoError(t, err)
-	// Entries without placeholders are kept, non-string results are formatted as text
-	assert.Equal(t, "static: value\nhost: db\nport: \"5\"\n", output.String())
+	// Entries without placeholders are kept, non-string results keep their type
+	assert.Equal(t, "static: value\nhost: db\nport: 5\n", output.String())
 	assert.Contains(t, logs.String(), `msg="Setting new value" entry=host`)
 	assert.NotContains(t, logs.String(), "entry=static")
 }

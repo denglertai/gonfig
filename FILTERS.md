@@ -8,6 +8,7 @@ This page documents the placeholder syntax, every built-in filter and some commo
 - [Filter params](#filter-params)
 - [Built-in filters](#built-in-filters)
 - [Lists](#lists)
+- [Types](#types)
 - [Recipes](#recipes)
 - [Caveats](#caveats)
 
@@ -106,7 +107,9 @@ api.example.com
 | [`trim`](#trim--trimleft--trimright) | | Removes leading and trailing whitespace |
 | [`trimleft`](#trim--trimleft--trimright) | | Removes leading spaces |
 | [`trimright`](#trim--trimleft--trimright) | | Removes trailing spaces |
-| [`to_int`](#to_int) | | Converts the value to an integer |
+| [`to_int`](#to_int--to_float--to_bool) | | Converts the value to an integer |
+| [`to_float`](#to_int--to_float--to_bool) | | Converts the value to a floating point number |
+| [`to_bool`](#to_int--to_float--to_bool) | | Converts the value to a boolean |
 | [`multiply`](#multiply) | `m` | Multiplies an integer |
 | [`md5`](#md5) | | Hashes the value with MD5 |
 | [`bcrypt`](#bcrypt) | | Hashes the value with bcrypt |
@@ -138,14 +141,22 @@ $ V='  abc  ' gonfig value '[${V | trim}] [${V | trimleft}] [${V | trimright}]'
 [abc] [abc  ] [  abc]
 ```
 
-### to_int
+### to_int / to_float / to_bool
 
-Converts the value to an integer and fails if it is not numeric.
-See the [caveats](#caveats) on how non-string results are written.
+Convert the value to an integer, a floating point number or a boolean, and fail if it cannot be converted.
+YAML and JSON files write the result as a number or boolean, see [types](#types).
+
+- `to_int` accepts integers, e.g. `8080` or `-1`.
+- `to_float` accepts finite numbers, e.g. `1.5`, `2` or `1e3`.
+- `to_bool` accepts `true`, `false`, `1`, `0`, `t`, `f` and their upper case variants, but not `yes` or `on`.
 
 ```console
 $ PORT=8080 gonfig value '${PORT | to_int}'
 8080
+$ RATIO=0.75 gonfig value '${RATIO | to_float}'
+0.75
+$ ENABLED=1 gonfig value '${ENABLED | to_bool}'
+true
 ```
 
 ### multiply
@@ -249,6 +260,30 @@ A;B;C
 
 Always `join` a list before the placeholder ends. A list that is not joined is written in Go's list format, e.g. `[a b c]`.
 
+## Types
+
+Placeholders are replaced by text, so processed values are strings by default, even if they look like numbers.
+This keeps values like `01701` or `123456` unchanged, e.g. for zip codes or passwords.
+
+`to_int`, `to_float` and `to_bool` return a number or boolean instead.
+If a placeholder with such a result makes up the whole value, file types supporting types write it as such:
+
+| File type | `${PORT \| to_int}` | `${ENABLED \| to_bool}` | `${ZIP}` |
+| --- | --- | --- | --- |
+| YAML | `8080` | `true` | `"01701"` |
+| JSON | `8080` | `true` | `"01701"` |
+| XML, properties, plain text | `8080` as text | `true` as text | `01701` as text |
+
+In YAML, this also applies to quoted placeholders like `"${PORT | to_int}"`, while keys of mappings are always text.
+In JSON, placeholders are always written within strings, e.g. `"port": "${PORT | to_int}"` becomes `"port": 8080`.
+
+If such a placeholder is surrounded by other text, its result is formatted as text:
+
+```console
+$ PORT=8080 gonfig value 'http://localhost:${PORT | to_int}/api'
+http://localhost:8080/api
+```
+
 ## Recipes
 
 ### Read secrets from files
@@ -301,8 +336,7 @@ db1,db2,db3
 ## Caveats
 
 - **Missing variables are empty:** A variable that is not set is replaced by an empty string without an error.
-- **Non-string results replace the whole value:** `to_int` and `multiply` return integers. If such a placeholder is surrounded by other text, the whole value is replaced by the number, e.g. `port ${PORT | to_int}` becomes `8080`. Use these filters only for placeholders that make up the whole value.
-- **Types in config files:** Processed values are written back as text. JSON values keep the type of the original value, so a placeholder within a JSON string stays a string. YAML values keep the type of the original scalar, so `port: ${PORT | to_int}` becomes `port: "8080"`.
+- **Types in config files:** Processed values are strings unless a filter like `to_int` converts them, see [types](#types).
 - **YAML flow collections:** Within `[...]` or `{...}` an unquoted `${...}` is invalid YAML. Quote it, e.g. `hosts: ["${HOST_A}", "${HOST_B}"]`.
 - **Plain text files:** Every `${...}` is treated as a placeholder, including shell variables that were meant to be expanded by the shell later.
 - **No nesting:** Placeholders cannot be nested, `${A_${B}}` does not work.

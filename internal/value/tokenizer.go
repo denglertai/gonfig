@@ -1,6 +1,7 @@
 package value
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -36,8 +37,9 @@ func init() {
 }
 
 // ProcessValue replaces all placeholders within the value by the result of their filters.
-// The result is a string, unless a placeholder's filters return another type (e.g. to_int),
-// in which case that result replaces the whole value.
+// If a single placeholder makes up the whole value, the result of its filters is returned as is,
+// which may be of another type than string (e.g. to_int). Otherwise, the result is a string
+// and results of other types are formatted as text.
 func ProcessValue(value string) (any, error) {
 	// Most values do not contain any placeholders, so return them without any further processing
 	if !strings.Contains(value, "${") {
@@ -49,44 +51,45 @@ func ProcessValue(value string) (any, error) {
 		return value, nil
 	}
 
+	// Keep the type of the result, so file types supporting it can write e.g. numbers as such
+	if len(placeholders) == 1 && placeholders[0].start == 0 && placeholders[0].end == len(value) {
+		return applyFilters(placeholders[0])
+	}
+
 	// Build the result in a single pass, copying the text between the placeholders as is
 	var result strings.Builder
 	result.Grow(len(value))
 
-	var nonStringResult any
-	lastIsNonString := false
 	last := 0
 
 	for _, p := range placeholders {
-		logging.Debug("Found placeholder", "placeholder", p.token, "start", p.start, "end", p.end)
-
-		// The first filter reads the environment variable and ignores its input, so the token is just a placeholder value.
-		// Without any filters, e.g. for "${}", the token is kept as is.
-		filtered, err := filter.ApplyFilters(p.token, parseFilters(p.content()))
+		filtered, err := applyFilters(p)
 		if err != nil {
 			return nil, err
 		}
 
-		result.WriteString(value[last:p.start])
-		if s, ok := filtered.(string); ok {
-			result.WriteString(s)
-			lastIsNonString = false
-		} else {
-			// Only strings can be embedded into the surrounding text. Other types replace the whole value
-			// if they are the result of the last placeholder, otherwise the placeholder is kept as is.
-			result.WriteString(p.token)
-			nonStringResult = filtered
-			lastIsNonString = true
+		// Results of other types than string are embedded into the surrounding text as text
+		s, ok := filtered.(string)
+		if !ok {
+			s = fmt.Sprint(filtered)
 		}
-		last = p.end
-	}
 
-	if lastIsNonString {
-		return nonStringResult, nil
+		result.WriteString(value[last:p.start])
+		result.WriteString(s)
+		last = p.end
 	}
 
 	result.WriteString(value[last:])
 	return result.String(), nil
+}
+
+// applyFilters applies the filters of the placeholder
+func applyFilters(p placeholder) (any, error) {
+	logging.Debug("Found placeholder", "placeholder", p.token, "start", p.start, "end", p.end)
+
+	// The first filter reads the environment variable and ignores its input, so the token is just a placeholder value.
+	// Without any filters, e.g. for "${}", the token is kept as is.
+	return filter.ApplyFilters(p.token, parseFilters(p.content()))
 }
 
 // placeholder is a placeholder "${...}" found within a value

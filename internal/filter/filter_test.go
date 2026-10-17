@@ -117,6 +117,18 @@ func TestFiltersWithNonStringInput(t *testing.T) {
 		{desc: "to_int on int", filter: "to_int", input: 5, expected: 5},
 		{desc: "multiply on numeric string", filter: "multiply", params: map[string]string{"m": "2"}, input: "3", expected: 6},
 		{desc: "multiply on non-numeric", filter: "multiply", input: true, wantErr: true},
+		{desc: "to_float on string", filter: "to_float", input: "1.5", expected: 1.5},
+		{desc: "to_float on int", filter: "to_float", input: 2, expected: 2.0},
+		{desc: "to_float on float", filter: "to_float", input: 2.5, expected: 2.5},
+		{desc: "to_float on non-numeric", filter: "to_float", input: "abc", wantErr: true},
+		{desc: "to_float on infinity", filter: "to_float", input: "Inf", wantErr: true},
+		{desc: "to_float on NaN", filter: "to_float", input: "NaN", wantErr: true},
+		{desc: "to_float on bool", filter: "to_float", input: true, wantErr: true},
+		{desc: "to_bool on true", filter: "to_bool", input: "true", expected: true},
+		{desc: "to_bool on 0", filter: "to_bool", input: "0", expected: false},
+		{desc: "to_bool on bool", filter: "to_bool", input: true, expected: true},
+		{desc: "to_bool on yes", filter: "to_bool", input: "yes", wantErr: true},
+		{desc: "to_bool on int", filter: "to_bool", input: 1, wantErr: true},
 	}
 	for _, tC := range testCases {
 		t.Run(tC.desc, func(t *testing.T) {
