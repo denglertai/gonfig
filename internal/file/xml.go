@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"iter"
+	"regexp"
 	"slices"
 
 	"github.com/beevik/etree"
@@ -52,6 +53,8 @@ func (x *XmlAttributeConfigEntry) SetValue(value string) {
 type XmlElementConfigEntry struct {
 	element   *etree.Element
 	fromCData bool
+	// handler collects the entries of inserted fragments
+	handler *XmlConfigFileHandler
 }
 
 // Key returns the key of the configuration entry
@@ -72,6 +75,47 @@ func (x *XmlElementConfigEntry) GetValue() string {
 // SetValue sets the value of the configuration entry
 func (x *XmlElementConfigEntry) SetValue(value string) {
 	x.element.SetText(value)
+}
+
+// SetFragment replaces the content of the element by the fragment, which may consist of several elements and text.
+// An empty fragment removes the content.
+func (x *XmlElementConfigEntry) SetFragment(text string) ([]ConfigEntry, error) {
+	fragment, err := parseXmlFragment(text)
+	if err != nil {
+		return nil, err
+	}
+
+	// Children are removed from the end, since removing a child shifts all following children,
+	// which would take quadratic time for fragments with many elements
+	for i := len(x.element.Child) - 1; i >= 0; i-- {
+		x.element.RemoveChildAt(i)
+	}
+	children := make([]etree.Token, len(fragment.Child))
+	for i := len(fragment.Child) - 1; i >= 0; i-- {
+		children[i] = fragment.RemoveChildAt(i)
+	}
+	for _, child := range children {
+		x.element.AddChild(child)
+	}
+	x.fromCData = false
+
+	return x.handler.collectEntries(func() { x.handler.handleChildElements(x.element.ChildElements()) }), nil
+}
+
+// xmlDeclarationRe matches an XML declaration at the start of a fragment, e.g. of a fragment file
+var xmlDeclarationRe = regexp.MustCompile(`^\s*<\?xml[^>]*\?>`)
+
+// parseXmlFragment parses a fragment into the children of a wrapping element, so it may contain several elements and text
+func parseXmlFragment(text string) (*etree.Element, error) {
+	document := etree.NewDocument()
+	document.ReadSettings.PreserveCData = true
+
+	wrapped := "<gonfig-fragment>" + xmlDeclarationRe.ReplaceAllString(text, "") + "</gonfig-fragment>"
+	if err := document.ReadFromString(wrapped); err != nil {
+		return nil, fmt.Errorf("invalid XML fragment: %w", err)
+	}
+
+	return document.Root(), nil
 }
 
 // XmlConfigFileHandler represents a configuration file handler
@@ -110,6 +154,13 @@ func (x *XmlConfigFileHandler) Read(source io.Reader) error {
 	return nil
 }
 
+// collectEntries returns the entries added while inserting a fragment
+func (x *XmlConfigFileHandler) collectEntries(insert func()) []ConfigEntry {
+	before := len(x.entries)
+	insert()
+	return slices.Clone(x.entries[before:])
+}
+
 // handleChildElements recursively processes the child elements and their attributes
 func (x *XmlConfigFileHandler) handleChildElements(elements []*etree.Element) {
 	for _, element := range elements {
@@ -127,6 +178,7 @@ func (x *XmlConfigFileHandler) handleChildElements(elements []*etree.Element) {
 		x.entries = append(x.entries, &XmlElementConfigEntry{
 			element:   element,
 			fromCData: fromCData,
+			handler:   x,
 		})
 
 		for _, attr := range element.Attr {

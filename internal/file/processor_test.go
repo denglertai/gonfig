@@ -72,3 +72,20 @@ func TestFileProcessorProcessesEntries(t *testing.T) {
 	assert.Contains(t, logs.String(), `msg="Setting new value" entry=host`)
 	assert.NotContains(t, logs.String(), "entry=static")
 }
+
+// failingWriter fails on every write
+type failingWriter struct{}
+
+func (failingWriter) Write(_ []byte) (int, error) {
+	return 0, assert.AnError
+}
+
+func TestFileProcessorWriteError(t *testing.T) {
+	file := path.Join(t.TempDir(), "config.yaml")
+	assert.NoError(t, os.WriteFile(file, []byte("key: value\n"), 0o644))
+
+	err := NewFileProcessor(file, general.Undefined, failingWriter{}).Process()
+	assert.ErrorContains(t, err, "failed to write")
+	// The YAML encoder wraps the error of the writer as text
+	assert.ErrorContains(t, err, assert.AnError.Error())
+}

@@ -1,7 +1,9 @@
 package file
 
 import (
+	"cmp"
 	"errors"
+	"fmt"
 	"io"
 	"iter"
 	"slices"
@@ -16,6 +18,13 @@ type YamlConfigEntry struct {
 	key   string
 	path  string
 	isKey bool
+	// handler collects the entries of inserted fragments
+	handler *YamlConfigFileHandler
+	// parent and parentPath are the mapping containing the key and its path, only set for keys
+	parent     *yaml.Node
+	parentPath string
+	// keyNode is the key of a value within a mapping
+	keyNode *yaml.Node
 }
 
 // Key returns the key of the configuration entry
@@ -57,6 +66,84 @@ func (y *YamlConfigEntry) SetTypedValue(value any) bool {
 	y.node.Tag = yamlTags[tv.kind]
 	y.node.Style = 0
 	return true
+}
+
+// SetFragment replaces a value by the fragment, or merges the fragment into the mapping containing a key.
+// An empty fragment replaces a value by null, or removes a key.
+func (y *YamlConfigEntry) SetFragment(text string) ([]ConfigEntry, error) {
+	fragment, err := parseYamlFragment(text)
+	if err != nil {
+		return nil, err
+	}
+
+	if y.isKey {
+		return y.mergeFragment(fragment)
+	}
+
+	if fragment == nil {
+		fragment = &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!null"}
+	}
+
+	// A line comment of a value belongs to its key if the value is written as a block below the key
+	if y.keyNode != nil && (fragment.Kind == yaml.MappingNode || fragment.Kind == yaml.SequenceNode) {
+		y.keyNode.LineComment = cmp.Or(y.keyNode.LineComment, y.node.LineComment)
+		y.node.LineComment = ""
+	}
+	keepYamlComments(y.node, fragment)
+
+	// Replace the node in place, so the parent refers to the fragment
+	*y.node = *fragment
+	return y.handler.collectEntries(func() { y.handler.handleNode(y.node, y.path, y.key) }), nil
+}
+
+// mergeFragment merges the fragment into the mapping containing the key and removes the key
+func (y *YamlConfigEntry) mergeFragment(fragment *yaml.Node) ([]ConfigEntry, error) {
+	i := slices.Index(y.parent.Content, y.node)
+	value := y.parent.Content[i+1]
+	if value.Kind != yaml.ScalarNode || value.ShortTag() != "!!null" {
+		return nil, errors.New("a key with a fragment must not have a value")
+	}
+	if fragment != nil && fragment.Kind != yaml.MappingNode {
+		return nil, errors.New("a fragment used as a key has to be a mapping")
+	}
+
+	y.parent.Content = slices.Delete(y.parent.Content, i, i+2)
+	if fragment == nil {
+		return nil, nil
+	}
+
+	return y.handler.collectEntries(func() { y.handler.mergeMappings(y.parent, fragment, y.parentPath) }), nil
+}
+
+// parseYamlFragment parses the first document of a fragment, or returns nil for an empty fragment
+func parseYamlFragment(text string) (*yaml.Node, error) {
+	var document yaml.Node
+	if err := yaml.Unmarshal([]byte(text), &document); err != nil {
+		return nil, fmt.Errorf("invalid YAML fragment: %w", err)
+	}
+	if len(document.Content) == 0 {
+		return nil, nil
+	}
+
+	fragment := document.Content[0]
+	resetYamlStyles(fragment)
+	return fragment, nil
+}
+
+// keepYamlComments keeps the comments of a replaced node, unless the replacing node has comments of its own
+func keepYamlComments(replaced *yaml.Node, replacing *yaml.Node) {
+	replacing.HeadComment = cmp.Or(replacing.HeadComment, replaced.HeadComment)
+	replacing.LineComment = cmp.Or(replacing.LineComment, replaced.LineComment)
+	replacing.FootComment = cmp.Or(replacing.FootComment, replaced.FootComment)
+}
+
+// resetYamlStyles writes fragments in block style without unnecessary quotes, e.g. for JSON fragments.
+// The encoder quotes strings that would be read as another type otherwise, and literal and folded scalars are kept.
+func resetYamlStyles(node *yaml.Node) {
+	node.Style &^= yaml.FlowStyle | yaml.DoubleQuotedStyle | yaml.SingleQuotedStyle
+	for _, child := range node.Content {
+		resetYamlStyles(child)
+	}
 }
 
 // IsKey returns whether the configuration entry represents the key of a mapping rather than a value
@@ -106,26 +193,7 @@ func (y *YamlConfigFileHandler) handleNode(node *yaml.Node, path string, key str
 		}
 	case yaml.MappingNode:
 		for i := 0; i+1 < len(node.Content); i += 2 {
-			keyNode, valueNode := node.Content[i], node.Content[i+1]
-			currentPath := appendToPath(path, keyNode.Value)
-
-			// The encoder writes merge keys with an explicit tag ("!!merge <<"), which is
-			// valid but noisy; without the tag the key resolves to a merge key again
-			if keyNode.Tag == "!!merge" {
-				keyNode.Tag = ""
-			}
-
-			// Keys may contain placeholders as well
-			if keyNode.Kind == yaml.ScalarNode {
-				y.entries = append(y.entries, &YamlConfigEntry{
-					node:  keyNode,
-					key:   keyNode.Value,
-					path:  currentPath,
-					isKey: true,
-				})
-			}
-
-			y.handleNode(valueNode, currentPath, keyNode.Value)
+			y.handleMappingPair(node, i, path)
 		}
 	case yaml.SequenceNode:
 		for i, child := range node.Content {
@@ -134,12 +202,85 @@ func (y *YamlConfigFileHandler) handleNode(node *yaml.Node, path string, key str
 		}
 	case yaml.ScalarNode:
 		y.entries = append(y.entries, &YamlConfigEntry{
-			node: node,
-			key:  key,
-			path: path,
+			node:    node,
+			key:     key,
+			path:    path,
+			handler: y,
 		})
 	case yaml.AliasNode:
 		// Aliases refer to an anchored node, which is processed where it is defined
+	}
+}
+
+// handleMappingPair collects the entries of the key and value at index i of the mapping
+func (y *YamlConfigFileHandler) handleMappingPair(mapping *yaml.Node, i int, path string) {
+	keyNode, valueNode := mapping.Content[i], mapping.Content[i+1]
+	currentPath := appendToPath(path, keyNode.Value)
+
+	// The encoder writes merge keys with an explicit tag ("!!merge <<"), which is
+	// valid but noisy; without the tag the key resolves to a merge key again
+	if keyNode.Tag == "!!merge" {
+		keyNode.Tag = ""
+	}
+
+	// Keys may contain placeholders as well
+	if keyNode.Kind == yaml.ScalarNode {
+		y.entries = append(y.entries, &YamlConfigEntry{
+			node:       keyNode,
+			key:        keyNode.Value,
+			path:       currentPath,
+			isKey:      true,
+			handler:    y,
+			parent:     mapping,
+			parentPath: path,
+		})
+	}
+
+	before := len(y.entries)
+	y.handleNode(valueNode, currentPath, keyNode.Value)
+
+	// Remember the key of a scalar value, e.g. to move comments when the value is replaced by a fragment
+	if valueNode.Kind == yaml.ScalarNode && len(y.entries) == before+1 {
+		y.entries[before].(*YamlConfigEntry).keyNode = keyNode
+	}
+}
+
+// collectEntries returns the entries added while inserting a fragment
+func (y *YamlConfigFileHandler) collectEntries(insert func()) []ConfigEntry {
+	before := len(y.entries)
+	insert()
+	return slices.Clone(y.entries[before:])
+}
+
+// mergeMappings deep merges the source mapping into the target mapping: mappings are merged recursively,
+// other values of the source replace the ones of the target, and new keys are appended in the order of the source
+func (y *YamlConfigFileHandler) mergeMappings(target *yaml.Node, source *yaml.Node, path string) {
+	// Index the keys of the target once, so merging takes linear instead of quadratic time for large mappings.
+	// Like a lookup in YAML, the first occurrence of a duplicate key is used.
+	index := make(map[string]int, len(target.Content)/2)
+	for i := 0; i+1 < len(target.Content); i += 2 {
+		if _, found := index[target.Content[i].Value]; !found {
+			index[target.Content[i].Value] = i
+		}
+	}
+
+	for i := 0; i+1 < len(source.Content); i += 2 {
+		keyNode, valueNode := source.Content[i], source.Content[i+1]
+		currentPath := appendToPath(path, keyNode.Value)
+
+		j, found := index[keyNode.Value]
+		switch {
+		case !found:
+			target.Content = append(target.Content, keyNode, valueNode)
+			index[keyNode.Value] = len(target.Content) - 2
+			y.handleMappingPair(target, len(target.Content)-2, path)
+		case target.Content[j+1].Kind == yaml.MappingNode && valueNode.Kind == yaml.MappingNode:
+			y.mergeMappings(target.Content[j+1], valueNode, currentPath)
+		default:
+			keepYamlComments(target.Content[j+1], valueNode)
+			target.Content[j+1] = valueNode
+			y.handleNode(valueNode, currentPath, keyNode.Value)
+		}
 	}
 }
 

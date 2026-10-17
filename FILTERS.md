@@ -10,6 +10,7 @@ This page documents the placeholder syntax, every built-in filter and some commo
 - [Lists](#lists)
 - [Types](#types)
 - [Templates](#templates)
+- [Fragments](#fragments)
 - [Recipes](#recipes)
 - [Caveats](#caveats)
 
@@ -118,6 +119,7 @@ api.example.com
 | [`base64_decode`](#base64--base64_decode) | | Decodes a base64 value |
 | [`url_encode`](#url_encode--url_decode) | `mode` | Escapes the value for use within URLs |
 | [`url_decode`](#url_encode--url_decode) | `mode` | Reverses `url_encode` |
+| [`fragment`](#fragments) | | Inserts the value as a structure, e.g. a YAML mapping or XML elements |
 | [`replace`](#replace) | `old`, `new` | Replaces text |
 | [`regex`](#regex) | `pattern`, `replacement` | Replaces text using a regular expression |
 | [`split`](#split--join) | `delimiter` | Splits the value into a [list](#lists) |
@@ -384,6 +386,101 @@ Placeholder templates may be embedded into other text like any placeholder, and 
 - **Quoting:** Quote values in `.gonfig.yaml` that start with a template reference, e.g. `filters: "@clean | upper"`, since `@` cannot start an unquoted YAML value.
   Quote values containing placeholders as well. gonfig does not process its own config file, so placeholders there are only replaced when a template is used.
   A config file that cannot be read, e.g. because of invalid YAML, fails with an error naming the file.
+
+## Fragments
+
+The filter `fragment` inserts whole structures (fragments) into a config file instead of text, e.g. a list of YAML mappings or XML elements.
+A fragment is read like any value, from an environment variable or from a file referenced with `@path`.
+The file it is inserted into parses it in its own format, so YAML files take YAML fragments, JSON files take JSON fragments and XML files take XML fragments.
+JSON is valid YAML as well, so JSON fragments work in YAML files too.
+
+The position of the placeholder decides what happens.
+
+### Fragments as values
+
+A fragment used as a value replaces the value:
+
+`logging.yaml`:
+```yaml
+logging:
+  level: info
+  appenders: ${LOG_APPENDERS | fragment}
+```
+
+```console
+$ LOG_APPENDERS='[{"type": "console"}, {"type": "file", "path": "/var/log/app.log"}]' gonfig config process -f logging.yaml
+logging:
+  level: info
+  appenders:
+    - type: console
+    - type: file
+      path: /var/log/app.log
+```
+
+In XML files, a fragment replaces the whole content of the element containing the placeholder. It may consist of several elements and text.
+Like any placeholder in XML, it is only found at the start of the element's content, before any child elements:
+
+`server.xml`:
+```xml
+<server>
+  <resources>${DATASOURCES | fragment}</resources>
+</server>
+```
+
+```console
+$ DATASOURCES='<datasource name="main"/><datasource name="readonly"/>' gonfig config process -f server.xml
+<server>
+  <resources><datasource name="main"/><datasource name="readonly"/></resources>
+</server>
+```
+
+### Fragments as keys
+
+A fragment used as a key without a value is merged into the mapping or object containing it:
+
+`database.yaml`:
+```yaml
+database:
+  host: localhost # development
+  port: 5432
+  pool:
+    timeout: 30
+  ${DB_OVERRIDES | fragment}:
+```
+
+`db-prod.yaml`:
+```yaml
+host: db.prod
+pool:
+  size: 20
+```
+
+```console
+$ DB_OVERRIDES=@db-prod.yaml gonfig config process -f database.yaml
+database:
+  host: db.prod # development
+  port: 5432
+  pool:
+    timeout: 30
+    size: 20
+```
+
+The fragment is merged deeply:
+
+- **Mappings and objects** are merged recursively.
+- **Other values**, like scalars and lists, are replaced by the ones of the fragment.
+- **Comments and key order** of the file are kept, and new keys are appended in the order of the fragment.
+
+In JSON files, the key has to have the value `null`, e.g. `"${DB_OVERRIDES | fragment}": null`. XML files support fragments only as the content of elements.
+
+### Rules
+
+- **Whole values only:** A fragment has to make up the whole value or key, otherwise processing fails.
+- **Placeholders within fragments** are processed as well, e.g. a fragment may contain `${DB_PASSWORD | @secret}`. Fragments cannot contain further fragments.
+- **Empty fragments** replace a value by null, remove a key or remove the content of an XML element.
+- **Formatting:** YAML fragments are written in block style. Quotes are only kept where they are needed to keep a string a string.
+- **Errors:** Invalid fragments, fragments in properties or plain text files and fragments in XML attributes fail processing, so no output is written.
+- **Templates:** Fragment files can be provided by [placeholder templates](#templates), e.g. with `default: "@/etc/app/logging.yaml"` and `${@logging | fragment}`.
 
 ## Recipes
 

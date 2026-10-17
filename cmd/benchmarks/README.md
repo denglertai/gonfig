@@ -7,6 +7,7 @@ Benchmarks for processing config files and single values.
 | `BenchmarkProcessFile/<type>/static` | Reading, parsing and writing a config file of at least 1 MiB without placeholders |
 | `BenchmarkProcessFile/<type>/placeholders` | The same file with three placeholders per entry, e.g. `${BENCH_PASSWORD \| trim}` |
 | `BenchmarkProcessValue/<case>` | Finding placeholders and executing filter chains for a single value |
+| `BenchmarkProcessFragment/<type>/<mode>/<n>` | Inserting a [fragment](../../FILTERS.md#fragments) with `n` keys or XML elements as a value (`value`), or merging it into a mapping with `n` keys (`merge`) |
 
 The difference between `static` and `placeholders` shows the cost of the placeholders compared to reading and writing the file.
 
@@ -113,6 +114,25 @@ Measured with the gonfig binary, `/usr/bin/time` and files with two placeholders
 
 The peak memory of the process is a multiple of the file size: about 110 times for YAML and 12 to 31 times for the other file types.
 Config files are usually much smaller than 1 MiB, but very large YAML files may exceed the memory limit of a container.
+
+## Fragments
+
+Inserting and merging [fragments](../../FILTERS.md#fragments) takes linear time in the size of the fragment and the target mapping.
+For `merge`, half of the fragment's keys overwrite keys of the target and half are added. XML only supports fragments as the content of elements, so there is no `merge` variant for XML.
+
+| Benchmark | 1,000 keys | 10,000 keys | Peak heap 10,000 keys |
+| --- | ---: | ---: | ---: |
+| yaml/value | 6.4 ms | 63 ms | 74 MiB |
+| yaml/merge | 11.7 ms | 115 ms | 94 MiB |
+| json/value | 1.3 ms | 16 ms | 9 MiB |
+| json/merge | 2.9 ms | 32 ms | 19 MiB |
+| xml/value | 1.7 ms | 20 ms | 14 MiB |
+
+Merging initially looked up each key of the fragment by a linear search through the target mapping, which took quadratic time:
+merging 16,000 keys took 915 ms for YAML and 325 ms for JSON. The keys of the target are now indexed once per merge, which reduced it to 192 ms and 55 ms.
+
+Inserting XML fragments took quadratic time as well, since etree shifts all following children when a child is removed,
+and the fragment's children were moved from the front: 64,000 elements took 7.4 s. They are now removed from the end, which reduced it to 85 ms.
 
 ## Findings
 

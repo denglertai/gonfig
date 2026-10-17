@@ -285,3 +285,15 @@ func TestIsKnown(t *testing.T) {
 	assert.True(t, IsKnown("url_encode"))
 	assert.False(t, IsKnown("not_a_filter"))
 }
+
+func TestFragmentFilter(t *testing.T) {
+	result, err := NewFilter("fragment").Process("a: 1")
+	assert.NoError(t, err)
+	assert.Equal(t, Fragment{Text: "a: 1"}, result)
+	assert.Equal(t, "a: 1", result.(Fragment).String())
+
+	// Values of other types are formatted as text
+	result, err = NewFilter("fragment").Process(5)
+	assert.NoError(t, err)
+	assert.Equal(t, Fragment{Text: "5"}, result)
+}

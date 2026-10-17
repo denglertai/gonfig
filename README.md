@@ -30,11 +30,12 @@ czNjciZ0
 | --- | --- | --- | --- | --- | --- | --- |
 | File extensions | `.yaml`, `.yml` | `.json` | `.xml` | `.properties` | any, with `-t plain` | planned ([#161](https://github.com/denglertai/gonfig/issues/161)) |
 | Placeholders in values | ✅ | ✅ | ✅ element text, CDATA and attributes | ✅ | ✅ every line | |
-| Placeholders in keys | ✅ | ❌ | ❌ | ❌ | ✅ | |
+| Placeholders in keys | ✅ | ✅ | ❌ | ❌ | ✅ | |
 | [Filters](./FILTERS.md) and [plugins](./PLUGINS.md) | ✅ | ✅ | ✅ | ✅ | ✅ | |
 | Comments preserved | ✅ | – | ✅ | ✅ written as `#` | ✅ | |
 | Key order preserved | ✅ | ✅ | ✅ | ✅ | ✅ | |
 | Formatting preserved | ✅ including multiple documents | ❌ indented with 2 spaces | ✅ | ❌ written as `key = value` | ✅ | |
+| [Fragments](./FILTERS.md#fragments) | ✅ values and keys | ✅ values and keys | ✅ element content | ❌ | ❌ | |
 | [Typed values](./FILTERS.md#types) | ✅ with `to_int`, `to_float`, `to_bool` | ✅ with `to_int`, `to_float`, `to_bool` | ❌ text | ❌ text | ❌ text | |
 
 ## Installation
@@ -212,6 +213,8 @@ exec /usr/bin/app
 
 **Reusable settings:** Define filter chains and placeholders like a JDBC URL with defaults once in `.gonfig.yaml` and use them in all config files, e.g. `${@db_url}`. See [templates](./FILTERS.md#templates).
 
+**Environment-specific structures:** Insert whole blocks like a list of log appenders or data sources, or merge environment-specific overrides into a mapping, see [fragments](./FILTERS.md#fragments).
+
 **Templates per environment:** Keep a template in the repository and render it for each environment with `-o`:
 ```console
 $ gonfig config process -f config.template.yaml -o config.yaml -w
@@ -338,6 +341,7 @@ ${ENV_VAR | filter1 | filter2(param) | filter3}
 | `base64_decode` | Decodes a base64 value, fails on invalid input | `${VAL \| base64_decode}` |
 | `url_encode(mode)` | Escapes the value for URL query parameters, or path segments with mode `path` | `${VAL \| url_encode}` |
 | `url_decode(mode)` | Reverses `url_encode` | `${VAL \| url_decode}` |
+| `fragment` | Inserts the value as a structure, e.g. a YAML mapping or XML elements, see [fragments](./FILTERS.md#fragments) | `${VAL \| fragment}` |
 | `replace(old,new)` | Replaces every occurrence of `old` by `new` | `${VAL \| replace(foo,bar)}` |
 | `regex(pattern,replacement)` | Replaces every match of the [regular expression](https://pkg.go.dev/regexp/syntax) `pattern`. Capture groups are referenced by `\1` | `${EMAIL \| regex(^\(\w+\)@.+,\1)}` |
 | `split(delimiter)` | Splits the value into a [list](./FILTERS.md#lists), the delimiter defaults to `,` | `${VAL \| split(;) \| join}` |
