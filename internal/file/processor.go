@@ -14,7 +14,9 @@ import (
 	"github.com/denglertai/gonfig/pkg/logging"
 )
 
-// ConfigEntry represents a single configuration entry
+// ConfigEntry represents a single configuration entry, i.e. a value that may contain placeholders.
+// Depending on the file type this is a scalar or key (YAML), a scalar (JSON, properties),
+// an element's text or an attribute (XML) or a line (plain).
 type ConfigEntry interface {
 	// Key returns the key of the configuration entry
 	Key() string
@@ -26,7 +28,8 @@ type ConfigEntry interface {
 	SetValue(value string)
 }
 
-// ConfigFileHandler represents a configuration file handler
+// ConfigFileHandler represents a configuration file handler, which is implemented once per file type.
+// The handler keeps the parsed document, so changes made to its entries are part of what Write writes.
 type ConfigFileHandler interface {
 	// Read reads the configuration file
 	Read(source io.Reader) error
@@ -62,7 +65,17 @@ func NewFileProcessor(fileName string, fileType general.FileType, output io.Writ
 	}
 }
 
-// Process processes the file
+// Process processes the file. The pipeline is the same for every file type:
+//  1. getFileProcessor selects the ConfigFileHandler for the file type
+//  2. Read parses the file into the handler's document
+//  3. Process flattens the document into a list of entries
+//  4. every entry's value is passed to value.ProcessValue, which replaces its placeholders,
+//     and the result is set on the entry, updating the document
+//  5. Write serializes the updated document to the output
+//
+// Since only the values of entries are changed, everything else in the document is kept
+// as far as the file type's library allows, e.g. comments and key order.
+// If any value fails to process, nothing is written.
 func (fp *FileProcessor) Process() error {
 	fileGroup := slog.Group("file", "name", fp.FileName, "type", fp.FileType)
 
@@ -96,6 +109,8 @@ func (fp *FileProcessor) Process() error {
 			return fmt.Errorf("failed to process the value of %s in %s: %w", entry.Path(), fp.FileName, err)
 		}
 
+		// Entries store text, so non-string results (e.g. of to_int) are formatted.
+		// Handlers may convert the text back to the original type, e.g. JSON numbers.
 		logging.Debug("Setting new value", "entry", entry.Path(), "value", newVal, fileGroup)
 		entry.SetValue(fmt.Sprintf("%v", newVal))
 	}
