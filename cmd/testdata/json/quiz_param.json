@@ -37,16 +37,16 @@
         "test": {
             "bla_blub": "${BLA_BLUB}",
             "int": "${INT|to_int}",
-            "float": "${FLOAT|to_float}",
-            "bool": "${BOOL|to_bool}",
+            "float": "${FLOAT}",
+            "bool": "${BOOL}",
             "string": "${STRING}",
             "special_characters": "${SPECIAL_CHARACTERS}"
         },
         "list": {
             "list": [
                 "${INT|to_int}",
-                "${FLOAT|to_float}",
-                "${BOOL|to_bool}",
+                "${FLOAT}",
+                "${BOOL}",
                 "${STRING}",
                 "${SPECIAL_CHARACTERS}"
             ]

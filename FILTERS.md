@@ -54,8 +54,22 @@ $ V=' abc ' gonfig value '[${V | base64 | trim}]'
 
 If a filter fails, for example `to_int` on a non-numeric value, gonfig stops with an error and does not write any output file.
 
-A filter name that is unknown, for example because of a typo or a [plugin](./PLUGINS.md) that failed to load, is skipped:
-gonfig logs a warning and passes the value on unchanged. Filter names are case-sensitive, so `UPPER` is unknown.
+A filter name that is unknown, for example because of a typo or a [plugin](./PLUGINS.md) that failed to load, is an error as well.
+This prevents writing a value unchanged that was meant to be hashed or encrypted. Filter names are case-sensitive, so `UPPER` is unknown:
+
+```console
+$ V=abc gonfig value '${V | UPPER}'
+Error: unknown filter "UPPER": check the filter name, or the log for plugins that failed to load
+```
+
+The option `allow-unknown-filters` restores the behavior of earlier versions, which logged a warning and passed the value on unchanged.
+It may be set with the flag `--allow-unknown-filters`, the environment variable `GONFIG_ALLOW_UNKNOWN_FILTERS` or in `.gonfig.yaml`, see [configuration](./README.md#configuration).
+Only use it if values passed on unchanged cannot contain secrets:
+
+```console
+$ V=abc gonfig --allow-unknown-filters value '${V | UPPER}'
+abc
+```
 
 ## Filter params
 

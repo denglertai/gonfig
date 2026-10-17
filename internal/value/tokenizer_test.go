@@ -215,7 +215,7 @@ func TestProcessValueWithStringFilters(t *testing.T) {
 func TestProcessValueWithInvalidFilterParams(t *testing.T) {
 	t.Setenv("FILTER_TEST", "abc")
 
-	for _, value := range []string{"${FILTER_TEST|replace}", "${FILTER_TEST|regex(\\()}", "${FILTER_TEST|base64_decode}"} {
+	for _, value := range []string{"${FILTER_TEST|not_a_filter}", "${FILTER_TEST|UPPER}", "${FILTER_TEST|replace}", "${FILTER_TEST|regex(\\()}", "${FILTER_TEST|base64_decode}"} {
 		_, err := ProcessValue(value)
 		assert.Error(t, err, value)
 	}

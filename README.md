@@ -357,6 +357,7 @@ Order of precedence (highest to lowest):
 | Include source location | `--log-source`, `-s` | `GONFIG_LOG_SOURCE` | `false` | Includes source location in log output |
 | Config directory | `--config-path` | `GONFIG_CONFIG_PATH` | empty | Directory that contains `.gonfig.yaml` |
 | Plugin directory | `--plugin-path` | `GONFIG_PLUGIN_PATH` | `./plugins` | Directory scanned recursively for plugin `.so` files |
+| Allow unknown filters | `--allow-unknown-filters` | `GONFIG_ALLOW_UNKNOWN_FILTERS` | `false` | Passes values on unchanged with a warning instead of failing for [unknown filters](./FILTERS.md#order-of-operations). This may write secrets that were meant to be hashed or encrypted |
 
 ### Config File
 
@@ -373,6 +374,8 @@ Example config file:
 log-level: debug
 log-source: true
 plugin-path: ./plugins
+# Fail on unknown filters instead of passing values on unchanged (default)
+allow-unknown-filters: false
 ```
 
 `plugin-path` can be configured in `.gonfig.yaml` and is resolved relative to the current working directory when provided as a relative path.

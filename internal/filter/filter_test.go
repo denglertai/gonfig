@@ -212,3 +212,22 @@ func TestStringManipulationFilters(t *testing.T) {
 		})
 	}
 }
+
+func TestUnknownFilterFails(t *testing.T) {
+	filter := NewFilter("not_a_filter")
+
+	result, err := filter.Process("s3cret")
+
+	assert.ErrorContains(t, err, `unknown filter "not_a_filter"`)
+	assert.NotEqual(t, "s3cret", result)
+}
+
+func TestUnknownFilterAllowed(t *testing.T) {
+	SetAllowUnknownFilters(true)
+	t.Cleanup(func() { SetAllowUnknownFilters(false) })
+
+	result, err := NewFilter("not_a_filter").Process("value")
+
+	assert.NoError(t, err)
+	assert.Equal(t, "value", result)
+}

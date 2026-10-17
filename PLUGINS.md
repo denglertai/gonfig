@@ -50,11 +50,17 @@ Things to keep in mind:
 - **Positional params:** Params given by position are passed with their position as key, e.g. `sha256(base64)` passes `{"0": "base64"}`.
 - **Command plugins:** [pkg/plugin/plugin.go](./pkg/plugin/plugin.go) also defines a `PluginCommand` interface for adding CLI commands. gonfig does not load command plugins yet.
 
-> [!WARNING]
-> If a plugin fails to load, gonfig logs an error and continues without it.
-> Its filters are then unknown, and unknown filters pass the value on **unchanged**.
-> For a filter that hashes or encrypts a secret, this means the plain secret ends up in the config file.
-> Check the log output after installing or upgrading plugins.
+If a plugin fails to load, gonfig logs an error and continues without it.
+Its filters are then unknown, and using an unknown filter fails processing, so no output is written:
+
+```console
+$ V=hello gonfig value '${V | sha256}'
+{"time":"...","level":"ERROR","msg":"Failed to load plugin","path":"plugins/hash.so","error":"plugin.Open(\"plugins/hash\"): plugin was built with a different version of package internal/goarch"}
+Error: unknown filter "sha256": check the filter name, or the log for plugins that failed to load
+```
+
+The option [`allow-unknown-filters`](./FILTERS.md#order-of-operations) makes gonfig pass the values of unknown filters on unchanged instead.
+Avoid it for plugins that hash or encrypt secrets, since a plugin failing to load would then write the plain secrets.
 
 ## Requirements
 
@@ -250,7 +256,8 @@ Since the key is a param, it may contain [escaped](./FILTERS.md#filter-params) s
 
 ## Troubleshooting
 
-Plugin errors are logged with the message `Failed to load plugin`. Common errors:
+Using a filter of a plugin that failed to load results in the error `unknown filter "..."`.
+The reason is logged with the message `Failed to load plugin` when gonfig starts. Common errors:
 
 | Error | Cause |
 | --- | --- |
