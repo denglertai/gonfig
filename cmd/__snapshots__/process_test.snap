@@ -173,32 +173,32 @@ kind: Deployment
 metadata:
   name: nginx-deployment
 spec:
-  replicas: "123"
   selector:
     matchLabels:
       app: nginx
+  replicas: "123" # tells deployment to run 2 pods matching the template  
   template:
+    metadata:
+      labels:
+        app: nginx
+        bool: "true"
+        int: "123"
+        float: "123.123"
+        string: string
+        special_characters: '%^&*()_+'
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.14.2
+          ports:
+            - containerPort: 80
+          imagePullPolicy: '%^&*()_+'
     list:
       - "123"
       - "123.123"
       - string
       - "true"
       - '%^&*()_+'
-    metadata:
-      labels:
-        app: nginx
-        bool: "true"
-        float: "123.123"
-        int: "123"
-        special_characters: '%^&*()_+'
-        string: string
-    spec:
-      containers:
-        - image: nginx:1.14.2
-          imagePullPolicy: '%^&*()_+'
-          name: nginx
-          ports:
-            - containerPort: 80
 
 ---
 
@@ -208,32 +208,32 @@ kind: Deployment
 metadata:
   name: nginx-deployment
 spec:
-  replicas: "123"
   selector:
     matchLabels:
       app: nginx
+  replicas: "123" # tells deployment to run 2 pods matching the template  
   template:
+    metadata:
+      labels:
+        app: nginx
+        bool: "true"
+        int: "123"
+        float: "123.123"
+        string: string
+        special_characters: '%^&*()_+'
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.14.2
+          ports:
+            - containerPort: 80
+          imagePullPolicy: '%^&*()_+'
     list:
       - "123"
       - "123.123"
       - string
       - "true"
       - '%^&*()_+'
-    metadata:
-      labels:
-        app: nginx
-        bool: "true"
-        float: "123.123"
-        int: "123"
-        special_characters: '%^&*()_+'
-        string: string
-    spec:
-      containers:
-        - image: nginx:1.14.2
-          imagePullPolicy: '%^&*()_+'
-          name: nginx
-          ports:
-            - containerPort: 80
 
 ---
 
@@ -443,32 +443,32 @@ kind: Deployment
 metadata:
   name: nginx-deployment
 spec:
-  replicas: "123"
   selector:
     matchLabels:
       app: nginx
+  replicas: "123" # tells deployment to run 2 pods matching the template  
   template:
+    metadata:
+      labels:
+        app: nginx
+        bool: "true"
+        int: "123"
+        float: "123.123"
+        string: string
+        special_characters: '%^&*()_+'
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.14.2
+          ports:
+            - containerPort: 80
+          imagePullPolicy: '%^&*()_+'
     list:
       - "123"
       - "123.123"
       - string
       - "true"
       - '%^&*()_+'
-    metadata:
-      labels:
-        app: nginx
-        bool: "true"
-        float: "123.123"
-        int: "123"
-        special_characters: '%^&*()_+'
-        string: string
-    spec:
-      containers:
-        - image: nginx:1.14.2
-          imagePullPolicy: '%^&*()_+'
-          name: nginx
-          ports:
-            - containerPort: 80
 
 ---
 
@@ -478,32 +478,32 @@ kind: Deployment
 metadata:
   name: nginx-deployment
 spec:
-  replicas: "123"
   selector:
     matchLabels:
       app: nginx
+  replicas: "123" # tells deployment to run 2 pods matching the template  
   template:
+    metadata:
+      labels:
+        app: nginx
+        bool: "true"
+        int: "123"
+        float: "123.123"
+        string: string
+        special_characters: '%^&*()_+'
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.14.2
+          ports:
+            - containerPort: 80
+          imagePullPolicy: '%^&*()_+'
     list:
       - "123"
       - "123.123"
       - string
       - "true"
       - '%^&*()_+'
-    metadata:
-      labels:
-        app: nginx
-        bool: "true"
-        float: "123.123"
-        int: "123"
-        special_characters: '%^&*()_+'
-        string: string
-    spec:
-      containers:
-        - image: nginx:1.14.2
-          imagePullPolicy: '%^&*()_+'
-          name: nginx
-          ports:
-            - containerPort: 80
 
 ---
 
@@ -713,32 +713,32 @@ kind: Deployment
 metadata:
   name: nginx-deployment
 spec:
-  replicas: "123"
   selector:
     matchLabels:
       app: nginx
+  replicas: "123" # tells deployment to run 2 pods matching the template  
   template:
+    metadata:
+      labels:
+        app: nginx
+        bool: "true"
+        int: "123"
+        float: "123.123"
+        string: string
+        special_characters: '%^&*()_+'
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.14.2
+          ports:
+            - containerPort: 80
+          imagePullPolicy: '%^&*()_+'
     list:
       - "123"
       - "123.123"
       - string
       - "true"
       - '%^&*()_+'
-    metadata:
-      labels:
-        app: nginx
-        bool: "true"
-        float: "123.123"
-        int: "123"
-        special_characters: '%^&*()_+'
-        string: string
-    spec:
-      containers:
-        - image: nginx:1.14.2
-          imagePullPolicy: '%^&*()_+'
-          name: nginx
-          ports:
-            - containerPort: 80
 
 ---
 
@@ -748,32 +748,32 @@ kind: Deployment
 metadata:
   name: nginx-deployment
 spec:
-  replicas: "123"
   selector:
     matchLabels:
       app: nginx
+  replicas: "123" # tells deployment to run 2 pods matching the template  
   template:
+    metadata:
+      labels:
+        app: nginx
+        bool: "true"
+        int: "123"
+        float: "123.123"
+        string: string
+        special_characters: '%^&*()_+'
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.14.2
+          ports:
+            - containerPort: 80
+          imagePullPolicy: '%^&*()_+'
     list:
       - "123"
       - "123.123"
       - string
       - "true"
       - '%^&*()_+'
-    metadata:
-      labels:
-        app: nginx
-        bool: "true"
-        float: "123.123"
-        int: "123"
-        special_characters: '%^&*()_+'
-        string: string
-    spec:
-      containers:
-        - image: nginx:1.14.2
-          imagePullPolicy: '%^&*()_+'
-          name: nginx
-          ports:
-            - containerPort: 80
 
 ---
 
@@ -899,32 +899,32 @@ kind: Deployment
 metadata:
   name: nginx-deployment
 spec:
-  replicas: "123"
   selector:
     matchLabels:
       app: nginx
+  replicas: "123" # tells deployment to run 2 pods matching the template  
   template:
+    metadata:
+      labels:
+        app: nginx
+        bool: "true"
+        int: "123"
+        float: "123.123"
+        string: string
+        special_characters: '%^&*()_+'
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.14.2
+          ports:
+            - containerPort: 80
+          imagePullPolicy: '%^&*()_+'
     list:
       - "123"
       - "123.123"
       - string
       - "true"
       - '%^&*()_+'
-    metadata:
-      labels:
-        app: nginx
-        bool: "true"
-        float: "123.123"
-        int: "123"
-        special_characters: '%^&*()_+'
-        string: string
-    spec:
-      containers:
-        - image: nginx:1.14.2
-          imagePullPolicy: '%^&*()_+'
-          name: nginx
-          ports:
-            - containerPort: 80
 
 ---
 
@@ -946,19 +946,19 @@ inty.mc.int.int = 123
 
 [TestYamlMove/YAML_AutoDiscover - 1]
 Random User with spaces:
+  hash: "0819afba2ba9206442ddea68249ff02a"
   backend_roles:
-    - admin
-  description: Demo admin user
-  hash: 0819afba2ba9206442ddea68249ff02a
+    - "admin"
+  description: "Demo admin user"
 
 ---
 
 [TestYamlMove/YAML_Explicit - 1]
 Random User with spaces:
+  hash: "0819afba2ba9206442ddea68249ff02a"
   backend_roles:
-    - admin
-  description: Demo admin user
-  hash: 0819afba2ba9206442ddea68249ff02a
+    - "admin"
+  description: "Demo admin user"
 
 ---
 
@@ -968,32 +968,32 @@ kind: Deployment
 metadata:
   name: nginx-deployment
 spec:
-  replicas: "123"
   selector:
     matchLabels:
       app: nginx
+  replicas: "123" # tells deployment to run 2 pods matching the template  
   template:
+    metadata:
+      labels:
+        app: nginx
+        bool: "true"
+        int: "123"
+        float: "123.123"
+        string: string
+        special_characters: '%^&*()_+'
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.14.2
+          ports:
+            - containerPort: 80
+          imagePullPolicy: '%^&*()_+'
     list:
       - "123"
       - "123.123"
       - string
       - "true"
       - '%^&*()_+'
-    metadata:
-      labels:
-        app: nginx
-        bool: "true"
-        float: "123.123"
-        int: "123"
-        special_characters: '%^&*()_+'
-        string: string
-    spec:
-      containers:
-        - image: nginx:1.14.2
-          imagePullPolicy: '%^&*()_+'
-          name: nginx
-          ports:
-            - containerPort: 80
 
 ---
 
@@ -1003,32 +1003,32 @@ kind: Deployment
 metadata:
   name: nginx-deployment
 spec:
-  replicas: "123"
   selector:
     matchLabels:
       app: nginx
+  replicas: "123" # tells deployment to run 2 pods matching the template  
   template:
+    metadata:
+      labels:
+        app: nginx
+        bool: "true"
+        int: "123"
+        float: "123.123"
+        string: string
+        special_characters: '%^&*()_+'
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.14.2
+          ports:
+            - containerPort: 80
+          imagePullPolicy: '%^&*()_+'
     list:
       - "123"
       - "123.123"
       - string
       - "true"
       - '%^&*()_+'
-    metadata:
-      labels:
-        app: nginx
-        bool: "true"
-        float: "123.123"
-        int: "123"
-        special_characters: '%^&*()_+'
-        string: string
-    spec:
-      containers:
-        - image: nginx:1.14.2
-          imagePullPolicy: '%^&*()_+'
-          name: nginx
-          ports:
-            - containerPort: 80
 
 ---
 
