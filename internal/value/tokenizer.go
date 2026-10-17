@@ -20,8 +20,9 @@ import (
 var filterParser *tokenizer.Tokenizer
 
 const (
-	// TokenFilterSeparator is the pipe separating the filters of a placeholder
-	TokenFilterSeparator = iota
+	// TokenFilterSeparator is the pipe separating the filters of a placeholder.
+	// The tokenizer reserves the key 0 for undefined tokens and ignores definitions using it, so the keys start at 1.
+	TokenFilterSeparator = iota + 1
 	// TokenParam is a framed string containing the params "(...)" of a filter
 	TokenParam
 )
@@ -32,8 +33,8 @@ func init() {
 	// A framed string ends at the first unescaped closing bracket, so brackets cannot be nested.
 	// Allow escaping the closing brackets, e.g. for regex groups within filter params
 	filterParser.DefineStringToken(TokenParam, "(", ")").SetEscapeSymbol('\\')
-	// Allow names like MY_VAR_2 and base64_decode to be parsed as a single keyword
-	filterParser.AllowKeywordSymbols(tokenizer.Underscore, tokenizer.Numbers)
+	// Allow names like MY_VAR_2, base64_decode and template references like @secret to be parsed as a single keyword
+	filterParser.AllowKeywordSymbols([]rune{'_', '@'}, tokenizer.Numbers)
 }
 
 // ProcessValue replaces all placeholders within the value by the result of their filters.
@@ -204,37 +205,81 @@ func parseParams(paramStr string) map[string]string {
 	return res
 }
 
+// chainStep is a step of the filter chain of a placeholder: the environment variable or placeholder template
+// at the start, followed by filters and filter templates
+type chainStep struct {
+	// name is the name of the environment variable, filter or template. Names of templates start with "@".
+	name string
+	// params are the params given in brackets, or nil if there are none
+	params map[string]string
+}
+
+// scanChain splits the content of a placeholder, e.g. "ENV_VAR | filter(key=value)", into its steps.
+// If withSource is false, the content is a filter chain without an environment variable, e.g. the filters of a template.
+func scanChain(content string, withSource bool) []chainStep {
+	steps := make([]chainStep, 0)
+
+	stream := filterParser.ParseString(content)
+	defer stream.Close()
+
+	for ; stream.IsValid(); stream.GoNext() {
+		token := stream.CurrentToken()
+
+		switch {
+		case token.Is(TokenFilterSeparator):
+			continue
+		case withSource && len(steps) == 0:
+			// The first token is always the name of the environment variable or placeholder template
+			steps = append(steps, chainStep{name: token.ValueString()})
+		case token.Is(tokenizer.TokenKeyword):
+			// Other tokens have to be filters or filter templates
+			steps = append(steps, chainStep{name: token.ValueString()})
+		case token.Is(tokenizer.TokenString) && token.StringSettings().Key == TokenParam && len(steps) > 0:
+			// Params always follow the step they belong to
+			steps[len(steps)-1].params = parseParams(token.ValueString())
+		}
+	}
+
+	return steps
+}
+
 // parseFilters parses the content of a placeholder, e.g. "ENV_VAR | filter(key=value)", into the filters to apply
 func parseFilters(content string) []filter.Filter {
-	filters := make([]filter.Filter, 0)
+	steps := scanChain(content, true)
+	if len(steps) == 0 {
+		return []filter.Filter{}
+	}
 
-	filterStream := filterParser.ParseString(content)
-	defer filterStream.Close()
+	return append(sourceFilters(steps[0]), chainFilters(steps[1:])...)
+}
 
-	for ; filterStream.IsValid(); filterStream.GoNext() {
-		filterToken := filterStream.CurrentToken()
+// sourceFilters returns the filters reading the value of a placeholder, from either an environment variable or a placeholder template.
+// Params given for the source are ignored.
+func sourceFilters(step chainStep) []filter.Filter {
+	if name, isTemplate := templateName(step.name); isTemplate {
+		return []filter.Filter{placeholderTemplateFilter(name)}
+	}
 
-		// Skip filter separator
-		if filterToken.Is(TokenFilterSeparator) {
+	return []filter.Filter{filter.NewEnvVarFilter(step.name), filter.NewFileInterceptorFilter()}
+}
+
+// chainFilters creates the filters of the steps of a filter chain
+func chainFilters(steps []chainStep) []filter.Filter {
+	filters := make([]filter.Filter, 0, len(steps))
+
+	for _, step := range steps {
+		// Filter templates are applied as a single filter, which ignores params
+		if name, isTemplate := templateName(step.name); isTemplate {
+			filters = append(filters, filterTemplateFilter(name))
 			continue
 		}
 
-		// The first token is always the name of the env var
-		// Thus append the env var filter and the file interceptor filter
-		if len(filters) == 0 {
-			filters = append(filters, filter.NewEnvVarFilter(filterToken.ValueString()), filter.NewFileInterceptorFilter())
-		} else if filterToken.Is(tokenizer.TokenKeyword) {
-			// Other tokens have to be filters
-			filters = append(filters, filter.NewFilter(filterToken.ValueString()))
-		} else if filterToken.Is(tokenizer.TokenString) && filterToken.StringSettings().Key == TokenParam {
-			// Params always follow the filter they belong to, so apply them to the last generated filter.
-			// Filters not accepting params, including the environment variable filters, ignore them.
-			lastFilter, acceptsParams := filters[len(filters)-1].(filter.FilterParams)
-			if acceptsParams {
-				params := parseParams(filterToken.ValueString())
-				lastFilter.AcceptParams(params)
-			}
+		f := filter.NewFilter(step.name)
+		// Filters not accepting params ignore them
+		if paramsFilter, acceptsParams := f.(filter.FilterParams); acceptsParams && step.params != nil {
+			paramsFilter.AcceptParams(step.params)
 		}
+		filters = append(filters, f)
 	}
 
 	return filters

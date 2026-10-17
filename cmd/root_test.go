@@ -41,7 +41,11 @@ func TestDefaultAppConfig(t *testing.T) {
 	}
 
 	// Defaults as used by the CLI, with all flags at their default values
-	assert.Equal(t, want, config.LoadAppConfig(config.SetupViper(rootCmd.PersistentFlags())))
+	v, err := config.SetupViper(rootCmd.PersistentFlags())
+	assert.NoError(t, err)
+	cfg, err := config.LoadAppConfig(v)
+	assert.NoError(t, err)
+	assert.Equal(t, want, cfg)
 
 	// Fallback of commands without a loaded config
 	cmd := &cobra.Command{}

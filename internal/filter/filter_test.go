@@ -205,6 +205,16 @@ func TestStringManipulationFilters(t *testing.T) {
 		{desc: "join single value", filter: "join", input: "a", expected: "a"},
 		{desc: "upper on list", filter: "upper", input: []string{"a", "b"}, expected: []string{"A", "B"}},
 		{desc: "base64_decode on list with invalid element", filter: "base64_decode", input: []string{"YQ==", "!"}, wantErr: true},
+		{desc: "url_encode query", filter: "url_encode", input: "p@ss/w rd&=?", expected: "p%40ss%2Fw+rd%26%3D%3F"},
+		{desc: "url_encode path", filter: "url_encode", params: map[string]string{"0": "path"}, input: "a b/c", expected: "a%20b%2Fc"},
+		{desc: "url_encode named mode", filter: "url_encode", params: map[string]string{"mode": "query"}, input: "a b", expected: "a+b"},
+		{desc: "url_encode unicode", filter: "url_encode", input: "ä", expected: "%C3%A4"},
+		{desc: "url_encode invalid mode", filter: "url_encode", params: map[string]string{"0": "form"}, input: "a", wantErr: true},
+		{desc: "url_encode on list", filter: "url_encode", input: []string{"a b", "c&d"}, expected: []string{"a+b", "c%26d"}},
+		{desc: "url_decode query", filter: "url_decode", input: "p%40ss%2Fw+rd%26", expected: "p@ss/w rd&"},
+		{desc: "url_decode path", filter: "url_decode", params: map[string]string{"0": "path"}, input: "a%20b+c", expected: "a b+c"},
+		{desc: "url_decode invalid escape", filter: "url_decode", input: "%zz", wantErr: true},
+		{desc: "url_decode invalid mode", filter: "url_decode", params: map[string]string{"0": "form"}, input: "a", wantErr: true},
 	}
 	for _, tC := range testCases {
 		t.Run(tC.desc, func(t *testing.T) {
@@ -235,11 +245,43 @@ func TestUnknownFilterFails(t *testing.T) {
 }
 
 func TestUnknownFilterAllowed(t *testing.T) {
+	assert.False(t, UnknownFiltersAllowed())
 	SetAllowUnknownFilters(true)
 	t.Cleanup(func() { SetAllowUnknownFilters(false) })
+	assert.True(t, UnknownFiltersAllowed())
 
 	result, err := NewFilter("not_a_filter").Process("value")
 
 	assert.NoError(t, err)
 	assert.Equal(t, "value", result)
+}
+
+func TestDefaultValueFilter(t *testing.T) {
+	filter := NewDefaultValueFilter("fallback")
+
+	for input, expected := range map[any]any{"": "fallback", "value": "value", 0: 0} {
+		result, err := filter.Process(input)
+		assert.NoError(t, err)
+		assert.Equal(t, expected, result)
+	}
+}
+
+func TestChainFilter(t *testing.T) {
+	result, err := NewChainFilter([]Filter{NewFilter("trim"), NewFilter("upper")}).Process(" abc ")
+	assert.NoError(t, err)
+	assert.Equal(t, "ABC", result)
+
+	_, err = NewChainFilter([]Filter{NewFilter("to_int")}).Process("abc")
+	assert.Error(t, err)
+}
+
+func TestErrorFilter(t *testing.T) {
+	_, err := NewErrorFilter(assert.AnError).Process("value")
+	assert.ErrorIs(t, err, assert.AnError)
+}
+
+func TestIsKnown(t *testing.T) {
+	assert.True(t, IsKnown("trim"))
+	assert.True(t, IsKnown("url_encode"))
+	assert.False(t, IsKnown("not_a_filter"))
 }

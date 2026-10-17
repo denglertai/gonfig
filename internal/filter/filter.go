@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"net/url"
 	"os"
 	"reflect"
 	"regexp"
@@ -105,6 +106,60 @@ func (f *FileInterceptorFilter) Process(value any) (any, error) {
 // NewFileInterceptorFilter creates a new FileInterceptorFilter
 func NewFileInterceptorFilter() *FileInterceptorFilter {
 	return &FileInterceptorFilter{}
+}
+
+// DefaultValueFilter replaces empty values, e.g. of environment variables that are not set, by a default value
+type DefaultValueFilter struct {
+	value string
+}
+
+// Process returns the default value if the value is an empty string, otherwise the value unchanged
+func (f *DefaultValueFilter) Process(value any) (any, error) {
+	if s, ok := value.(string); ok && s == "" {
+		return f.value, nil
+	}
+	return value, nil
+}
+
+// NewDefaultValueFilter creates a new DefaultValueFilter
+func NewDefaultValueFilter(value string) *DefaultValueFilter {
+	return &DefaultValueFilter{
+		value: value,
+	}
+}
+
+// ChainFilter applies a chain of filters as a single filter, e.g. for templates
+type ChainFilter struct {
+	filters []Filter
+}
+
+// Process applies the filters of the chain
+func (f *ChainFilter) Process(value any) (any, error) {
+	return ApplyFilters(value, f.filters)
+}
+
+// NewChainFilter creates a new ChainFilter
+func NewChainFilter(filters []Filter) *ChainFilter {
+	return &ChainFilter{
+		filters: filters,
+	}
+}
+
+// ErrorFilter fails with an error, e.g. for references to templates that do not exist
+type ErrorFilter struct {
+	err error
+}
+
+// Process returns the error of the filter
+func (f *ErrorFilter) Process(_ any) (any, error) {
+	return "", f.err
+}
+
+// NewErrorFilter creates a new ErrorFilter
+func NewErrorFilter(err error) *ErrorFilter {
+	return &ErrorFilter{
+		err: err,
+	}
 }
 
 // toString converts a filter input to a string, formatting non-string values
@@ -227,6 +282,17 @@ func ApplyFilters(value any, filters []Filter) (any, error) {
 
 // allowUnknownFilters makes unknown filters pass values on unchanged instead of failing, see SetAllowUnknownFilters
 var allowUnknownFilters bool
+
+// UnknownFiltersAllowed returns whether unknown filters pass values on unchanged instead of failing
+func UnknownFiltersAllowed() bool {
+	return allowUnknownFilters
+}
+
+// IsKnown returns whether a filter with the name is registered, either built-in or by a plugin
+func IsKnown(name string) bool {
+	_, found := filterMap[name]
+	return found
+}
 
 // SetAllowUnknownFilters sets whether unknown filters pass values on unchanged with a warning instead of failing.
 // This may write a secret that was meant to be hashed or encrypted by a filter that is unknown, e.g. because of a typo.
@@ -396,6 +462,44 @@ func init() {
 		return &FuncFilter{
 			fn: stringFunc(func(s string, _ map[string]string) (string, error) {
 				return base64.StdEncoding.EncodeToString([]byte(s)), nil
+			}),
+		}
+	}
+
+	filterMap["url_encode"] = func(token string) Filter {
+		return &FuncFilter{
+			fn: stringFunc(func(s string, params map[string]string) (string, error) {
+				mode, _ := param(params, "mode", 0)
+				switch mode {
+				case "", "query":
+					return url.QueryEscape(s), nil
+				case "path":
+					return url.PathEscape(s), nil
+				default:
+					return "", fmt.Errorf("filter url_encode: unsupported mode %q, use query or path", mode)
+				}
+			}),
+		}
+	}
+
+	filterMap["url_decode"] = func(token string) Filter {
+		return &FuncFilter{
+			fn: stringFunc(func(s string, params map[string]string) (string, error) {
+				mode, _ := param(params, "mode", 0)
+				var decoded string
+				var err error
+				switch mode {
+				case "", "query":
+					decoded, err = url.QueryUnescape(s)
+				case "path":
+					decoded, err = url.PathUnescape(s)
+				default:
+					return "", fmt.Errorf("filter url_decode: unsupported mode %q, use query or path", mode)
+				}
+				if err != nil {
+					return "", fmt.Errorf("filter url_decode: %w", err)
+				}
+				return decoded, nil
 			}),
 		}
 	}

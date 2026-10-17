@@ -522,3 +522,79 @@ func TestUnknownFilterAllowed(t *testing.T) {
 		})
 	}
 }
+
+// templatesConfig is a .gonfig.yaml defining the templates of the documentation's JDBC example
+const templatesConfig = `templates:
+  filters:
+    secret:
+      filters: trim | base64
+  placeholders:
+    db_host:
+      env: TPL_DB_HOST
+      default: localhost
+    db_port:
+      env: TPL_DB_PORT
+      default: "5432"
+    db_url:
+      value: "jdbc:postgresql://${@db_host}:${@db_port}/app"
+`
+
+func TestTemplates(t *testing.T) {
+	t.Setenv("TPL_DB_HOST", "")
+	t.Setenv("TPL_DB_PORT", "6543")
+	t.Setenv("TPL_DB_PASSWORD", " s3cret ")
+
+	configDir := t.TempDir()
+	assert.NoError(t, os.WriteFile(path.Join(configDir, ".gonfig.yaml"), []byte(templatesConfig), 0o644))
+
+	fileName := path.Join(t.TempDir(), "config.yaml")
+	content := "url: ${@db_url}?ssl=true\nport: ${@db_port | to_int}\npassword: ${TPL_DB_PASSWORD | @secret}\n"
+	assert.NoError(t, os.WriteFile(fileName, []byte(content), 0o644))
+
+	resetFlags(t)
+	rootCmd.SetArgs([]string{"--config-path", configDir, "config", "process", "-f", fileName, "-i"})
+	assert.NoError(t, rootCmd.Execute())
+
+	result, err := os.ReadFile(fileName)
+	assert.NoError(t, err)
+	assert.Equal(t, "url: jdbc:postgresql://localhost:6543/app?ssl=true\nport: 6543\npassword: czNjcmV0\n", string(result))
+}
+
+func TestInvalidTemplatesKeepFileUnchanged(t *testing.T) {
+	configDir := t.TempDir()
+	assert.NoError(t, os.WriteFile(path.Join(configDir, ".gonfig.yaml"), []byte("templates:\n  filters:\n    secret:\n      filters: trim | bas64\n"), 0o644))
+
+	content := "key: value\n"
+	fileName := path.Join(t.TempDir(), "config.yaml")
+	assert.NoError(t, os.WriteFile(fileName, []byte(content), 0o644))
+
+	resetFlags(t)
+	rootCmd.SetArgs([]string{"--config-path", configDir, "config", "process", "-f", fileName, "-i"})
+	err := rootCmd.Execute()
+
+	assert.ErrorContains(t, err, `filter template "secret": unknown filter "bas64"`)
+	result, readErr := os.ReadFile(fileName)
+	assert.NoError(t, readErr)
+	assert.Equal(t, content, string(result))
+}
+
+func TestInvalidConfigFile(t *testing.T) {
+	testCases := []struct {
+		desc    string
+		content string
+		wantErr string
+	}{
+		{desc: "invalid YAML", content: "templates:\n  filters:\n    a:\n      filters: @b\n", wantErr: "failed to read config file"},
+		{desc: "invalid templates", content: "templates:\n  filters: not a map\n", wantErr: "invalid templates in config file"},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			configDir := t.TempDir()
+			assert.NoError(t, os.WriteFile(path.Join(configDir, ".gonfig.yaml"), []byte(tC.content), 0o644))
+
+			resetFlags(t)
+			rootCmd.SetArgs([]string{"--config-path", configDir, "value", "x"})
+			assert.ErrorContains(t, rootCmd.Execute(), tC.wantErr)
+		})
+	}
+}

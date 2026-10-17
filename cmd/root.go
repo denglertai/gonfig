@@ -5,12 +5,14 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"github.com/denglertai/gonfig/internal/config"
 	"github.com/denglertai/gonfig/internal/filter"
 	"github.com/denglertai/gonfig/internal/logging"
 	"github.com/denglertai/gonfig/internal/plugin"
+	"github.com/denglertai/gonfig/internal/value"
 	"github.com/spf13/cobra"
 )
 
@@ -32,10 +34,16 @@ It provides a flexible plugin system for extending functionality and a filtering
 
 		// Initialize Viper with configuration from multiple sources.
 		// The root's persistent flags are used, as cmd is the executed subcommand.
-		v := config.SetupViper(cmd.Root().PersistentFlags())
+		v, err := config.SetupViper(cmd.Root().PersistentFlags())
+		if err != nil {
+			return err
+		}
 
 		// Load into AppConfig
-		cfg := config.LoadAppConfig(v)
+		cfg, err := config.LoadAppConfig(v)
+		if err != nil {
+			return err
+		}
 
 		// Store in context for access in all subcommands
 		ctx := context.WithValue(cmd.Context(), appConfigKey{}, cfg)
@@ -50,6 +58,11 @@ It provides a flexible plugin system for extending functionality and a filtering
 		plugin.InitPlugins(cfg.PluginPath)
 
 		filter.SetAllowUnknownFilters(cfg.AllowUnknownFilters)
+
+		// Templates are validated after the filters of plugins are registered, so they are known
+		if err := value.SetTemplates(cfg.Templates); err != nil {
+			return fmt.Errorf("invalid templates in config file: %w", err)
+		}
 
 		return nil
 	},

@@ -9,6 +9,7 @@ This page documents the placeholder syntax, every built-in filter and some commo
 - [Built-in filters](#built-in-filters)
 - [Lists](#lists)
 - [Types](#types)
+- [Templates](#templates)
 - [Recipes](#recipes)
 - [Caveats](#caveats)
 
@@ -115,6 +116,8 @@ api.example.com
 | [`bcrypt`](#bcrypt) | | Hashes the value with bcrypt |
 | [`base64`](#base64--base64_decode) | | Encodes the value to base64 |
 | [`base64_decode`](#base64--base64_decode) | | Decodes a base64 value |
+| [`url_encode`](#url_encode--url_decode) | `mode` | Escapes the value for use within URLs |
+| [`url_decode`](#url_encode--url_decode) | `mode` | Reverses `url_encode` |
 | [`replace`](#replace) | `old`, `new` | Replaces text |
 | [`regex`](#regex) | `pattern`, `replacement` | Replaces text using a regular expression |
 | [`split`](#split--join) | `delimiter` | Splits the value into a [list](#lists) |
@@ -202,6 +205,25 @@ $ V=czNjcmV0 gonfig value '${V | base64_decode}'
 s3cret
 ```
 
+### url_encode / url_decode
+
+Escape the value for use within a URL or decode it again, e.g. for passwords containing `@`, `/` or `&`.
+The param `mode` selects the part of the URL:
+
+- `query` (default) escapes the value for query parameters like `?password=...`, encoding spaces as `+`.
+- `path` escapes the value for a path segment like `/files/...`, encoding spaces as `%20` and keeping characters allowed in paths, like `@` and `:`.
+
+`url_decode` fails if the value contains invalid escape sequences.
+
+```console
+$ DB_PASSWORD='p@ss/w rd&' gonfig value '?password=${DB_PASSWORD | url_encode}'
+?password=p%40ss%2Fw+rd%26
+$ FILE='my report.pdf' gonfig value '/files/${FILE | url_encode(path)}'
+/files/my%20report.pdf
+$ V='p%40ss+word' gonfig value '${V | url_decode}'
+p@ss word
+```
+
 ### replace
 
 Replaces every occurrence of `old` by `new`. Both params are required, `new` may be empty.
@@ -284,6 +306,85 @@ $ PORT=8080 gonfig value 'http://localhost:${PORT | to_int}/api'
 http://localhost:8080/api
 ```
 
+## Templates
+
+Templates make filter chains and placeholders reusable. They are defined in the [config file](./README.md#config-file) `.gonfig.yaml`
+and referenced with a leading `@`, so they never clash with filters:
+
+- **Filter templates** are reusable filter chains, used as `${VAR | @name}`.
+- **Placeholder templates** are reusable placeholders, used as `${@name}`. They read either an environment variable with an optional default (`env`)
+  or a value containing placeholders (`value`), e.g. to build URLs from several variables.
+
+```yaml
+# .gonfig.yaml
+templates:
+  filters:
+    secret:
+      description: Trims a secret and encodes it to base64
+      filters: trim | base64
+
+  placeholders:
+    db_host:
+      description: Host of the database
+      env: DB_HOST
+      default: localhost
+    db_port:
+      env: DB_PORT
+      default: "5432"
+    db_name:
+      env: DB_NAME
+      default: app
+      filters: trim | lower
+    db_url:
+      description: JDBC URL of the database
+      value: "jdbc:postgresql://${@db_host}:${@db_port}/${@db_name}"
+```
+
+```console
+$ DB_PASSWORD=' s3cret ' gonfig value '${DB_PASSWORD | @secret}'
+czNjcmV0
+$ gonfig value '${@db_url}'
+jdbc:postgresql://localhost:5432/app
+$ DB_HOST=db.internal DB_NAME=' Orders ' gonfig value '${@db_url}?ssl=true'
+jdbc:postgresql://db.internal:5432/orders?ssl=true
+$ gonfig value '${@db_port | to_int}'
+5432
+```
+
+### Filter templates
+
+| Field | Required | Description |
+| --- | --- | --- |
+| `filters` | yes | The filter chain in the same syntax as in placeholders, e.g. `trim \| replace(a,b)`. It may use other filter templates, e.g. `"@clean \| @encode"`. |
+| `description` | no | Documents the template |
+
+A filter template is applied like a single filter, so further filters may follow, e.g. `${VAR | @secret | lower}`.
+
+### Placeholder templates
+
+| Field | Required | Description |
+| --- | --- | --- |
+| `env` | either `env` or `value` | The environment variable to read |
+| `default` | no, only with `env` | The value used if the environment variable is not set or empty. Like any value, it may refer to a file with `@path`. |
+| `value` | either `env` or `value` | A value containing placeholders, which is processed like any config value. It may use other placeholder templates. |
+| `filters` | no | The filter chain applied to the value of the environment variable, the default or the processed value. It may use filter templates. |
+| `description` | no | Documents the template |
+
+Filters following a placeholder template are applied to its result, e.g. `${@db_port | to_int}`.
+Placeholder templates may be embedded into other text like any placeholder, and a typed result is written as a number or boolean if the template makes up the whole value, see [types](#types).
+
+### Rules
+
+- **Names** consist of lower case letters, digits and underscores, and are unique across filter and placeholder templates.
+  Since the config file is read case-insensitively, names are converted to lower case.
+- **Validation:** All templates are checked when gonfig starts. Unknown filters, unknown or misused references, cycles and invalid definitions
+  fail before any file is processed, with an error naming the template.
+- **References within config files** to templates that are not defined fail processing, even with `allow-unknown-filters`.
+- **Chaining:** Filter templates can be chained with each other and with filters, in placeholders as well as in the `filters` of templates, e.g. `${VAR | @clean | @encode | upper}`.
+- **Quoting:** Quote values in `.gonfig.yaml` that start with a template reference, e.g. `filters: "@clean | upper"`, since `@` cannot start an unquoted YAML value.
+  Quote values containing placeholders as well. gonfig does not process its own config file, so placeholders there are only replaced when a template is used.
+  A config file that cannot be read, e.g. because of invalid YAML, fails with an error naming the file.
+
 ## Recipes
 
 ### Read secrets from files
@@ -314,6 +415,15 @@ Combine several variables and plain text in one value:
 $ DB_USER=app DB_PASSWORD=s3cret DB_HOST=db gonfig value 'postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:5432/app'
 postgres://app:s3cret@db:5432/app
 ```
+
+Escape credentials with `url_encode` if they may contain special characters, e.g. as query parameters of a JDBC URL:
+
+```console
+$ DB_USER=app DB_PASSWORD='p@ss/w rd&' gonfig value 'jdbc:postgresql://db:5432/app?user=${DB_USER | url_encode}&password=${DB_PASSWORD | url_encode}'
+jdbc:postgresql://db:5432/app?user=app&password=p%40ss%2Fw+rd%26
+```
+
+To use the same URL in several places, define it once as a [placeholder template](#templates).
 
 ### HTTP basic authentication
 
