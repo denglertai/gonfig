@@ -207,20 +207,47 @@ func toString(value any) string {
 	return fmt.Sprint(value)
 }
 
-// toInt converts a filter input to an int, parsing string values
-func toInt(value any) (int, error) {
+// valuesInErrors includes values in error messages of filters, see SetValuesInErrors
+var valuesInErrors bool
+
+// SetValuesInErrors sets whether error messages of filters include the value that could not be processed.
+// Values may contain secrets, so this is meant for debugging only, like including values in debug logs.
+func SetValuesInErrors(enabled bool) {
+	valuesInErrors = enabled
+}
+
+// ValuesInErrors returns whether error messages of filters include the value that could not be processed
+func ValuesInErrors() bool {
+	return valuesInErrors
+}
+
+// valueError returns the error of a filter that could not process a value, e.g. "filter to_int: the value is not an integer".
+// The value is only included if enabled by SetValuesInErrors, since it may contain secrets.
+func valueError(filter string, problem string, value any) error {
+	if valuesInErrors {
+		return fmt.Errorf("filter %s: %s: %q", filter, problem, fmt.Sprint(value))
+	}
+	return fmt.Errorf("filter %s: %s", filter, problem)
+}
+
+// toInt converts a filter input to an int, parsing string values. filter names the filter in errors.
+func toInt(filter string, value any) (int, error) {
 	switch v := value.(type) {
 	case int:
 		return v, nil
 	case string:
-		return strconv.Atoi(v)
+		i, err := strconv.Atoi(v)
+		if err != nil {
+			return 0, valueError(filter, "the value is not an integer", value)
+		}
+		return i, nil
 	default:
-		return 0, fmt.Errorf("cannot convert %v (%T) to int", value, value)
+		return 0, valueError(filter, fmt.Sprintf("a value of type %T cannot be converted to an integer", value), value)
 	}
 }
 
-// toFloat converts a filter input to a finite float64, parsing string values
-func toFloat(value any) (float64, error) {
+// toFloat converts a filter input to a finite float64, parsing string values. filter names the filter in errors.
+func toFloat(filter string, value any) (float64, error) {
 	var f float64
 	switch v := value.(type) {
 	case float64:
@@ -230,28 +257,32 @@ func toFloat(value any) (float64, error) {
 	case string:
 		var err error
 		if f, err = strconv.ParseFloat(v, 64); err != nil {
-			return 0, err
+			return 0, valueError(filter, "the value is not a number", value)
 		}
 	default:
-		return 0, fmt.Errorf("cannot convert %v (%T) to float", value, value)
+		return 0, valueError(filter, fmt.Sprintf("a value of type %T cannot be converted to a number", value), value)
 	}
 
 	// Config files cannot represent infinite numbers and NaN consistently
 	if math.IsInf(f, 0) || math.IsNaN(f) {
-		return 0, fmt.Errorf("cannot convert %v to a finite float", value)
+		return 0, valueError(filter, "the value is not a finite number", value)
 	}
 	return f, nil
 }
 
-// toBool converts a filter input to a bool, parsing string values like "true", "false", "1" and "0"
-func toBool(value any) (bool, error) {
+// toBool converts a filter input to a bool, parsing string values like "true", "false", "1" and "0". filter names the filter in errors.
+func toBool(filter string, value any) (bool, error) {
 	switch v := value.(type) {
 	case bool:
 		return v, nil
 	case string:
-		return strconv.ParseBool(v)
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return false, valueError(filter, "the value is not a boolean, use true, false, 1 or 0", value)
+		}
+		return b, nil
 	default:
-		return false, fmt.Errorf("cannot convert %v (%T) to bool", value, value)
+		return false, valueError(filter, fmt.Sprintf("a value of type %T cannot be converted to a boolean", value), value)
 	}
 }
 
@@ -448,7 +479,7 @@ func init() {
 	filterMap["to_int"] = func(token string) Filter {
 		return &FuncFilter{
 			fn: func(value any, _ map[string]string) (any, error) {
-				return toInt(value)
+				return toInt(token, value)
 			},
 		}
 	}
@@ -456,7 +487,7 @@ func init() {
 	filterMap["to_float"] = func(token string) Filter {
 		return &FuncFilter{
 			fn: func(value any, _ map[string]string) (any, error) {
-				return toFloat(value)
+				return toFloat(token, value)
 			},
 		}
 	}
@@ -464,7 +495,7 @@ func init() {
 	filterMap["to_bool"] = func(token string) Filter {
 		return &FuncFilter{
 			fn: func(value any, _ map[string]string) (any, error) {
-				return toBool(value)
+				return toBool(token, value)
 			},
 		}
 	}
@@ -482,7 +513,7 @@ func init() {
 					return "", err
 				}
 
-				v, err := toInt(value)
+				v, err := toInt(token, value)
 				if err != nil {
 					return "", err
 				}
@@ -572,8 +603,9 @@ func init() {
 				default:
 					return "", fmt.Errorf("filter url_decode: unsupported mode %q, use query or path", mode)
 				}
+				// The error of the url package quotes the invalid escape sequence, which is part of the value
 				if err != nil {
-					return "", fmt.Errorf("filter url_decode: %w", err)
+					return "", valueError(token, "the value contains an invalid escape sequence", s)
 				}
 				return decoded, nil
 			}),

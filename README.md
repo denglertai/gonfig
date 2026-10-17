@@ -380,7 +380,7 @@ Order of precedence (highest to lowest):
 | Include source location | `--log-source`, `-s` | `GONFIG_LOG_SOURCE` | `false` | Includes source location in log output |
 | Config directory | `--config-path` | `GONFIG_CONFIG_PATH` | empty | Directory that contains `.gonfig.yaml` |
 | Plugin directory | `--plugin-path` | `GONFIG_PLUGIN_PATH` | `./plugins` | Directory scanned recursively for plugin `.so` files |
-| Log values | `--log-values` | `GONFIG_LOG_VALUES` | `false` | Includes processed values in debug logs. Values may contain secrets, so only use it for debugging; gonfig warns on startup while it is enabled |
+| Log values | `--log-values` | `GONFIG_LOG_VALUES` | `false` | Includes processed values in debug logs and error messages of filters. Values may contain secrets, so only use it for debugging; gonfig warns on startup while it is enabled |
 | Fail on missing variables | `--fail-on-missing` | `GONFIG_FAIL_ON_MISSING` | `false` | Fails for [environment variables that are not set](./FILTERS.md#missing-variables) instead of using empty strings, unless the placeholder provides a default |
 | Allow unknown filters | `--allow-unknown-filters` | `GONFIG_ALLOW_UNKNOWN_FILTERS` | `false` | Passes values on unchanged with a warning instead of failing for [unknown filters](./FILTERS.md#order-of-operations). This may write secrets that were meant to be hashed or encrypted |
 
@@ -456,6 +456,7 @@ Since the CLI command output may be written to stdout, logs are written to stder
 Successful runs write nothing to stderr at the default level `info`, so gonfig can be used in scripts and entrypoints without noise. Use `--log-level debug` to see which files are processed and written.
 
 Processed values are not logged by default, even at `trace` level, since they may contain secrets. Debug logs show the entry and the type of its result instead, e.g. `"entry":"database.password","type":"string"`.
+Error messages of filters don't contain values either, e.g. `filter to_int: the value is not an integer`, together with the entry that failed.
 To include the values for debugging, enable `log-values` with `--log-values`, `GONFIG_LOG_VALUES=true` or in `.gonfig.yaml`. gonfig then logs a warning on startup, so the option is not left enabled by accident.
 
 ## Plugins

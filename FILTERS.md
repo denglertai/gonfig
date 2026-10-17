@@ -188,6 +188,7 @@ port=5432
 
 Convert the value to an integer, a floating point number or a boolean, and fail if it cannot be converted.
 YAML and JSON files write the result as a number or boolean, see [types](#types).
+Error messages don't contain the value, since it may be a secret, unless `log-values` is enabled, see [configuration](./README.md#configuration).
 
 - `to_int` accepts integers, e.g. `8080` or `-1`.
 - `to_float` accepts finite numbers, e.g. `1.5`, `2` or `1e3`.
@@ -200,6 +201,8 @@ $ RATIO=0.75 gonfig value '${RATIO | to_float}'
 0.75
 $ ENABLED=1 gonfig value '${ENABLED | to_bool}'
 true
+$ PORT=eighty gonfig value '${PORT | to_int}'
+Error: filter to_int: the value is not an integer
 ```
 
 ### multiply
@@ -592,7 +595,7 @@ This does not work in the following cases:
     - "2"
     - "3"
   $ ENVVAR=1,2,3 gonfig config process -f to_int.yaml
-  Error: failed to process the value of numbers in to_int.yaml: cannot convert [1 2 3] ([]string) to int
+  Error: failed to process the value of numbers in to_int.yaml: filter to_int: a value of type []string cannot be converted to an integer
   ```
 
 - **Elements cannot contain the delimiter.** `split` has no escaping, so a value like `a\,b` is split at the comma anyway.

@@ -1,6 +1,7 @@
 package filter
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -375,4 +376,62 @@ func TestEnvVarFilterWithFailOnMissing(t *testing.T) {
 	result, err = NewEnvVarFilter("ENV_FILTER_EMPTY", false).Process(nil)
 	assert.NoError(t, err)
 	assert.Equal(t, "", result)
+}
+
+// TestErrorsDoNotContainValues runs every registered filter on inputs containing a secret and checks that no error
+// message contains it, so filters added later are covered as well
+func TestErrorsDoNotContainValues(t *testing.T) {
+	const secret = "s3cret-%zz-value!"
+	inputs := []any{
+		secret,
+		strings.Repeat(secret, 5), // longer than bcrypt allows
+		[]string{secret, secret},  // a list, e.g. of split
+	}
+
+	failed := map[string]bool{}
+	for name := range filterMap {
+		for _, input := range inputs {
+			_, err := NewFilter(name).Process(input)
+			if err != nil {
+				failed[name] = true
+				assert.NotContains(t, err.Error(), secret, "filter %s", name)
+			}
+		}
+	}
+
+	// Make sure the inputs actually make the filters fail that used to include values in their errors
+	for _, name := range []string{"to_int", "to_float", "to_bool", "url_decode", "base64_decode", "bcrypt", "multiply"} {
+		assert.True(t, failed[name], "filter %s did not fail", name)
+	}
+}
+
+// TestErrorsContainValuesIfEnabled checks that error messages include the value only after enabling SetValuesInErrors
+func TestErrorsContainValuesIfEnabled(t *testing.T) {
+	assert.False(t, ValuesInErrors())
+
+	_, err := NewFilter("to_int").Process("eighty")
+	assert.EqualError(t, err, "filter to_int: the value is not an integer")
+
+	SetValuesInErrors(true)
+	t.Cleanup(func() { SetValuesInErrors(false) })
+	assert.True(t, ValuesInErrors())
+
+	testCases := []struct {
+		filter string
+		input  any
+		want   string
+	}{
+		{"to_int", "eighty", `filter to_int: the value is not an integer: "eighty"`},
+		{"to_int", []string{"a", "b"}, `filter to_int: a value of type []string cannot be converted to an integer: "[a b]"`},
+		{"to_float", "abc", `filter to_float: the value is not a number: "abc"`},
+		{"to_float", "Inf", `filter to_float: the value is not a finite number: "Inf"`},
+		{"to_float", true, `filter to_float: a value of type bool cannot be converted to a number: "true"`},
+		{"to_bool", "yes", `filter to_bool: the value is not a boolean, use true, false, 1 or 0: "yes"`},
+		{"to_bool", 1, `filter to_bool: a value of type int cannot be converted to a boolean: "1"`},
+		{"url_decode", "a%zz", `filter url_decode: the value contains an invalid escape sequence: "a%zz"`},
+	}
+	for _, tC := range testCases {
+		_, err := NewFilter(tC.filter).Process(tC.input)
+		assert.EqualError(t, err, tC.want)
+	}
 }
