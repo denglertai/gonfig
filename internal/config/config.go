@@ -63,6 +63,8 @@ type AppConfig struct {
 	PluginPath string
 	// AllowUnknownFilters makes unknown filters pass values on unchanged instead of failing
 	AllowUnknownFilters bool
+	// LogValues includes processed values in debug logs, which may expose secrets
+	LogValues bool
 	// Templates are reusable filter chains and placeholders, which can only be defined in the config file
 	Templates Templates
 }
@@ -77,6 +79,7 @@ func LoadAppConfig(v *viper.Viper) (*AppConfig, error) {
 		PluginPath: v.GetString("plugin-path"),
 
 		AllowUnknownFilters: v.GetBool("allow-unknown-filters"),
+		LogValues:           v.GetBool("log-values"),
 	}
 
 	// Template names are keys of the config file, which viper converts to lower case
@@ -105,6 +108,7 @@ func SetupViper(flags *pflag.FlagSet) (*viper.Viper, error) {
 	v.SetDefault("config-path", "")
 	v.SetDefault("plugin-path", "./plugins")
 	v.SetDefault("allow-unknown-filters", false)
+	v.SetDefault("log-values", false)
 
 	// Environment variables
 	v.SetEnvPrefix("GONFIG")

@@ -2,13 +2,16 @@ package file
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"os"
 	"path"
+	"strings"
 	"testing"
 
 	"github.com/denglertai/gonfig/internal/general"
+	"github.com/denglertai/gonfig/internal/logging"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -88,4 +91,58 @@ func TestFileProcessorWriteError(t *testing.T) {
 	assert.ErrorContains(t, err, "failed to write")
 	// The YAML encoder wraps the error of the writer as text
 	assert.ErrorContains(t, err, assert.AnError.Error())
+}
+
+// TestProcessedValuesAreNotLogged ensures that processed values, which may contain secrets, never appear in the logs
+func TestProcessedValuesAreNotLogged(t *testing.T) {
+	const secret = "top-secret-value"
+	t.Setenv("LOG_TEST_SECRET", secret)
+	t.Setenv("LOG_TEST_PORT", "8080")
+	t.Setenv("LOG_TEST_FRAGMENT", "nested: ${LOG_TEST_SECRET}")
+
+	// Log at the most verbose level
+	var logs bytes.Buffer
+	defaultLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: logging.LevelTrace})))
+	t.Cleanup(func() { slog.SetDefault(defaultLogger) })
+
+	file := path.Join(t.TempDir(), "config.yaml")
+	content := "plain: ${LOG_TEST_SECRET}\nembedded: user:${LOG_TEST_SECRET}\nport: ${LOG_TEST_PORT | to_int}\nfragment: ${LOG_TEST_FRAGMENT | fragment}\n"
+	assert.NoError(t, os.WriteFile(file, []byte(content), 0o644))
+
+	var output bytes.Buffer
+	assert.NoError(t, NewFileProcessor(file, general.Undefined, &output).Process())
+
+	assert.Contains(t, output.String(), secret)
+	assert.NotContains(t, logs.String(), secret)
+	// Check the records rather than searching for the number, since timestamps contain arbitrary digits
+	for _, line := range strings.Split(strings.TrimSpace(logs.String()), "\n") {
+		var record map[string]any
+		assert.NoError(t, json.Unmarshal([]byte(line), &record))
+		assert.NotContains(t, record, "value", line)
+	}
+	// The type of each result is logged instead
+	assert.Contains(t, logs.String(), `"entry":"plain","type":"string"`)
+	assert.Contains(t, logs.String(), `"entry":"port","type":"int"`)
+	assert.Contains(t, logs.String(), `"entry":"fragment","type":"filter.Fragment"`)
+}
+
+// TestProcessedValuesAreLoggedIfEnabled checks that values appear in debug logs only after opting in with SetLogValues
+func TestProcessedValuesAreLoggedIfEnabled(t *testing.T) {
+	t.Setenv("LOG_TEST_SECRET", "visible-value")
+	assert.False(t, LogValues())
+	SetLogValues(true)
+	t.Cleanup(func() { SetLogValues(false) })
+	assert.True(t, LogValues())
+
+	var logs bytes.Buffer
+	defaultLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(defaultLogger) })
+
+	file := path.Join(t.TempDir(), "config.yaml")
+	assert.NoError(t, os.WriteFile(file, []byte("plain: ${LOG_TEST_SECRET}\n"), 0o644))
+	assert.NoError(t, NewFileProcessor(file, general.Undefined, io.Discard).Process())
+
+	assert.Contains(t, logs.String(), `"entry":"plain","type":"string","value":"visible-value"`)
 }

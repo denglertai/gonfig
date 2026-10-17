@@ -135,12 +135,13 @@ func isolateConfig(t *testing.T) {
 
 	t.Setenv("HOME", t.TempDir())
 	t.Chdir(t.TempDir())
-	for _, key := range []string{"GONFIG_LOG_LEVEL", "GONFIG_LOG_SOURCE", "GONFIG_CONFIG_PATH", "GONFIG_PLUGIN_PATH", "GONFIG_ALLOW_UNKNOWN_FILTERS"} {
+	for _, key := range []string{"GONFIG_LOG_LEVEL", "GONFIG_LOG_SOURCE", "GONFIG_CONFIG_PATH", "GONFIG_PLUGIN_PATH", "GONFIG_ALLOW_UNKNOWN_FILTERS", "GONFIG_LOG_VALUES"} {
 		// Viper ignores empty environment variables
 		t.Setenv(key, "")
 	}
 }
 
+// TestLoadAppConfig_Defaults checks the complete default config without any config file or environment variables
 func TestLoadAppConfig_Defaults(t *testing.T) {
 	isolateConfig(t)
 
@@ -152,6 +153,7 @@ func TestLoadAppConfig_Defaults(t *testing.T) {
 		ConfigPath:          "",
 		PluginPath:          "./plugins",
 		AllowUnknownFilters: false,
+		LogValues:           false,
 	}
 	if !reflect.DeepEqual(*cfg, want) {
 		t.Fatalf("expected default config %+v, got %+v", want, *cfg)
@@ -227,5 +229,44 @@ func TestSetupViper_MissingConfigFile(t *testing.T) {
 
 	if _, err := SetupViper(nil); err != nil {
 		t.Fatalf("expected no error for a missing config file, got %v", err)
+	}
+}
+
+// TestLoadAppConfig_LogValues checks that logging values is disabled by default and can be enabled by every source
+func TestLoadAppConfig_LogValues(t *testing.T) {
+	testCases := []struct {
+		desc       string
+		env        string
+		configFile string
+		flag       []string
+		want       bool
+	}{
+		{desc: "default", want: false},
+		{desc: "env var", env: "true", want: true},
+		{desc: "config file", configFile: "log-values: true\n", want: true},
+		{desc: "flag overrides config file", configFile: "log-values: true\n", flag: []string{"--log-values=false"}, want: false},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			dir := t.TempDir()
+			if tC.configFile != "" {
+				if err := os.WriteFile(filepath.Join(dir, ".gonfig.yaml"), []byte(tC.configFile), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			t.Setenv("GONFIG_LOG_VALUES", tC.env)
+
+			flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
+			flags.String("config-path", "", "")
+			flags.Bool("log-values", false, "")
+			if err := flags.Parse(append([]string{"--config-path", dir}, tC.flag...)); err != nil {
+				t.Fatal(err)
+			}
+
+			cfg := mustLoadAppConfig(t, mustSetupViper(t, flags))
+			if cfg.LogValues != tC.want {
+				t.Fatalf("expected LogValues %v, got %v", tC.want, cfg.LogValues)
+			}
+		})
 	}
 }

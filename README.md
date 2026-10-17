@@ -367,6 +367,7 @@ Order of precedence (highest to lowest):
 | Include source location | `--log-source`, `-s` | `GONFIG_LOG_SOURCE` | `false` | Includes source location in log output |
 | Config directory | `--config-path` | `GONFIG_CONFIG_PATH` | empty | Directory that contains `.gonfig.yaml` |
 | Plugin directory | `--plugin-path` | `GONFIG_PLUGIN_PATH` | `./plugins` | Directory scanned recursively for plugin `.so` files |
+| Log values | `--log-values` | `GONFIG_LOG_VALUES` | `false` | Includes processed values in debug logs. Values may contain secrets, so only use it for debugging; gonfig warns on startup while it is enabled |
 | Allow unknown filters | `--allow-unknown-filters` | `GONFIG_ALLOW_UNKNOWN_FILTERS` | `false` | Passes values on unchanged with a warning instead of failing for [unknown filters](./FILTERS.md#order-of-operations). This may write secrets that were meant to be hashed or encrypted |
 
 ### Config File
@@ -384,6 +385,8 @@ Example config file:
 log-level: debug
 log-source: true
 plugin-path: ./plugins
+# Keep processed values, which may contain secrets, out of debug logs (default)
+log-values: false
 # Fail on unknown filters instead of passing values on unchanged (default)
 allow-unknown-filters: false
 # Reusable filter chains and placeholders, used as ${VAR | @secret} and ${@db_url}
@@ -434,6 +437,9 @@ The wrappers in `./pkg/logging` also support `trace` and `fatal` levels.
 `fatal` exits with status code `1`.
 
 Since the CLI command output may be written to stdout, logs are written to stderr by default.
+
+Processed values are not logged by default, even at `trace` level, since they may contain secrets. Debug logs show the entry and the type of its result instead, e.g. `"entry":"database.password","type":"string"`.
+To include the values for debugging, enable `log-values` with `--log-values`, `GONFIG_LOG_VALUES=true` or in `.gonfig.yaml`. gonfig then logs a warning on startup, so the option is not left enabled by accident.
 
 ## Plugins
 

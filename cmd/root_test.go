@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/denglertai/gonfig/internal/config"
+	"github.com/denglertai/gonfig/internal/file"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 )
@@ -26,7 +27,7 @@ func TestLogLevelFlagIsApplied(t *testing.T) {
 func TestDefaultAppConfig(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Chdir(t.TempDir())
-	for _, key := range []string{"GONFIG_LOG_LEVEL", "GONFIG_LOG_SOURCE", "GONFIG_CONFIG_PATH", "GONFIG_PLUGIN_PATH", "GONFIG_ALLOW_UNKNOWN_FILTERS"} {
+	for _, key := range []string{"GONFIG_LOG_LEVEL", "GONFIG_LOG_SOURCE", "GONFIG_CONFIG_PATH", "GONFIG_PLUGIN_PATH", "GONFIG_ALLOW_UNKNOWN_FILTERS", "GONFIG_LOG_VALUES"} {
 		// Viper ignores empty environment variables
 		t.Setenv(key, "")
 	}
@@ -38,6 +39,7 @@ func TestDefaultAppConfig(t *testing.T) {
 		ConfigPath:          "",
 		PluginPath:          "./plugins",
 		AllowUnknownFilters: false,
+		LogValues:           false,
 	}
 
 	// Defaults as used by the CLI, with all flags at their default values
@@ -59,6 +61,7 @@ func TestDefaultAppConfig(t *testing.T) {
 		"config-path":           "",
 		"plugin-path":           "./plugins",
 		"allow-unknown-filters": "false",
+		"log-values":            "false",
 	}
 	for name, want := range flagDefaults {
 		flag := rootCmd.PersistentFlags().Lookup(name)
@@ -66,4 +69,26 @@ func TestDefaultAppConfig(t *testing.T) {
 			assert.Equal(t, want, flag.DefValue, name)
 		}
 	}
+}
+
+// TestLogValuesFlagIsApplied checks that --log-values and GONFIG_LOG_VALUES enable logging values in the file processor
+func TestLogValuesFlagIsApplied(t *testing.T) {
+	t.Setenv("GONFIG_LOG_VALUES", "")
+	t.Cleanup(func() { file.SetLogValues(false) })
+
+	resetFlags(t)
+	rootCmd.SetArgs([]string{"--log-values", "value", "x"})
+	assert.NoError(t, rootCmd.Execute())
+	assert.True(t, file.LogValues())
+
+	resetFlags(t)
+	rootCmd.SetArgs([]string{"value", "x"})
+	assert.NoError(t, rootCmd.Execute())
+	assert.False(t, file.LogValues())
+
+	t.Setenv("GONFIG_LOG_VALUES", "true")
+	resetFlags(t)
+	rootCmd.SetArgs([]string{"value", "x"})
+	assert.NoError(t, rootCmd.Execute())
+	assert.True(t, file.LogValues())
 }

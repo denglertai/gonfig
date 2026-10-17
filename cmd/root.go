@@ -9,10 +9,12 @@ import (
 	"os"
 
 	"github.com/denglertai/gonfig/internal/config"
+	"github.com/denglertai/gonfig/internal/file"
 	"github.com/denglertai/gonfig/internal/filter"
 	"github.com/denglertai/gonfig/internal/logging"
 	"github.com/denglertai/gonfig/internal/plugin"
 	"github.com/denglertai/gonfig/internal/value"
+	pkglogging "github.com/denglertai/gonfig/pkg/logging"
 	"github.com/spf13/cobra"
 )
 
@@ -59,6 +61,11 @@ It provides a flexible plugin system for extending functionality and a filtering
 
 		filter.SetAllowUnknownFilters(cfg.AllowUnknownFilters)
 
+		file.SetLogValues(cfg.LogValues)
+		if cfg.LogValues {
+			pkglogging.Warn("Processed values are included in debug logs and may expose secrets")
+		}
+
 		// Templates are validated after the filters of plugins are registered, so they are known
 		if err := value.SetTemplates(cfg.Templates); err != nil {
 			return fmt.Errorf("invalid templates in config file: %w", err)
@@ -85,6 +92,7 @@ func GetAppConfig(cmd *cobra.Command) *config.AppConfig {
 		PluginPath: "./plugins",
 
 		AllowUnknownFilters: false,
+		LogValues:           false,
 	}
 }
 
@@ -97,10 +105,12 @@ func Execute() {
 	}
 }
 
+// init defines the global flags, which are resolved together with environment variables and the config file
 func init() {
 	rootCmd.PersistentFlags().StringP("log-level", "l", "info", "Log level (trace, debug, info, warn, error, fatal)")
 	rootCmd.PersistentFlags().BoolP("log-source", "s", false, "Whether to include source location in log output or not")
 	rootCmd.PersistentFlags().String("config-path", "", "Path to the directory containing .gonfig config file (env var: GONFIG_CONFIG_PATH)")
 	rootCmd.PersistentFlags().String("plugin-path", "./plugins", "Path to plugin directory (env var: GONFIG_PLUGIN_PATH)")
+	rootCmd.PersistentFlags().Bool("log-values", false, "Include processed values in debug logs, which may expose secrets (env var: GONFIG_LOG_VALUES)")
 	rootCmd.PersistentFlags().Bool("allow-unknown-filters", false, "Pass values on unchanged instead of failing for unknown filters, which may write secrets unhashed (env var: GONFIG_ALLOW_UNKNOWN_FILTERS)")
 }
