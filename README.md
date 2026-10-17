@@ -315,6 +315,17 @@ Usage:
     $2a$10$rX0TunRMPGlntJT6PKDgLuFYMud2gmTvDMFGhsTjpzYX7bLJeXF6G
     ```
 
+1. End each result with a newline (`--newline`)
+    ```console
+    $ A=first B=second gonfig value --newline "\${A}" "\${B}"
+    first
+    second
+    ```
+   By default, results are printed exactly as they are, without a newline, so they can be written to files or piped into other tools byte for byte.
+   For a single value, command substitution like `TOKEN=$(gonfig value ...)` works the same with and without the flag, since it removes trailing newlines.
+   With several values, `--newline` keeps them on separate lines, while the default joins them, e.g. `firstsecond`.
+   If processing any value fails, nothing is printed.
+
 ## Filters
 
 Filters transform the values of environment variables. They are added to a placeholder with a pipe `|` and applied from left to right:
