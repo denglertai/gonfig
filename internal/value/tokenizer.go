@@ -1,7 +1,6 @@
 package value
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -10,127 +9,141 @@ import (
 	"github.com/denglertai/gonfig/pkg/logging"
 )
 
-// Values are tokenized in two stages:
-//  1. parser finds the placeholders "${...}" within a value, everything else is kept as is.
+// Values are processed in two stages:
+//  1. findPlaceholders finds the placeholders "${...}" within a value, everything else is kept as is.
 //  2. filterParser splits the content of a placeholder, e.g. "ENV_VAR | filter1 | filter2(param)",
 //     into the name of the environment variable, the filter names, their params and the separators between them.
-var parser *tokenizer.Tokenizer
+//
+// Finding the placeholders does not use a tokenizer, because tokenizing all the text around
+// the placeholders is expensive and most values do not contain any placeholders at all.
 var filterParser *tokenizer.Tokenizer
 
 const (
 	// TokenFilterSeparator is the pipe separating the filters of a placeholder
 	TokenFilterSeparator = iota
-	// TokenParam is a framed string: a placeholder "${...}" for parser, the params "(...)" of a filter for filterParser
+	// TokenParam is a framed string containing the params "(...)" of a filter
 	TokenParam
 )
 
 func init() {
-	parser = tokenizer.New()
-	// A framed string ends at the first unescaped closing bracket, so brackets cannot be nested.
-	// Allow escaping the closing brackets, e.g. for regex quantifiers within filter params
-	parser.DefineStringToken(TokenParam, "${", "}").SetEscapeSymbol('\\')
-
 	filterParser = tokenizer.New()
 	filterParser.DefineTokens(TokenFilterSeparator, []string{"|", " |", " | "})
+	// A framed string ends at the first unescaped closing bracket, so brackets cannot be nested.
+	// Allow escaping the closing brackets, e.g. for regex groups within filter params
 	filterParser.DefineStringToken(TokenParam, "(", ")").SetEscapeSymbol('\\')
 	// Allow names like MY_VAR_2 and base64_decode to be parsed as a single keyword
 	filterParser.AllowKeywordSymbols(tokenizer.Underscore, tokenizer.Numbers)
-}
-
-// Tokenize returns a stream of tokens
-func tokenize(value string) (*tokenizer.Stream, error) {
-	return parser.ParseString(value), nil
 }
 
 // ProcessValue replaces all placeholders within the value by the result of their filters.
 // The result is a string, unless a placeholder's filters return another type (e.g. to_int),
 // in which case that result replaces the whole value.
 func ProcessValue(value string) (any, error) {
-	stream, err := tokenize(value)
-	if err != nil {
-		return nil, err
-	}
-
-	defer stream.Close()
-
-	params, err := processStream(stream)
-
-	if err != nil {
-		return value, err
-	}
-
-	// The start and end offsets of the placeholders refer to the original value.
-	// Every replacement changes the length of the value, so sumDiff tracks the total change
-	// to shift the offsets of the following placeholders accordingly.
-	sumDiff := 0
-	result := value
-	var finalResult any
-
-	// If there are no params return the value as is without any processing
-	if len(params) == 0 {
+	// Most values do not contain any placeholders, so return them without any further processing
+	if !strings.Contains(value, "${") {
 		return value, nil
 	}
 
-	for _, param := range params {
-		paramResult, lenDiff, err := param.Apply(result, sumDiff)
+	placeholders := findPlaceholders(value)
+	if len(placeholders) == 0 {
+		return value, nil
+	}
+
+	// Build the result in a single pass, copying the text between the placeholders as is
+	var result strings.Builder
+	result.Grow(len(value))
+
+	var nonStringResult any
+	lastIsNonString := false
+	last := 0
+
+	for _, p := range placeholders {
+		logging.Debug("Found placeholder", "placeholder", p.token, "start", p.start, "end", p.end)
+
+		// The first filter reads the environment variable and ignores its input, so the token is just a placeholder value.
+		// Without any filters, e.g. for "${}", the token is kept as is.
+		filtered, err := filter.ApplyFilters(p.token, parseFilters(p.content()))
 		if err != nil {
 			return nil, err
 		}
 
-		sumDiff += lenDiff
-		if stringResult, ok := paramResult.(string); ok {
-			logging.Debug("Result", "result", result)
-			result = stringResult
-			finalResult = stringResult
+		result.WriteString(value[last:p.start])
+		if s, ok := filtered.(string); ok {
+			result.WriteString(s)
+			lastIsNonString = false
 		} else {
-			finalResult = paramResult
+			// Only strings can be embedded into the surrounding text. Other types replace the whole value
+			// if they are the result of the last placeholder, otherwise the placeholder is kept as is.
+			result.WriteString(p.token)
+			nonStringResult = filtered
+			lastIsNonString = true
 		}
+		last = p.end
 	}
 
-	return finalResult, nil
+	if lastIsNonString {
+		return nonStringResult, nil
+	}
+
+	result.WriteString(value[last:])
+	return result.String(), nil
 }
 
-// ApplyableTokenParam is a placeholder found within a value
-type ApplyableTokenParam interface {
-	// Apply applies the token to the input string
-	Apply(input string, offset int) (any, int, error)
-}
-
-// TokenFilterParam is a placeholder "${...}" and the filters parsed from its content
-type TokenFilterParam struct {
+// placeholder is a placeholder "${...}" found within a value
+type placeholder struct {
 	// token is the placeholder including "${" and "}"
 	token string
-	// filters starts with the filters reading the environment variable, followed by the filters of the placeholder
-	filters []filter.Filter
-	// start and end are the byte offsets of the placeholder within the original value
+	// start and end are the byte offsets of the placeholder within the value
 	start int
 	end   int
 }
 
-// Apply applies the token to the input string and returns the result, the length difference and an error if any
-func (t TokenFilterParam) Apply(input string, offset int) (any, int, error) {
-	// The first filter reads the environment variable and ignores its input, so the token is just a placeholder value
-	result, err := filter.ApplyFilters(t.token, t.filters)
+// content returns the content of the placeholder without "${" and "}"
+func (p placeholder) content() string {
+	return p.token[2 : len(p.token)-1]
+}
 
-	if err != nil {
-		return "", 0, err
+// findPlaceholders returns the placeholders within the value in the order they appear.
+// A placeholder ends at the first closing bracket that is not escaped by a backslash, so placeholders
+// cannot be nested. A placeholder without a closing bracket is not a placeholder and kept as is.
+func findPlaceholders(value string) []placeholder {
+	var placeholders []placeholder
+
+	for offset := 0; offset < len(value); {
+		i := strings.Index(value[offset:], "${")
+		if i == -1 {
+			break
+		}
+
+		start := offset + i
+		end := closingBracket(value, start+2)
+		if end == -1 {
+			break
+		}
+
+		placeholders = append(placeholders, placeholder{
+			token: value[start:end],
+			start: start,
+			end:   end,
+		})
+		offset = end
 	}
 
-	lenBefore := len(input)
+	return placeholders
+}
 
-	// start and end are byte offsets, so slice the bytes rather than the runes
-	before := input[:t.start+offset]
-	after := input[t.end+offset:]
-
-	// Only strings can be embedded into the surrounding text, other types replace the whole value
-	switch result.(type) {
-	case string:
-		result := fmt.Sprintf("%s%s%s", before, result, after)
-
-		return result, len(result) - lenBefore, nil
-	default:
-		return result, 0, nil
+// closingBracket returns the offset after the first unescaped "}" at or after from, or -1 if there is none
+func closingBracket(value string, from int) int {
+	for i := from; i < len(value); i++ {
+		switch value[i] {
+		case '\\':
+			// Skip the escaped character
+			i++
+		case '}':
+			return i + 1
+		}
 	}
+	return -1
 }
 
 // paramEscapes are the characters which may be escaped by a backslash within filter params
@@ -140,8 +153,9 @@ const paramEscapes = `,=(){}\`
 // Named params are stored by their key, positional params by their position ("0", "1", ...).
 // A backslash escapes the following character if it is one of paramEscapes, otherwise it is kept.
 func parseParams(paramStr string) map[string]string {
-	// remove leading and trailing brackets
-	paramStr = paramStr[1 : len(paramStr)-1]
+	// Remove the leading and trailing brackets. The trailing one is missing if the params are not closed, e.g. "${VAL | replace(}"
+	paramStr = strings.TrimPrefix(paramStr, "(")
+	paramStr = strings.TrimSuffix(paramStr, ")")
 
 	res := map[string]string{}
 	if paramStr == "" {
@@ -185,39 +199,6 @@ func parseParams(paramStr string) map[string]string {
 	flush()
 
 	return res
-}
-
-// processStream collects the placeholders of the token stream created by parser and parses their filters
-func processStream(stream *tokenizer.Stream) ([]ApplyableTokenParam, error) {
-	logging.Trace("Processing stream", "stream", stream)
-
-	result := make([]ApplyableTokenParam, 0)
-
-	for stream.IsValid() {
-		currentToken := stream.CurrentToken()
-
-		// Only placeholders are of interest, the text around them is kept as is
-		if currentToken.Is(tokenizer.TokenString) {
-			if currentToken.StringSettings().Key == TokenParam {
-				token := currentToken.ValueString()
-				// Strip "${" and "}" to get the content of the placeholder for parsing its filters
-				param := TokenFilterParam{
-					token:   token,
-					start:   currentToken.Offset(),
-					end:     currentToken.Offset() + len(token),
-					filters: parseFilters(token[2 : len(token)-1]),
-				}
-
-				logging.Debug("Found param", "param", param.token, "start", param.start, "end", param.end)
-
-				result = append(result, param)
-			}
-		}
-
-		stream.GoNext()
-	}
-
-	return result, nil
 }
 
 // parseFilters parses the content of a placeholder, e.g. "ENV_VAR | filter(key=value)", into the filters to apply

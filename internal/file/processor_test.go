@@ -1,7 +1,9 @@
 package file
 
 import (
+	"bytes"
 	"io"
+	"log/slog"
 	"os"
 	"path"
 	"testing"
@@ -45,4 +47,28 @@ func TestFileProcessorWithoutExtension(t *testing.T) {
 
 	err := NewFileProcessor(file, general.Undefined, io.Discard).Process()
 	assert.ErrorContains(t, err, "could not infer the file type")
+}
+
+func TestFileProcessorProcessesEntries(t *testing.T) {
+	t.Setenv("PROCESSOR_TEST_HOST", "db")
+	t.Setenv("PROCESSOR_TEST_PORT", "5")
+
+	// Capture debug logs to check that entry paths are logged
+	var logs bytes.Buffer
+	defaultLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(defaultLogger) })
+
+	file := path.Join(t.TempDir(), "config.yaml")
+	content := "static: value\nhost: ${PROCESSOR_TEST_HOST}\nport: ${PROCESSOR_TEST_PORT | to_int}\n"
+	assert.NoError(t, os.WriteFile(file, []byte(content), 0o644))
+
+	var output bytes.Buffer
+	err := NewFileProcessor(file, general.Undefined, &output).Process()
+
+	assert.NoError(t, err)
+	// Entries without placeholders are kept, non-string results are formatted as text
+	assert.Equal(t, "static: value\nhost: db\nport: \"5\"\n", output.String())
+	assert.Contains(t, logs.String(), `msg="Setting new value" entry=host`)
+	assert.NotContains(t, logs.String(), "entry=static")
 }
