@@ -20,8 +20,9 @@ import (
 var filterParser *tokenizer.Tokenizer
 
 const (
-	// TokenFilterSeparator is the pipe separating the filters of a placeholder
-	TokenFilterSeparator = iota
+	// TokenFilterSeparator is the pipe separating the filters of a placeholder.
+	// The tokenizer reserves the key 0 for undefined tokens and ignores definitions using it, so the keys start at 1.
+	TokenFilterSeparator = iota + 1
 	// TokenParam is a framed string containing the params "(...)" of a filter
 	TokenParam
 )
