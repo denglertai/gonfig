@@ -4,6 +4,8 @@ Copyright © 2024 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/denglertai/gonfig/internal/value"
 	"github.com/spf13/cobra"
 )
@@ -23,7 +25,10 @@ trimming whitespace, or applying cryptographic functions like bcrypt or md5.`,
 				return err
 			}
 
-			cmd.OutOrStdout().Write([]byte(result.(string)))
+			// Filters may produce non-string results (e.g. to_int)
+			if _, err := fmt.Fprint(cmd.OutOrStdout(), result); err != nil {
+				return err
+			}
 		}
 
 		return nil
