@@ -1,6 +1,8 @@
 package config
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/denglertai/gonfig/internal/general"
@@ -24,6 +26,35 @@ func NewSettings() *Settings {
 	}
 }
 
+// FilterTemplate is a reusable filter chain, used as ${VAR | @name}
+type FilterTemplate struct {
+	// Description documents the template
+	Description string `mapstructure:"description"`
+	// Filters is the filter chain, e.g. "trim | base64"
+	Filters string `mapstructure:"filters"`
+}
+
+// PlaceholderTemplate is a reusable placeholder, used as ${@name}.
+// It is either based on an environment variable (Env) or on a value containing placeholders (Value).
+type PlaceholderTemplate struct {
+	// Description documents the template
+	Description string `mapstructure:"description"`
+	// Env is the name of the environment variable to read
+	Env string `mapstructure:"env"`
+	// Default is used if the environment variable is not set or empty
+	Default string `mapstructure:"default"`
+	// Value is processed like any config value, e.g. "jdbc:postgresql://${@db_host}/app"
+	Value string `mapstructure:"value"`
+	// Filters is the filter chain applied to the value of the environment variable or to the processed value
+	Filters string `mapstructure:"filters"`
+}
+
+// Templates holds the templates defined in the config file
+type Templates struct {
+	Filters      map[string]FilterTemplate      `mapstructure:"filters"`
+	Placeholders map[string]PlaceholderTemplate `mapstructure:"placeholders"`
+}
+
 // AppConfig holds all global application settings
 type AppConfig struct {
 	LogLevel   string
@@ -32,12 +63,14 @@ type AppConfig struct {
 	PluginPath string
 	// AllowUnknownFilters makes unknown filters pass values on unchanged instead of failing
 	AllowUnknownFilters bool
+	// Templates are reusable filter chains and placeholders, which can only be defined in the config file
+	Templates Templates
 }
 
 // LoadAppConfig loads configuration from multiple sources
 // Precedence: CLI flags > env vars > config file > defaults
-func LoadAppConfig(v *viper.Viper) *AppConfig {
-	return &AppConfig{
+func LoadAppConfig(v *viper.Viper) (*AppConfig, error) {
+	cfg := &AppConfig{
 		LogLevel:   v.GetString("log-level"),
 		LogSource:  v.GetBool("log-source"),
 		ConfigPath: v.GetString("config-path"),
@@ -45,12 +78,20 @@ func LoadAppConfig(v *viper.Viper) *AppConfig {
 
 		AllowUnknownFilters: v.GetBool("allow-unknown-filters"),
 	}
+
+	// Template names are keys of the config file, which viper converts to lower case
+	if err := v.UnmarshalKey("templates", &cfg.Templates); err != nil {
+		return nil, fmt.Errorf("invalid templates in config file: %w", err)
+	}
+
+	return cfg, nil
 }
 
 // SetupViper configures Viper with defaults and paths.
 // The given flags (may be nil) are bound before the config file is located,
 // so that flags such as --config-path take effect.
-func SetupViper(flags *pflag.FlagSet) *viper.Viper {
+// A missing config file is fine, but a config file that cannot be read, e.g. because of invalid YAML, is an error.
+func SetupViper(flags *pflag.FlagSet) (*viper.Viper, error) {
 	v := viper.New()
 
 	// Bind CLI flags so they override env vars & config files
@@ -86,7 +127,12 @@ func SetupViper(flags *pflag.FlagSet) *viper.Viper {
 	}
 
 	// Load config file if it exists (optional, doesn't error if missing)
-	_ = v.ReadInConfig() // Ignore "file not found" errors
+	if err := v.ReadInConfig(); err != nil {
+		var notFound viper.ConfigFileNotFoundError
+		if !errors.As(err, &notFound) {
+			return nil, fmt.Errorf("failed to read config file %s: %w", v.ConfigFileUsed(), err)
+		}
+	}
 
-	return v
+	return v, nil
 }

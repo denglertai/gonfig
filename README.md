@@ -210,6 +210,8 @@ exec /usr/bin/app
 
 **Password hashes:** Generate bcrypt hashes at deploy time instead of storing them, e.g. `${ADMIN_PASSWORD | bcrypt}`. See [recipes](./FILTERS.md#generate-password-hashes).
 
+**Reusable settings:** Define filter chains and placeholders like a JDBC URL with defaults once in `.gonfig.yaml` and use them in all config files, e.g. `${@db_url}`. See [templates](./FILTERS.md#templates).
+
 **Templates per environment:** Keep a template in the repository and render it for each environment with `-o`:
 ```console
 $ gonfig config process -f config.template.yaml -o config.yaml -w
@@ -334,6 +336,8 @@ ${ENV_VAR | filter1 | filter2(param) | filter3}
 | `bcrypt` | Hashes the value with bcrypt, fails for values longer than 72 bytes | `${VAL \| bcrypt}` |
 | `base64` | Encodes the value to base64 | `${VAL \| base64}` |
 | `base64_decode` | Decodes a base64 value, fails on invalid input | `${VAL \| base64_decode}` |
+| `url_encode(mode)` | Escapes the value for URL query parameters, or path segments with mode `path` | `${VAL \| url_encode}` |
+| `url_decode(mode)` | Reverses `url_encode` | `${VAL \| url_decode}` |
 | `replace(old,new)` | Replaces every occurrence of `old` by `new` | `${VAL \| replace(foo,bar)}` |
 | `regex(pattern,replacement)` | Replaces every match of the [regular expression](https://pkg.go.dev/regexp/syntax) `pattern`. Capture groups are referenced by `\1` | `${EMAIL \| regex(^\(\w+\)@.+,\1)}` |
 | `split(delimiter)` | Splits the value into a [list](./FILTERS.md#lists), the delimiter defaults to `,` | `${VAL \| split(;) \| join}` |
@@ -378,9 +382,24 @@ log-source: true
 plugin-path: ./plugins
 # Fail on unknown filters instead of passing values on unchanged (default)
 allow-unknown-filters: false
+# Reusable filter chains and placeholders, used as ${VAR | @secret} and ${@db_url}
+templates:
+  filters:
+    secret:
+      description: Trims a secret and encodes it to base64
+      filters: trim | base64
+  placeholders:
+    db_host:
+      env: DB_HOST
+      default: localhost
+    db_url:
+      description: JDBC URL of the database
+      value: "jdbc:postgresql://${@db_host}:5432/app"
 ```
 
 `plugin-path` can be configured in `.gonfig.yaml` and is resolved relative to the current working directory when provided as a relative path.
+
+`templates` can only be configured in `.gonfig.yaml`, see [templates](./FILTERS.md#templates).
 
 ### Examples
 
