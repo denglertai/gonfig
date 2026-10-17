@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path"
+	"strings"
 	"testing"
 
 	"github.com/gkampitakis/go-snaps/snaps"
@@ -41,4 +42,15 @@ func TestPlainFileHandler(t *testing.T) {
 	handler.Write(output)
 
 	snaps.MatchSnapshot(t, output.String())
+}
+
+func TestPlainFileHandlerPreservesTrailingNewline(t *testing.T) {
+	for _, input := range []string{"a\nb", "a\nb\n", "", "\n"} {
+		handler := NewPlainFileProcessor()
+		assert.NoError(t, handler.Read(strings.NewReader(input)))
+
+		output := new(bytes.Buffer)
+		assert.NoError(t, handler.Write(output))
+		assert.Equal(t, input, output.String())
+	}
 }
