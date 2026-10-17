@@ -245,8 +245,10 @@ func TestUnknownFilterFails(t *testing.T) {
 }
 
 func TestUnknownFilterAllowed(t *testing.T) {
+	assert.False(t, UnknownFiltersAllowed())
 	SetAllowUnknownFilters(true)
 	t.Cleanup(func() { SetAllowUnknownFilters(false) })
+	assert.True(t, UnknownFiltersAllowed())
 
 	result, err := NewFilter("not_a_filter").Process("value")
 

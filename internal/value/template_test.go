@@ -270,3 +270,12 @@ func TestChainedFilterTemplates(t *testing.T) {
 		})
 	}
 }
+
+func TestValueTemplateWithEmptyPlaceholder(t *testing.T) {
+	// An empty placeholder is kept as is, also within the value of a template
+	setTemplates(t, config.Templates{Placeholders: map[string]config.PlaceholderTemplate{"literal": {Value: "a${}b"}}})
+
+	result, err := ProcessValue("${@literal}")
+	assert.NoError(t, err)
+	assert.Equal(t, "a${}b", result)
+}

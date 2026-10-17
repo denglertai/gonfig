@@ -577,3 +577,24 @@ func TestInvalidTemplatesKeepFileUnchanged(t *testing.T) {
 	assert.NoError(t, readErr)
 	assert.Equal(t, content, string(result))
 }
+
+func TestInvalidConfigFile(t *testing.T) {
+	testCases := []struct {
+		desc    string
+		content string
+		wantErr string
+	}{
+		{desc: "invalid YAML", content: "templates:\n  filters:\n    a:\n      filters: @b\n", wantErr: "failed to read config file"},
+		{desc: "invalid templates", content: "templates:\n  filters: not a map\n", wantErr: "invalid templates in config file"},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			configDir := t.TempDir()
+			assert.NoError(t, os.WriteFile(path.Join(configDir, ".gonfig.yaml"), []byte(tC.content), 0o644))
+
+			resetFlags(t)
+			rootCmd.SetArgs([]string{"--config-path", configDir, "value", "x"})
+			assert.ErrorContains(t, rootCmd.Execute(), tC.wantErr)
+		})
+	}
+}
