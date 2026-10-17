@@ -18,7 +18,7 @@ A plugin is a separate executable, which gonfig starts once and talks to over st
 Plugins and gonfig don't have to be built with the same Go version, and plugins may be written in any language.
 
 On startup gonfig walks the plugin directory recursively and starts every executable whose name starts with `gonfig-plugin-`, e.g. `gonfig-plugin-crypto` (`gonfig-plugin-crypto.exe` on Windows).
-Other files are ignored, so build scripts next to the sources of a plugin are never started.
+Other files are ignored, so build scripts next to the sources of a plugin are never started. The exception are deprecated Go plugins (`.so` files), which are still loaded, see [migrating from Go plugins](#migrating-from-go-plugins).
 The plugin directory defaults to `./plugins`, relative to the current working directory, and may be changed by:
 1. the CLI flag `--plugin-path`
 1. the environment variable `GONFIG_PLUGIN_PATH`
@@ -273,10 +273,19 @@ pipeline:
       mv ${{targets.destdir}}/usr/bin/gonfig-plugin-crypto ${{targets.destdir}}/usr/libexec/gonfig/plugins/
 ```
 
-The [apko](https://github.com/chainguard-dev/apko) configuration of the image adds both packages and points gonfig to the plugin directory:
+The [apko](https://github.com/chainguard-dev/apko) configuration of the image adds both packages from the repositories they are published to, and points gonfig to the plugin directory.
+These are the relevant parts of the configuration, e.g. for packages built with melange into its output directory `./packages`:
 
 ```yaml
 contents:
+  repositories:
+    - https://packages.wolfi.dev/os
+    # The packages built with melange
+    - ./packages
+  keyring:
+    - https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
+    # The public key of the key melange signed the packages with
+    - ./melange.rsa.pub
   packages:
     - gonfig
     - gonfig-plugin-crypto

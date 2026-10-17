@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/denglertai/gonfig/internal/filter"
@@ -20,15 +21,21 @@ func TestDummyPlugin(t *testing.T) {
 		t.Skip("building the dummy plugin requires the go tool")
 	}
 
+	// Plugins are only found with the suffix .exe on Windows
+	name := "gonfig-plugin-dummy"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+
 	pluginDir := t.TempDir()
-	build := exec.Command(goTool, "build", "-o", path.Join(pluginDir, "gonfig-plugin-dummy"), ".")
-	build.Dir = path.Join("..", "plugins", "dummy")
+	build := exec.Command(goTool, "build", "-o", filepath.Join(pluginDir, name), ".")
+	build.Dir = filepath.Join("..", "plugins", "dummy")
 	output, err := build.CombinedOutput()
 	if !assert.NoError(t, err, string(output)) {
 		return
 	}
 
-	fileName := path.Join(t.TempDir(), "config.yaml")
+	fileName := filepath.Join(t.TempDir(), "config.yaml")
 	assert.NoError(t, os.WriteFile(fileName, []byte("name: ${PLUGIN_NAME | reverse}\nid: ${PLUGIN_ID | to_int | reverse | to_int}\n"), 0o644))
 	t.Setenv("PLUGIN_NAME", "gonfig")
 	t.Setenv("PLUGIN_ID", "123")

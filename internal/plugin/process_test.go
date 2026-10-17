@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -119,6 +120,7 @@ func runTestPlugin(mode string, prefix string) int {
 // returned as well.
 func installTestPlugin(t *testing.T, mode string) (string, string) {
 	t.Helper()
+	skipOnWindows(t)
 
 	executable, err := os.Executable()
 	assert.NoError(t, err)
@@ -130,6 +132,15 @@ func installTestPlugin(t *testing.T, mode string) (string, string) {
 	t.Setenv(testPluginEnv, mode)
 	t.Setenv(testPluginPrefixEnv, prefix)
 	return dir, prefix
+}
+
+// skipOnWindows skips tests relying on symbolic links, executable permissions or shell scripts, which Windows lacks.
+// Plugins on Windows are covered by TestIsExecutablePlugin and the end-to-end test of the dummy plugin in cmd.
+func skipOnWindows(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("requires symbolic links, executable permissions and shell scripts")
+	}
 }
 
 // shortenTimeouts shortens the timeouts of executable plugins for the test. The handshake timeout stays longer,
@@ -300,6 +311,8 @@ func TestIsExecutablePlugin(t *testing.T) {
 
 // TestInitPluginsSkipsOtherFiles checks that only executables named like plugins are started
 func TestInitPluginsSkipsOtherFiles(t *testing.T) {
+	skipOnWindows(t)
+
 	dir := t.TempDir()
 	marker := filepath.Join(t.TempDir(), "started")
 	script := "#!/bin/sh\ntouch " + marker + "\n"
