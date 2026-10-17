@@ -255,17 +255,35 @@ func parseFilters(content string) []filter.Filter {
 		return []filter.Filter{}
 	}
 
-	return append(sourceFilters(steps[0]), chainFilters(steps[1:])...)
+	return append(sourceFilters(steps[0], chainHasDefault(steps[1:])), chainFilters(steps[1:])...)
 }
 
 // sourceFilters returns the filters reading the value of a placeholder, from either an environment variable or a placeholder template.
-// Params given for the source are ignored.
-func sourceFilters(step chainStep) []filter.Filter {
+// hasDefault marks chains providing a default, which never fail for a missing variable. Params given for the source are ignored.
+func sourceFilters(step chainStep, hasDefault bool) []filter.Filter {
 	if name, isTemplate := templateName(step.name); isTemplate {
-		return []filter.Filter{placeholderTemplateFilter(name)}
+		return []filter.Filter{placeholderTemplateFilter(name, hasDefault)}
 	}
 
-	return []filter.Filter{filter.NewEnvVarFilter(step.name), filter.NewFileInterceptorFilter()}
+	return []filter.Filter{filter.NewEnvVarFilter(step.name, hasDefault), filter.NewFileInterceptorFilter()}
+}
+
+// chainHasDefault returns whether the steps of a filter chain provide a default for a missing variable,
+// with the default filter either in the chain itself or within a filter template
+func chainHasDefault(steps []chainStep) bool {
+	for _, step := range steps {
+		if step.name == "default" {
+			return true
+		}
+
+		// Templates are validated on startup, so references within them cannot form cycles
+		if name, isTemplate := templateName(step.name); isTemplate {
+			if template, found := filterTemplates[name]; found && chainHasDefault(scanChain(template.Filters, false)) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // chainFilters creates the filters of the steps of a filter chain

@@ -27,7 +27,7 @@ func TestLogLevelFlagIsApplied(t *testing.T) {
 func TestDefaultAppConfig(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Chdir(t.TempDir())
-	for _, key := range []string{"GONFIG_LOG_LEVEL", "GONFIG_LOG_SOURCE", "GONFIG_CONFIG_PATH", "GONFIG_PLUGIN_PATH", "GONFIG_ALLOW_UNKNOWN_FILTERS", "GONFIG_LOG_VALUES"} {
+	for _, key := range []string{"GONFIG_LOG_LEVEL", "GONFIG_LOG_SOURCE", "GONFIG_CONFIG_PATH", "GONFIG_PLUGIN_PATH", "GONFIG_ALLOW_UNKNOWN_FILTERS", "GONFIG_LOG_VALUES", "GONFIG_FAIL_ON_MISSING"} {
 		// Viper ignores empty environment variables
 		t.Setenv(key, "")
 	}
@@ -40,6 +40,7 @@ func TestDefaultAppConfig(t *testing.T) {
 		PluginPath:          "./plugins",
 		AllowUnknownFilters: false,
 		LogValues:           false,
+		FailOnMissing:       false,
 	}
 
 	// Defaults as used by the CLI, with all flags at their default values
@@ -62,6 +63,7 @@ func TestDefaultAppConfig(t *testing.T) {
 		"plugin-path":           "./plugins",
 		"allow-unknown-filters": "false",
 		"log-values":            "false",
+		"fail-on-missing":       "false",
 	}
 	for name, want := range flagDefaults {
 		flag := rootCmd.PersistentFlags().Lookup(name)

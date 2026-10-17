@@ -331,6 +331,8 @@ ${ENV_VAR | filter1 | filter2(param) | filter3}
 | `trim` | Removes leading and trailing whitespace | `${VAL \| trim}` |
 | `trimleft` | Removes leading spaces | `${VAL \| trimleft}` |
 | `trimright` | Removes trailing spaces | `${VAL \| trimright}` |
+| `default(value)` | Replaces an empty value, e.g. of a variable that is not set | `${VAL \| default(5432)}` |
+| `required` | Fails if the value is empty | `${VAL \| required}` |
 | `to_int` | Converts the value to an integer, fails if it is not numeric | `${VAL \| to_int}` |
 | `to_float` | Converts the value to a finite floating point number | `${VAL \| to_float}` |
 | `to_bool` | Converts the value to a boolean, e.g. from `true` or `1` | `${VAL \| to_bool}` |
@@ -368,6 +370,7 @@ Order of precedence (highest to lowest):
 | Config directory | `--config-path` | `GONFIG_CONFIG_PATH` | empty | Directory that contains `.gonfig.yaml` |
 | Plugin directory | `--plugin-path` | `GONFIG_PLUGIN_PATH` | `./plugins` | Directory scanned recursively for plugin `.so` files |
 | Log values | `--log-values` | `GONFIG_LOG_VALUES` | `false` | Includes processed values in debug logs. Values may contain secrets, so only use it for debugging; gonfig warns on startup while it is enabled |
+| Fail on missing variables | `--fail-on-missing` | `GONFIG_FAIL_ON_MISSING` | `false` | Fails for [environment variables that are not set](./FILTERS.md#missing-variables) instead of using empty strings, unless the placeholder provides a default |
 | Allow unknown filters | `--allow-unknown-filters` | `GONFIG_ALLOW_UNKNOWN_FILTERS` | `false` | Passes values on unchanged with a warning instead of failing for [unknown filters](./FILTERS.md#order-of-operations). This may write secrets that were meant to be hashed or encrypted |
 
 ### Config File
@@ -387,6 +390,8 @@ log-source: true
 plugin-path: ./plugins
 # Keep processed values, which may contain secrets, out of debug logs (default)
 log-values: false
+# Replace environment variables that are not set by empty strings (default)
+fail-on-missing: false
 # Fail on unknown filters instead of passing values on unchanged (default)
 allow-unknown-filters: false
 # Reusable filter chains and placeholders, used as ${VAR | @secret} and ${@db_url}

@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/url"
@@ -52,28 +53,48 @@ func (f *DefaultFilterParamsHandler) AcceptParams(params map[string]string) {
 	f.params = params
 }
 
+// failOnMissing makes environment variables that are not set fail processing, see SetFailOnMissing
+var failOnMissing bool
+
+// SetFailOnMissing sets whether environment variables that are not set fail processing instead of becoming empty strings.
+// Placeholders providing a default, e.g. with the default filter, never fail for missing variables.
+func SetFailOnMissing(enabled bool) {
+	failOnMissing = enabled
+}
+
+// FailOnMissing returns whether environment variables that are not set fail processing
+func FailOnMissing() bool {
+	return failOnMissing
+}
+
 // EnvVarFilter is a filter that replaces the value with the value of an environment variable
 type EnvVarFilter struct {
 	envVar string
+	// hasDefault marks placeholders providing a default, which never fail for a missing variable
+	hasDefault bool
 }
 
-// Process replaces the value with the value of an environment variable
+// Process replaces the value with the value of an environment variable.
+// A variable that is not set becomes an empty string, or fails if enabled by SetFailOnMissing and there is no default.
 func (f *EnvVarFilter) Process(_ any) (any, error) {
 	logging.Debug("Processing EnvVarFilter", "envVar", f.envVar)
 
 	value, found := os.LookupEnv(f.envVar)
 	if !found {
-		// if the environment variable is not found, return an empty string and continue
+		if failOnMissing && !f.hasDefault {
+			return "", fmt.Errorf("environment variable %q is not set", f.envVar)
+		}
 		return "", nil
 	}
 
 	return value, nil
 }
 
-// NewEnvVarFilter creates a new EnvVarFilter
-func NewEnvVarFilter(envVar string) *EnvVarFilter {
+// NewEnvVarFilter creates a new EnvVarFilter. hasDefault marks placeholders providing a default for a missing variable.
+func NewEnvVarFilter(envVar string, hasDefault bool) *EnvVarFilter {
 	return &EnvVarFilter{
-		envVar: envVar,
+		envVar:     envVar,
+		hasDefault: hasDefault,
 	}
 }
 
@@ -397,6 +418,30 @@ func init() {
 			fn: stringFunc(func(s string, _ map[string]string) (string, error) {
 				return strings.TrimRight(s, " "), nil
 			}),
+		}
+	}
+
+	filterMap["default"] = func(token string) Filter {
+		return &FuncFilter{
+			fn: func(value any, params map[string]string) (any, error) {
+				// Like the default of placeholder templates, it replaces empty values, e.g. of variables that are not set
+				if s, ok := value.(string); ok && s == "" {
+					fallback, _ := param(params, "value", 0)
+					return fallback, nil
+				}
+				return value, nil
+			},
+		}
+	}
+
+	filterMap["required"] = func(token string) Filter {
+		return &FuncFilter{
+			fn: func(value any, _ map[string]string) (any, error) {
+				if s, ok := value.(string); ok && s == "" {
+					return "", errors.New("filter required: the value is empty or the environment variable is not set")
+				}
+				return value, nil
+			},
 		}
 	}
 

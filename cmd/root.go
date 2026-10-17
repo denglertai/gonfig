@@ -60,6 +60,7 @@ It provides a flexible plugin system for extending functionality and a filtering
 		plugin.InitPlugins(cfg.PluginPath)
 
 		filter.SetAllowUnknownFilters(cfg.AllowUnknownFilters)
+		filter.SetFailOnMissing(cfg.FailOnMissing)
 
 		file.SetLogValues(cfg.LogValues)
 		if cfg.LogValues {
@@ -93,6 +94,7 @@ func GetAppConfig(cmd *cobra.Command) *config.AppConfig {
 
 		AllowUnknownFilters: false,
 		LogValues:           false,
+		FailOnMissing:       false,
 	}
 }
 
@@ -112,5 +114,6 @@ func init() {
 	rootCmd.PersistentFlags().String("config-path", "", "Path to the directory containing .gonfig config file (env var: GONFIG_CONFIG_PATH)")
 	rootCmd.PersistentFlags().String("plugin-path", "./plugins", "Path to plugin directory (env var: GONFIG_PLUGIN_PATH)")
 	rootCmd.PersistentFlags().Bool("log-values", false, "Include processed values in debug logs, which may expose secrets (env var: GONFIG_LOG_VALUES)")
+	rootCmd.PersistentFlags().Bool("fail-on-missing", false, "Fail for environment variables that are not set instead of using empty strings, unless a default is provided (env var: GONFIG_FAIL_ON_MISSING)")
 	rootCmd.PersistentFlags().Bool("allow-unknown-filters", false, "Pass values on unchanged instead of failing for unknown filters, which may write secrets unhashed (env var: GONFIG_ALLOW_UNKNOWN_FILTERS)")
 }

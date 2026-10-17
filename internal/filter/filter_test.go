@@ -312,3 +312,67 @@ func TestFragmentFilterWithLists(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, Fragment{Text: "[]", IsList: true}, result)
 }
+
+// TestDefaultAndRequiredFilters checks that default replaces and required rejects empty values, leaving other values unchanged
+func TestDefaultAndRequiredFilters(t *testing.T) {
+	testCases := []struct {
+		desc     string
+		filter   string
+		params   map[string]string
+		input    any
+		expected any
+		wantErr  bool
+	}{
+		{desc: "default replaces empty value", filter: "default", params: map[string]string{"0": "5432"}, input: "", expected: "5432"},
+		{desc: "default keeps value", filter: "default", params: map[string]string{"0": "5432"}, input: "6543", expected: "6543"},
+		{desc: "default by name", filter: "default", params: map[string]string{"value": "x"}, input: "", expected: "x"},
+		{desc: "default without param", filter: "default", input: "", expected: ""},
+		{desc: "default keeps other types", filter: "default", params: map[string]string{"0": "x"}, input: 0, expected: 0},
+		{desc: "required keeps value", filter: "required", input: "value", expected: "value"},
+		{desc: "required keeps other types", filter: "required", input: 0, expected: 0},
+		{desc: "required rejects empty value", filter: "required", input: "", wantErr: true},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			filter := NewFilter(tC.filter)
+			if tC.params != nil {
+				filter.(FilterParams).AcceptParams(tC.params)
+			}
+
+			result, err := filter.Process(tC.input)
+			if tC.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tC.expected, result)
+		})
+	}
+}
+
+// TestEnvVarFilterWithFailOnMissing checks that only variables that are not set fail, and only without a default
+func TestEnvVarFilterWithFailOnMissing(t *testing.T) {
+	t.Setenv("ENV_FILTER_EMPTY", "")
+	assert.False(t, FailOnMissing())
+
+	// Missing variables are empty by default
+	result, err := NewEnvVarFilter("ENV_FILTER_MISSING", false).Process(nil)
+	assert.NoError(t, err)
+	assert.Equal(t, "", result)
+
+	SetFailOnMissing(true)
+	t.Cleanup(func() { SetFailOnMissing(false) })
+	assert.True(t, FailOnMissing())
+
+	_, err = NewEnvVarFilter("ENV_FILTER_MISSING", false).Process(nil)
+	assert.EqualError(t, err, `environment variable "ENV_FILTER_MISSING" is not set`)
+
+	result, err = NewEnvVarFilter("ENV_FILTER_MISSING", true).Process(nil)
+	assert.NoError(t, err)
+	assert.Equal(t, "", result)
+
+	// A variable that is set but empty is not missing
+	result, err = NewEnvVarFilter("ENV_FILTER_EMPTY", false).Process(nil)
+	assert.NoError(t, err)
+	assert.Equal(t, "", result)
+}

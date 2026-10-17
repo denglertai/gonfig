@@ -52,8 +52,9 @@ func filterTemplateFilter(name string) filter.Filter {
 	return filter.NewChainFilter(chainFilters(scanChain(template.Filters, false)))
 }
 
-// placeholderTemplateFilter creates the filter returning the value of the placeholder template
-func placeholderTemplateFilter(name string) filter.Filter {
+// placeholderTemplateFilter creates the filter returning the value of the placeholder template.
+// hasDefault marks placeholders providing a default after the template, e.g. ${@db_host | default(localhost)}.
+func placeholderTemplateFilter(name string, hasDefault bool) filter.Filter {
 	template, found := placeholderTemplates[name]
 	if !found {
 		return filter.NewErrorFilter(fmt.Errorf("unknown placeholder template %q", name))
@@ -61,7 +62,9 @@ func placeholderTemplateFilter(name string) filter.Filter {
 
 	var filters []filter.Filter
 	if template.Env != "" {
-		filters = append(filters, filter.NewEnvVarFilter(template.Env))
+		// The default of the template and a default within its filters satisfy a missing variable as well
+		hasDefault = hasDefault || template.Default != "" || chainHasDefault(scanChain(template.Filters, false))
+		filters = append(filters, filter.NewEnvVarFilter(template.Env, hasDefault))
 		if template.Default != "" {
 			filters = append(filters, filter.NewDefaultValueFilter(template.Default))
 		}

@@ -8,6 +8,7 @@ import (
 	"path"
 	"testing"
 
+	"github.com/denglertai/gonfig/internal/filter"
 	"github.com/denglertai/gonfig/internal/general"
 	"github.com/gkampitakis/go-snaps/snaps"
 	"github.com/stretchr/testify/assert"
@@ -622,4 +623,46 @@ func TestFragmentFromTemplate(t *testing.T) {
 	result, err := os.ReadFile(fileName)
 	assert.NoError(t, err)
 	assert.Equal(t, "logging:\n  level: debug\n  appenders:\n    - console\n", string(result))
+}
+
+// TestFailOnMissingKeepsFileUnchanged checks that --fail-on-missing and GONFIG_FAIL_ON_MISSING fail for missing variables without writing
+func TestFailOnMissingKeepsFileUnchanged(t *testing.T) {
+	t.Setenv("GONFIG_FAIL_ON_MISSING", "")
+	t.Setenv("FAIL_ON_MISSING_PORT", "")
+	t.Cleanup(func() { filter.SetFailOnMissing(false) })
+
+	content := "password: ${FAIL_ON_MISSING_PASWORD}\nport: ${FAIL_ON_MISSING_PORT | default(5432)}\n"
+	for _, tC := range []struct {
+		desc string
+		args []string
+		env  string
+	}{
+		{desc: "flag", args: []string{"--fail-on-missing"}},
+		{desc: "env var", env: "true"},
+	} {
+		t.Run(tC.desc, func(t *testing.T) {
+			t.Setenv("GONFIG_FAIL_ON_MISSING", tC.env)
+
+			fileName := path.Join(t.TempDir(), "config.yaml")
+			assert.NoError(t, os.WriteFile(fileName, []byte(content), 0o644))
+
+			resetFlags(t)
+			rootCmd.SetArgs(append(tC.args, "config", "process", "-f", fileName, "-i"))
+			assert.ErrorContains(t, rootCmd.Execute(), `environment variable "FAIL_ON_MISSING_PASWORD" is not set`)
+
+			result, err := os.ReadFile(fileName)
+			assert.NoError(t, err)
+			assert.Equal(t, content, string(result))
+		})
+	}
+
+	// Without the option, missing variables are empty
+	fileName := path.Join(t.TempDir(), "config.yaml")
+	assert.NoError(t, os.WriteFile(fileName, []byte(content), 0o644))
+	resetFlags(t)
+	rootCmd.SetArgs([]string{"config", "process", "-f", fileName, "-i"})
+	assert.NoError(t, rootCmd.Execute())
+	result, err := os.ReadFile(fileName)
+	assert.NoError(t, err)
+	assert.Equal(t, "password: \"\"\nport: \"5432\"\n", string(result))
 }
