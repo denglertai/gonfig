@@ -20,6 +20,14 @@ var rootCmd = &cobra.Command{
 	Long: `Gonfig is a powerful configuration management tool that supports multiple formats (YAML, JSON, TOML, etc.) and sources (files, environment variables, remote services). 
 	It provides a flexible plugin system for extending functionality and a robust filtering mechanism for dynamic configuration processing.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// Cobra validates required flags only after this hook, so validate them while the usage is still printed
+		if err := cmd.ValidateRequiredFlags(); err != nil {
+			return err
+		}
+
+		// Flags and arguments are valid at this point, so don't print the usage for errors occurring from here on
+		cmd.SilenceUsage = true
+
 		// Initialize Viper with configuration from multiple sources.
 		// The root's persistent flags are used, as cmd is the executed subcommand.
 		v := config.SetupViper(cmd.Root().PersistentFlags())
