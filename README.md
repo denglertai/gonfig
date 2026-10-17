@@ -2,11 +2,39 @@
 
 [![codecov](https://codecov.io/gh/denglertai/gonfig/graph/badge.svg?token=QYIQ2BO0IV)](https://codecov.io/gh/denglertai/gonfig)
 
-gonfig is a project intended to process different types of config files and fill their contents using environment variables.
+gonfig fills config files with values from environment variables, e.g. when starting an application inside a container.
 
-The idea for creating this was while having to handle application's config files inside containers by filling their parameters and making sure to not to have to rely on secure input values. 
+It parses each file in its own format instead of replacing text, so values are escaped as the format requires.
+An example would be `&` (ampersand) within `xml` files, which has to be escaped as `&amp;`.
+Values may be transformed by [filters](./FILTERS.md), e.g. to trim, encode or hash them, and custom filters may be added by [plugins](./PLUGINS.md).
 
-An example would be `&` (ampersand) within `xml` files which has to be escaped with `&amp;`
+```console
+$ DB_PASSWORD='s3cr&t' gonfig value '${DB_PASSWORD | base64}'
+czNjciZ0
+```
+
+- [Features](#features)
+- [Installation](#installation)
+- [Quick start](#quick-start)
+- [Use cases](#use-cases)
+- [Usage](#usage)
+- [Filters](#filters)
+- [Configuration](#configuration)
+- [Plugins](#plugins)
+- [Releasing](#releasing)
+
+## Features
+
+| | YAML | JSON | XML | Properties | Plain text | TOML |
+| --- | --- | --- | --- | --- | --- | --- |
+| File extensions | `.yaml`, `.yml` | `.json` | `.xml` | `.properties` | any, with `-t plain` | planned ([#161](https://github.com/denglertai/gonfig/issues/161)) |
+| Placeholders in values | ✅ | ✅ | ✅ element text, CDATA and attributes | ✅ | ✅ every line | |
+| Placeholders in keys | ✅ | ❌ | ❌ | ❌ | ✅ | |
+| [Filters](./FILTERS.md) and [plugins](./PLUGINS.md) | ✅ | ✅ | ✅ | ✅ | ✅ | |
+| Comments preserved | ✅ | – | ✅ | ✅ written as `#` | ✅ | |
+| Key order preserved | ✅ | ✅ | ✅ | ✅ | ✅ | |
+| Formatting preserved | ✅ including multiple documents | ❌ indented with 2 spaces | ✅ | ❌ written as `key = value` | ✅ | |
+| Value types | type of the original scalar | type of the original value | text | text | text | |
 
 ## Installation
 
@@ -45,33 +73,148 @@ entrypoint:
   command: /usr/bin/gonfig
 ```
 
-## Quick Start
+## Quick start
 
-Create a minimal global config file:
+1. [Install](#installation) gonfig.
+1. Add placeholders like `${ENV_VAR}` to a config file, optionally with [filters](./FILTERS.md) like `${ENV_VAR | trim}`.
+1. Run `gonfig config process -f <file>`. The file type is inferred from the extension, or set with `-t`.
 
+The result is printed to stdout, while logs are written to stderr.
+Use `-i` to update the file in place or `-o` to write to another file, see [config](#config).
+
+### YAML
+
+`app.yaml`:
 ```yaml
-# .gonfig.yaml
-log-level: info
-log-source: false
+# Database settings
+database:
+  host: ${DB_HOST}
+  password: ${DB_PASSWORD}
+features:
+  ${FEATURE | lower}: true
 ```
 
-Run with config from the current directory:
-
-```bash
-gonfig config process -f ./config.yaml
+```console
+$ DB_HOST=db.internal DB_PASSWORD=s3cret FEATURE=NEW_UI gonfig config process -f app.yaml
+# Database settings
+database:
+  host: db.internal
+  password: s3cret
+features:
+  new_ui: true
 ```
 
-Or point to a dedicated config directory:
+Quote placeholders within flow collections like `["${A}", "${B}"]`, otherwise the file is not valid YAML.
 
-```bash
-gonfig --config-path /etc/myapp config process -f ./config.yaml
+### JSON
+
+`app.json`:
+```json
+{
+  "url": "postgres://${DB_USER}@${DB_HOST}:5432/app",
+  "pool": 10
+}
 ```
 
-You can override options at runtime with env vars or flags:
-
-```bash
-GONFIG_LOG_LEVEL=debug gonfig --log-level trace config process -f ./config.yaml
+```console
+$ DB_USER=app DB_HOST=db.internal gonfig config process -f app.json
+{
+  "url": "postgres://app@db.internal:5432/app",
+  "pool": 10
+}
 ```
+
+### XML
+
+`server.xml`:
+```xml
+<?xml version="1.0"?>
+<server>
+  <database host="${DB_HOST}">
+    <password>${DB_PASSWORD}</password>
+  </database>
+</server>
+```
+
+```console
+$ DB_HOST=db.internal DB_PASSWORD='s3cr&t<1>' gonfig config process -f server.xml
+<?xml version="1.0"?>
+<server>
+  <database host="db.internal">
+    <password>s3cr&amp;t&lt;1&gt;</password>
+  </database>
+</server>
+```
+
+### Properties
+
+`app.properties`:
+```properties
+# Database settings
+db.host=${DB_HOST}
+db.password=${DB_PASSWORD | base64}
+```
+
+```console
+$ DB_HOST=db.internal DB_PASSWORD=s3cret gonfig config process -f app.properties
+# Database settings
+db.host = db.internal
+db.password = czNjcmV0
+```
+
+### Plain text
+
+Any other text file is processed line by line with `-t plain`, e.g. `nginx.conf`:
+```nginx
+server {
+    listen 80;
+    server_name ${DOMAIN};
+    location / {
+        proxy_pass http://${UPSTREAM_HOST}:8080;
+        proxy_set_header Host $host;
+    }
+}
+```
+
+```console
+$ DOMAIN=example.com UPSTREAM_HOST=app gonfig config process -f nginx.conf -t plain
+server {
+    listen 80;
+    server_name example.com;
+    location / {
+        proxy_pass http://app:8080;
+        proxy_set_header Host $host;
+    }
+}
+```
+
+Every `${...}` is replaced, so avoid plain text mode for files using the same syntax for other purposes, like shell scripts.
+
+### TOML
+
+TOML support is planned, see [#161](https://github.com/denglertai/gonfig/issues/161).
+
+## Use cases
+
+**Container entrypoints:** Render the config files of an application from environment variables when the container starts, then start the application:
+```sh
+#!/bin/sh
+gonfig config process -i -f /etc/app/server.xml
+exec /usr/bin/app
+```
+
+**Secrets mounted as files:** Docker and Kubernetes mount secrets as files. Point a variable to the file with `@` instead of copying the secret into the environment, e.g. `DB_PASSWORD=@/run/secrets/db_password` with `${DB_PASSWORD | trim}`. See [recipes](./FILTERS.md#read-secrets-from-files).
+
+**Values with special characters:** Passwords or URLs containing `&`, `<`, `"` or `:` are escaped as required by XML, JSON or YAML, which plain text replacement tools like `envsubst` do not do.
+
+**Password hashes:** Generate bcrypt hashes at deploy time instead of storing them, e.g. `${ADMIN_PASSWORD | bcrypt}`. See [recipes](./FILTERS.md#generate-password-hashes).
+
+**Templates per environment:** Keep a template in the repository and render it for each environment with `-o`:
+```console
+$ gonfig config process -f config.template.yaml -o config.yaml -w
+```
+
+**Scripts:** Use `gonfig value` to transform single values, e.g. `gonfig value '${CREDENTIALS | base64}'`.
 
 ## Usage
 
@@ -166,6 +309,35 @@ Usage:
     $2a$10$rX0TunRMPGlntJT6PKDgLuFYMud2gmTvDMFGhsTjpzYX7bLJeXF6G
     ```
 
+## Filters
+
+Filters transform the values of environment variables. They are added to a placeholder with a pipe `|` and applied from left to right:
+```console
+${ENV_VAR | filter1 | filter2(param) | filter3}
+```
+
+[FILTERS.md](./FILTERS.md) documents the syntax, params, every filter with examples and common recipes.
+
+| Filter | Description | Example |
+| --- | --- | --- |
+| `upper` | Converts the value to upper case | `${VAL \| upper}` |
+| `lower` | Converts the value to lower case | `${VAL \| lower}` |
+| `trim` | Removes leading and trailing whitespace | `${VAL \| trim}` |
+| `trimleft` | Removes leading spaces | `${VAL \| trimleft}` |
+| `trimright` | Removes trailing spaces | `${VAL \| trimright}` |
+| `to_int` | Converts the value to an integer, fails if it is not numeric | `${VAL \| to_int}` |
+| `multiply(m=factor)` | Multiplies an integer value by `m`, which defaults to `1` | `${VAL \| to_int \| multiply(m=2)}` |
+| `md5` | Hashes the value with MD5 (hex encoded) | `${VAL \| md5}` |
+| `bcrypt` | Hashes the value with bcrypt, fails for values longer than 72 bytes | `${VAL \| bcrypt}` |
+| `base64` | Encodes the value to base64 | `${VAL \| base64}` |
+| `base64_decode` | Decodes a base64 value, fails on invalid input | `${VAL \| base64_decode}` |
+| `replace(old,new)` | Replaces every occurrence of `old` by `new` | `${VAL \| replace(foo,bar)}` |
+| `regex(pattern,replacement)` | Replaces every match of the [regular expression](https://pkg.go.dev/regexp/syntax) `pattern`. Capture groups are referenced by `\1` | `${EMAIL \| regex(^\(\w+\)@.+,\1)}` |
+| `split(delimiter)` | Splits the value into a [list](./FILTERS.md#lists), the delimiter defaults to `,` | `${VAL \| split(;) \| join}` |
+| `join(delimiter)` | Joins a list into a single value, the delimiter defaults to `,` | `${VAL \| split \| join(;)}` |
+
+Additional filters may be added by [plugins](./PLUGINS.md).
+
 ## Configuration
 
 Global CLI configuration is loaded via `viper` from multiple sources.
@@ -236,29 +408,10 @@ Since the CLI command output may be written to stdout, logs are written to stder
 
 ## Plugins
 
-Plugins are loaded dynamically on startup by walking the configured plugin directory recursively and looking for files ending with `.so`.
+Plugins add custom filters. They are Go plugins (`.so` files) loaded on startup from the plugin directory, which defaults to `./plugins` and may be changed with `--plugin-path`, `GONFIG_PLUGIN_PATH` or `plugin-path` in `.gonfig.yaml`.
 
-The plugin directory can be configured via:
-1. `--plugin-path`
-1. `GONFIG_PLUGIN_PATH`
-1. config file key `plugin-path`
-
-Default plugin directory: `./plugins` (relative to the current working directory)
-
-Example using an absolute plugin path in `.gonfig.yaml`:
-
-```yaml
-plugin-path: /opt/gonfig/plugins
-```
-
-By implementing plugins it is possible to extend gonfig by either supplying a set of `cobra.Commands` or a list of filters which may then be used within config files.
-
-The expected interfaces are defined in [./pkg/plugin/plugin.go](./pkg/plugin/plugin.go)
-
-Since filters are bound to their names, it is not possible to add two filters with the same name.
-If a filter with a given name is already registered the next one will be skipped. This may change in the future.
-
-See [./plugins/dummy](./plugins/dummy/) for a simple example.
+Plugins only work on Linux and macOS and have to be built with the same Go version and build flags as the gonfig binary.
+See [PLUGINS.md](./PLUGINS.md) for how plugins work, a step-by-step guide and examples, and [plugins/dummy](./plugins/dummy/) for a minimal plugin.
 
 ## Releasing
 
@@ -317,68 +470,7 @@ Optional:
 
 After the tag is pushed, monitor the workflow runs in GitHub Actions and verify the generated release assets and APK publication.
 
-## Filters
-
-Filters are being used to process the values retrieved from environment variables.
-
-All built-in filters are listed under [available filters](#available-filters). Additional filters may be provided by [plugins](#plugins).
-
-The syntax for applying a filter is by adding it using a pipe `|`
-```console
-${ENV_VAR | filter1 | filter2 | filter3}
-```
-
-In this case the value for `ENV_VAR` will be read, afterwards the filters `filter1`, `filter2` and `filter3` are being applied.
-
-This may also be used as part of substrings 
-```console
-$ gonfig value https://${DOMAIN}/search?${QUERY | url_escape}
-https://google.com/search?q=Nanowar+of+Steel+-+HelloWorld.java
-```
-Note: The filter `url_escape` does not exist. But it may be added either to the list of default filters or as a plugin.
-
-### Filter params
-
-Some filters accept params in brackets, either by position or by name:
-```console
-${ENV_VAR | replace(foo,bar)}
-${ENV_VAR | replace(old=foo,new=bar)}
-```
-
-The characters `,`, `=`, `(`, `)`, `{`, `}` and `\` have to be escaped with a backslash when used within a param,
-e.g. `${ENV_VAR | replace(\,,;)}` replaces every comma with a semicolon.
-
-### Available filters
-
-| Filter | Description | Example |
-| --- | --- | --- |
-| `upper` | Converts the value to upper case | `${VAL \| upper}` |
-| `lower` | Converts the value to lower case | `${VAL \| lower}` |
-| `trim` | Removes leading and trailing whitespace | `${VAL \| trim}` |
-| `trimleft` | Removes leading spaces | `${VAL \| trimleft}` |
-| `trimright` | Removes trailing spaces | `${VAL \| trimright}` |
-| `to_int` | Converts the value to an integer, fails if it is not numeric | `${VAL \| to_int}` |
-| `multiply(m=factor)` | Multiplies an integer value by `m`, which defaults to `1` | `${VAL \| to_int \| multiply(m=2)}` |
-| `md5` | Hashes the value with MD5 (hex encoded) | `${VAL \| md5}` |
-| `bcrypt` | Hashes the value with bcrypt, fails for values longer than 72 bytes | `${VAL \| bcrypt}` |
-| `base64` | Encodes the value to base64 | `${VAL \| base64}` |
-| `base64_decode` | Decodes a base64 value, fails on invalid input | `${VAL \| base64_decode}` |
-| `replace(old,new)` | Replaces every occurrence of `old` by `new` | `${VAL \| replace(foo,bar)}` |
-| `regex(pattern,replacement)` | Replaces every match of the [regular expression](https://pkg.go.dev/regexp/syntax) `pattern`. Capture groups may be referenced by `\1` or `${1}` | `${EMAIL \| regex(^\(\w+\)@.+,\1)}` |
-| `split(delimiter)` | Splits the value into a list, the delimiter defaults to `,` | `${VAL \| split(;)}` |
-| `join(delimiter)` | Joins a list into a single value, the delimiter defaults to `,` | `${VAL \| split \| join(;)}` |
-
-After `split`, the filters `upper`, `lower`, `trim`, `trimleft`, `trimright`, `base64`, `base64_decode`, `replace` and `regex` are applied to each element.
-Lists should always be joined again before being written to a file:
-```console
-$ LIST="a, b ,c" gonfig value '${LIST | split | trim | upper | join(;)}'
-A;B;C
-```
-
 ## Future goals
-
-Docs:
-* Improve documentation
 
 Stability:
 * Improve error handling

@@ -32,7 +32,7 @@ type Filter interface {
 	Process(value any) (any, error)
 }
 
-// FilterParams makes a filter confiruable
+// FilterParams makes a filter configurable
 type FilterParams interface {
 	// AcceptParams allows providing additional settings to a filter
 	AcceptParams(params map[string]string)
@@ -164,7 +164,16 @@ func stringFunc(fn func(string, map[string]string) (string, error)) func(any, ma
 	}
 }
 
-// ApplyFilters applies a list of filters to a value
+// ApplyFilters applies a chain of filters to a value.
+//
+// For a placeholder like "${ENV_VAR | trim | upper}" the chain consists of:
+//  1. EnvVarFilter, which ignores its input and returns the value of ENV_VAR
+//  2. FileInterceptorFilter, which replaces "@path" by the content of the file at path
+//  3. the filters of the placeholder in the order they are written, here trim and upper
+//
+// Each filter receives the output of the previous one. The values are usually strings,
+// but filters may return other types like int (to_int) or []string (split).
+// The first error stops the chain and is returned.
 func ApplyFilters(value any, filters []Filter) (any, error) {
 	logging.Debug("Applying filters", "filters", len(filters))
 	for _, filter := range filters {
@@ -179,22 +188,24 @@ func ApplyFilters(value any, filters []Filter) (any, error) {
 	return value, nil
 }
 
-// notFoundFilter is a filter that is used when a filter is not found
+// notFoundFilter is used for unknown filter names, e.g. typos or filters of plugins that failed to load
 type notFoundFilter struct {
 	filter string
 	DefaultFilterParamsHandler
 }
 
-// Process returns the filter name as the value
+// Process logs a warning and returns the value unchanged, so the rest of the chain is still applied
 func (f notFoundFilter) Process(value any) (any, error) {
 	logging.Warn("Filter not found, returning original value", "filter", f.filter)
 	return value, nil
 }
 
-// FilterMap is a map of filter names to filter constructors
+// filterMap is a map of filter names to filter constructors.
+// It contains the built-in filters registered by init and the filters added by plugins.
 var filterMap = map[string]func(string) Filter{}
 
-// NewFilter creates a new filter based on the provided token
+// NewFilter creates a new filter based on the provided token.
+// Every usage of a filter gets its own instance, so params accepted by one usage do not affect others.
 func NewFilter(token string) Filter {
 	logging.Debug("Creating filter", "token", token)
 

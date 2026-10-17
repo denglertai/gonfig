@@ -10,22 +10,30 @@ import (
 	"github.com/denglertai/gonfig/pkg/logging"
 )
 
+// Values are tokenized in two stages:
+//  1. parser finds the placeholders "${...}" within a value, everything else is kept as is.
+//  2. filterParser splits the content of a placeholder, e.g. "ENV_VAR | filter1 | filter2(param)",
+//     into the name of the environment variable, the filter names, their params and the separators between them.
 var parser *tokenizer.Tokenizer
 var filterParser *tokenizer.Tokenizer
 
 const (
+	// TokenFilterSeparator is the pipe separating the filters of a placeholder
 	TokenFilterSeparator = iota
+	// TokenParam is a framed string: a placeholder "${...}" for parser, the params "(...)" of a filter for filterParser
 	TokenParam
 )
 
 func init() {
 	parser = tokenizer.New()
+	// A framed string ends at the first unescaped closing bracket, so brackets cannot be nested.
 	// Allow escaping the closing brackets, e.g. for regex quantifiers within filter params
 	parser.DefineStringToken(TokenParam, "${", "}").SetEscapeSymbol('\\')
 
 	filterParser = tokenizer.New()
 	filterParser.DefineTokens(TokenFilterSeparator, []string{"|", " |", " | "})
 	filterParser.DefineStringToken(TokenParam, "(", ")").SetEscapeSymbol('\\')
+	// Allow names like MY_VAR_2 and base64_decode to be parsed as a single keyword
 	filterParser.AllowKeywordSymbols(tokenizer.Underscore, tokenizer.Numbers)
 }
 
@@ -34,7 +42,9 @@ func tokenize(value string) (*tokenizer.Stream, error) {
 	return parser.ParseString(value), nil
 }
 
-// ProcessValue takes the input value and processes it as needed
+// ProcessValue replaces all placeholders within the value by the result of their filters.
+// The result is a string, unless a placeholder's filters return another type (e.g. to_int),
+// in which case that result replaces the whole value.
 func ProcessValue(value string) (any, error) {
 	stream, err := tokenize(value)
 	if err != nil {
@@ -49,6 +59,9 @@ func ProcessValue(value string) (any, error) {
 		return value, err
 	}
 
+	// The start and end offsets of the placeholders refer to the original value.
+	// Every replacement changes the length of the value, so sumDiff tracks the total change
+	// to shift the offsets of the following placeholders accordingly.
 	sumDiff := 0
 	result := value
 	var finalResult any
@@ -77,20 +90,26 @@ func ProcessValue(value string) (any, error) {
 	return finalResult, nil
 }
 
+// ApplyableTokenParam is a placeholder found within a value
 type ApplyableTokenParam interface {
 	// Apply applies the token to the input string
 	Apply(input string, offset int) (any, int, error)
 }
 
+// TokenFilterParam is a placeholder "${...}" and the filters parsed from its content
 type TokenFilterParam struct {
-	token   string
+	// token is the placeholder including "${" and "}"
+	token string
+	// filters starts with the filters reading the environment variable, followed by the filters of the placeholder
 	filters []filter.Filter
-	start   int
-	end     int
+	// start and end are the byte offsets of the placeholder within the original value
+	start int
+	end   int
 }
 
 // Apply applies the token to the input string and returns the result, the length difference and an error if any
 func (t TokenFilterParam) Apply(input string, offset int) (any, int, error) {
+	// The first filter reads the environment variable and ignores its input, so the token is just a placeholder value
 	result, err := filter.ApplyFilters(t.token, t.filters)
 
 	if err != nil {
@@ -103,6 +122,7 @@ func (t TokenFilterParam) Apply(input string, offset int) (any, int, error) {
 	before := input[:t.start+offset]
 	after := input[t.end+offset:]
 
+	// Only strings can be embedded into the surrounding text, other types replace the whole value
 	switch result.(type) {
 	case string:
 		result := fmt.Sprintf("%s%s%s", before, result, after)
@@ -167,6 +187,7 @@ func parseParams(paramStr string) map[string]string {
 	return res
 }
 
+// processStream collects the placeholders of the token stream created by parser and parses their filters
 func processStream(stream *tokenizer.Stream) ([]ApplyableTokenParam, error) {
 	logging.Trace("Processing stream", "stream", stream)
 
@@ -175,9 +196,11 @@ func processStream(stream *tokenizer.Stream) ([]ApplyableTokenParam, error) {
 	for stream.IsValid() {
 		currentToken := stream.CurrentToken()
 
+		// Only placeholders are of interest, the text around them is kept as is
 		if currentToken.Is(tokenizer.TokenString) {
 			if currentToken.StringSettings().Key == TokenParam {
 				token := currentToken.ValueString()
+				// Strip "${" and "}" to get the content of the placeholder for parsing its filters
 				param := TokenFilterParam{
 					token:   token,
 					start:   currentToken.Offset(),
@@ -220,7 +243,8 @@ func parseFilters(content string) []filter.Filter {
 			// Other tokens have to be filters
 			filters = append(filters, filter.NewFilter(filterToken.ValueString()))
 		} else if filterToken.Is(tokenizer.TokenString) && filterToken.StringSettings().Key == TokenParam {
-			// Parse the Params for the filter and apply it to the last generated filter
+			// Params always follow the filter they belong to, so apply them to the last generated filter.
+			// Filters not accepting params, including the environment variable filters, ignore them.
 			lastFilter, acceptsParams := filters[len(filters)-1].(filter.FilterParams)
 			if acceptsParams {
 				params := parseParams(filterToken.ValueString())

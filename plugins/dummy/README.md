@@ -1,8 +1,12 @@
 # Dummy plugin
 
+A minimal example plugin providing the filter `reverse`, which reverses the value.
+See [PLUGINS.md](../../PLUGINS.md) for how plugins work.
+
 ## Build
 
-To build the plugin execute the following command:
+Plugins have to be built with the same Go version and build flags as the gonfig binary loading them.
+Run the following command within this directory:
 ```console
-go build -buildmode=plugin -o ./plugins/dummy/dummy.so ./plugins/dummy/main.go 
+go build -buildmode=plugin -o dummy.so .
 ```

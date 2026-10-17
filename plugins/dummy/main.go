@@ -1,8 +1,11 @@
 package main
 
-import "unicode/utf8"
+import (
+	"fmt"
+	"unicode/utf8"
+)
 
-// DummyFilter is a filter
+// DummyFilterRegister provides the filters of this plugin
 type DummyFilterRegister struct{}
 
 // Filters returns a map of filters
@@ -12,14 +15,17 @@ func (f *DummyFilterRegister) Filters() map[string]interface{} {
 	}
 }
 
+// Filter is the symbol gonfig looks up when loading the plugin
 var Filter = DummyFilterRegister{}
 
+// ReverseFilter reverses the value, e.g. ${VAL | reverse}
 type ReverseFilter struct {
 }
 
 // Process executes the filter's function
 func (ReverseFilter) Process(value any) (any, error) {
-	return reverse(value.(string)), nil
+	// Values may be of any type, e.g. after to_int
+	return reverse(fmt.Sprint(value)), nil
 }
 
 func reverse(s string) string {
