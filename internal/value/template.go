@@ -87,6 +87,20 @@ func (f valueTemplateFilter) Process(_ any) (any, error) {
 	return ProcessValue(f.value)
 }
 
+// TemplateReferences returns the templates referenced by the placeholders of the value, e.g. "@db_url",
+// in the order of their first occurrence. References within templates are not included.
+func TemplateReferences(value string) []string {
+	var refs []string
+	for _, p := range findPlaceholders(value) {
+		for _, step := range scanChain(p.content(), true) {
+			if _, isTemplate := templateName(step.name); isTemplate && !slices.Contains(refs, step.name) {
+				refs = append(refs, step.name)
+			}
+		}
+	}
+	return refs
+}
+
 // templateGraph holds the references between templates of the same kind, to detect cycles
 type templateGraph map[string][]string
 

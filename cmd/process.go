@@ -21,10 +21,7 @@ var processCmd = &cobra.Command{
 to the desired output. Defaults to stdout`,
 	TraverseChildren: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		configSettings, err := getConfigSettings(cmd)
-		if err != nil {
-			return err
-		}
+		configSettings := getConfigSettings(cmd)
 
 		output, err := cmd.Flags().GetString("output")
 		if err != nil {

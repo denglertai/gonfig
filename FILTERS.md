@@ -184,6 +184,8 @@ $ gonfig --fail-on-missing value 'port=${DB_PORT | default(5432)}'
 port=5432
 ```
 
+To find missing variables before processing a file, use [`gonfig config check`](./README.md#check), which reports all placeholders and their variables without writing anything.
+
 ### to_int / to_float / to_bool
 
 Convert the value to an integer, a floating point number or a boolean, and fail if it cannot be converted.

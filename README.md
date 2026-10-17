@@ -295,6 +295,41 @@ $ BLA_BLUB=hello INT=5 BOOL=true STRING=test_string FLOAT=123.45 SPECIAL_CHARACT
 </customers>
 ```
 
+### check
+
+`gonfig config check` processes a file like `config process`, but writes nothing and reports every entry containing placeholders with the environment variables and templates it uses.
+Values are never printed, only whether a variable is set, empty or missing.
+This is useful in CI or before a deployment, e.g. to find typos in variable names.
+
+`check.yaml`:
+```yaml
+database:
+  host: ${DB_HOST | default(localhost)}
+  user: ${DB_USER}
+  password: ${DB_PASWORD}
+  port: ${DB_PORT | to_int}
+```
+
+```console
+$ DB_USER=app DB_PORT=eighty gonfig config check -f check.yaml
+check.yaml: 4 entries with placeholders
+  database.host
+    DB_HOST                  missing, default used
+  database.user
+    DB_USER                  set
+  database.password
+    DB_PASWORD               missing
+  database.port
+    DB_PORT                  set
+    error: filter to_int: the value is not an integer
+1 missing variable, 1 error
+Error: check failed: 1 missing variable, 1 error
+```
+
+The check fails with exit code `1` if processing the file would fail, or if a variable is not set and the placeholder provides no [default](./FILTERS.md#default--required), independent of `fail-on-missing`.
+Variables set to an empty value are reported, but don't fail the check.
+Use `-o json` for a report in JSON, which includes the number of missing variables and errors.
+
 ### value
 
 `gonfig value` basically does the same as `gonfig config process` but expects an input string instead. This may be useful if any transformation has to be done in scripts or other places where no file is directly involved.

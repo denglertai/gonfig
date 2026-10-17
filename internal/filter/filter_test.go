@@ -435,3 +435,29 @@ func TestErrorsContainValuesIfEnabled(t *testing.T) {
 		assert.EqualError(t, err, tC.want)
 	}
 }
+
+// TestLookupRecorder checks that every lookup of an environment variable is recorded with its status and default until recording stops
+func TestLookupRecorder(t *testing.T) {
+	t.Setenv("RECORDER_SET", "value")
+	t.Setenv("RECORDER_EMPTY", "")
+
+	var lookups []VariableLookup
+	SetLookupRecorder(func(lookup VariableLookup) { lookups = append(lookups, lookup) })
+	t.Cleanup(func() { SetLookupRecorder(nil) })
+
+	for _, f := range []*EnvVarFilter{NewEnvVarFilter("RECORDER_SET", false), NewEnvVarFilter("RECORDER_EMPTY", false), NewEnvVarFilter("RECORDER_MISSING", true)} {
+		_, err := f.Process(nil)
+		assert.NoError(t, err)
+	}
+
+	assert.Equal(t, []VariableLookup{
+		{Name: "RECORDER_SET", Set: true},
+		{Name: "RECORDER_EMPTY", Set: true, Empty: true},
+		{Name: "RECORDER_MISSING", HasDefault: true},
+	}, lookups)
+
+	SetLookupRecorder(nil)
+	_, err := NewEnvVarFilter("RECORDER_SET", false).Process(nil)
+	assert.NoError(t, err)
+	assert.Len(t, lookups, 3)
+}

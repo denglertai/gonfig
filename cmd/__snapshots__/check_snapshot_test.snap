@@ -1,0 +1,262 @@
+
+[TestCheckSnapshots/file_without_problems - 1]
+environment:
+SNAP_CHECK_HOST="db.internal"
+SNAP_CHECK_PORT="5432"
+
+config.yaml:
+database:
+  host: ${SNAP_CHECK_HOST}
+  port: ${SNAP_CHECK_PORT | to_int}
+  name: static
+
+$ gonfig config check -f config.yaml
+config.yaml: 2 entries with placeholders
+  database.host
+    SNAP_CHECK_HOST          set
+  database.port
+    SNAP_CHECK_PORT          set
+0 missing variables, 0 errors
+(exit code 0)
+
+---
+
+[TestCheckSnapshots/missing,_empty_and_default_variables_with_an_error - 1]
+environment:
+SNAP_CHECK_PORT="eighty"
+SNAP_CHECK_SCHEMA=""
+SNAP_CHECK_USER="app"
+
+config.yaml:
+database:
+  host: ${SNAP_CHECK_HOST | default(localhost)}
+  user: ${SNAP_CHECK_USER}
+  password: ${SNAP_CHECK_PASWORD}
+  port: ${SNAP_CHECK_PORT | to_int}
+  schema: ${SNAP_CHECK_SCHEMA}
+  url: postgres://${SNAP_CHECK_USER}@${SNAP_CHECK_HOST | default(localhost)}/${SNAP_CHECK_DB}
+
+$ gonfig config check -f config.yaml
+config.yaml: 6 entries with placeholders
+  database.host
+    SNAP_CHECK_HOST          missing, default used
+  database.user
+    SNAP_CHECK_USER          set
+  database.password
+    SNAP_CHECK_PASWORD       missing
+  database.port
+    SNAP_CHECK_PORT          set
+    error: filter to_int: the value is not an integer
+  database.schema
+    SNAP_CHECK_SCHEMA        empty
+  database.url
+    SNAP_CHECK_USER          set
+    SNAP_CHECK_HOST          missing, default used
+    SNAP_CHECK_DB            missing
+2 missing variables, 1 error
+Error: check failed: 2 missing variables, 1 error
+
+---
+
+[TestCheckSnapshots/json_output - 1]
+environment:
+SNAP_CHECK_PORT="eighty"
+
+config.yaml:
+password: ${SNAP_CHECK_PASWORD}
+port: ${SNAP_CHECK_PORT | to_int}
+host: ${SNAP_CHECK_HOST | default(localhost)}
+
+$ gonfig config check -f config.yaml -o json
+{
+  "file": "config.yaml",
+  "entries": [
+    {
+      "path": "password",
+      "variables": [
+        {
+          "name": "SNAP_CHECK_PASWORD",
+          "status": "missing",
+          "hasDefault": false
+        }
+      ]
+    },
+    {
+      "path": "port",
+      "variables": [
+        {
+          "name": "SNAP_CHECK_PORT",
+          "status": "set",
+          "hasDefault": false
+        }
+      ],
+      "error": "filter to_int: the value is not an integer"
+    },
+    {
+      "path": "host",
+      "variables": [
+        {
+          "name": "SNAP_CHECK_HOST",
+          "status": "missing",
+          "hasDefault": true
+        }
+      ]
+    }
+  ],
+  "missingVariables": 1,
+  "errors": 1,
+  "failed": true
+}
+Error: check failed: 1 missing variable, 1 error
+
+---
+
+[TestCheckSnapshots/templates - 1]
+.gonfig.yaml:
+templates:
+  filters:
+    secret:
+      filters: trim | base64
+  placeholders:
+    db_host:
+      env: SNAP_CHECK_HOST
+      default: localhost
+    db_url:
+      value: "jdbc:postgresql://${@db_host}:${SNAP_CHECK_PORT}/app"
+
+environment:
+SNAP_CHECK_PASSWORD=" s3cret "
+
+config.yaml:
+datasource:
+  url: ${@db_url}
+  password: ${SNAP_CHECK_PASSWORD | @secret}
+
+$ gonfig --config-path <dir of .gonfig.yaml> config check -f config.yaml
+config.yaml: 2 entries with placeholders
+  datasource.url
+    SNAP_CHECK_HOST          missing, default used
+    SNAP_CHECK_PORT          missing
+    templates: @db_url
+  datasource.password
+    SNAP_CHECK_PASSWORD      set
+    templates: @secret
+1 missing variable, 0 errors
+Error: check failed: 1 missing variable, 0 errors
+
+---
+
+[TestCheckSnapshots/fragments - 1]
+environment:
+SNAP_CHECK_LOGGING="level: ${SNAP_CHECK_LEVEL}\nappenders: ${SNAP_CHECK_APPENDERS | fragment}"
+SNAP_CHECK_OVERRIDES="port: [1"
+
+config.yaml:
+logging: ${SNAP_CHECK_LOGGING | fragment}
+database:
+  host: localhost
+  ${SNAP_CHECK_OVERRIDES | fragment}:
+
+$ gonfig config check -f config.yaml
+config.yaml: 4 entries with placeholders
+  logging
+    SNAP_CHECK_LOGGING       set
+  logging.level
+    SNAP_CHECK_LEVEL         missing
+  logging.appenders
+    SNAP_CHECK_APPENDERS     missing
+    error: fragments cannot contain further fragments
+  database.${SNAP_CHECK_OVERRIDES | fragment}
+    SNAP_CHECK_OVERRIDES     set
+    error: invalid YAML fragment: yaml: line 1: did not find expected ',' or ']'
+2 missing variables, 2 errors
+Error: check failed: 2 missing variables, 2 errors
+
+---
+
+[TestCheckSnapshots/fail_on_missing - 1]
+environment:
+(none)
+
+config.yaml:
+password: ${SNAP_CHECK_PASWORD}
+host: ${SNAP_CHECK_HOST | default(localhost)}
+
+$ gonfig config check -f config.yaml --fail-on-missing
+config.yaml: 2 entries with placeholders
+  password
+    SNAP_CHECK_PASWORD       missing
+    error: environment variable "SNAP_CHECK_PASWORD" is not set
+  host
+    SNAP_CHECK_HOST          missing, default used
+1 missing variable, 1 error
+Error: check failed: 1 missing variable, 1 error
+
+---
+
+[TestCheckSnapshots/xml_file - 1]
+environment:
+SNAP_CHECK_PORT="8080"
+SNAP_CHECK_USER="app"
+
+server.xml:
+<server port="${SNAP_CHECK_PORT | to_int}">
+  ${SNAP_CHECK_NAME}
+  <datasource url="${SNAP_CHECK_URL}">
+    <user>${SNAP_CHECK_USER}</user>
+    <password><![CDATA[${SNAP_CHECK_PASSWORD}]]></password>
+  </datasource>
+</server>
+
+$ gonfig config check -f server.xml
+server.xml: 5 entries with placeholders
+  /server@port
+    SNAP_CHECK_PORT          set
+  /server
+    SNAP_CHECK_NAME          missing
+  /server/datasource@url
+    SNAP_CHECK_URL           missing
+  /server/datasource/user
+    SNAP_CHECK_USER          set
+  /server/datasource/password
+    SNAP_CHECK_PASSWORD      missing
+3 missing variables, 0 errors
+Error: check failed: 3 missing variables, 0 errors
+
+---
+
+[TestCheckSnapshots/plain_text_file - 1]
+environment:
+SNAP_CHECK_HOST="db"
+
+entrypoint.sh:
+#!/bin/sh
+export DB_URL="postgres://${SNAP_CHECK_HOST}:5432/app"
+exec app --user '${SNAP_CHECK_USER | required}'
+
+$ gonfig config check -f entrypoint.sh -t plain
+entrypoint.sh: 2 entries with placeholders
+  1
+    SNAP_CHECK_HOST          set
+  2
+    SNAP_CHECK_USER          missing
+    error: filter required: the value is empty or the environment variable is not set
+1 missing variable, 1 error
+Error: check failed: 1 missing variable, 1 error
+
+---
+
+[TestCheckSnapshots/file_without_placeholders - 1]
+environment:
+(none)
+
+config.yaml:
+database:
+  host: localhost
+
+$ gonfig config check -f config.yaml
+config.yaml: 0 entries with placeholders
+0 missing variables, 0 errors
+(exit code 0)
+
+---
