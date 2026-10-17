@@ -54,9 +54,14 @@ func (p *PlainFileProcessor) Read(source io.Reader) error {
 	lines := bytes.Split(buf.Bytes(), []byte{'\n'})
 	p.lines = make([]*plainFileLine, len(lines))
 	for i, line := range lines {
+		// The last line has no end of line, otherwise writing would add a trailing newline
+		eol := "\n"
+		if i == len(lines)-1 {
+			eol = ""
+		}
 		p.lines[i] = &plainFileLine{
 			value:      string(line),
-			eol:        "\n",
+			eol:        eol,
 			lineNumber: uint32(i),
 		}
 	}

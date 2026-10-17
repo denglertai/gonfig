@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path"
+	"strings"
 
 	"github.com/denglertai/gonfig/internal/general"
 	"github.com/denglertai/gonfig/internal/value"
@@ -48,9 +49,8 @@ type FileProcessor struct {
 // NewFileProcessor creates a new file processor
 func NewFileProcessor(fileName string, fileType general.FileType, output io.Writer) *FileProcessor {
 	if fileType == general.Undefined {
-		ext := path.Ext(fileName)
-		// strip the leading dot
-		ext = ext[1:]
+		// strip the leading dot; files without an extension yield an undefined type
+		ext := strings.TrimPrefix(path.Ext(fileName), ".")
 		fileType = general.FileType(ext)
 		logging.Debug("File type not provided, using the file's extension", "file", fileName, "type", fileType)
 	}
@@ -68,7 +68,6 @@ func (fp *FileProcessor) Process() error {
 
 	handler, err := fp.getFileProcessor()
 	if err != nil {
-		logging.Error("Error initializing file processor", "err", err, fileGroup)
 		return err
 	}
 
@@ -80,14 +79,12 @@ func (fp *FileProcessor) Process() error {
 
 	err = handler.Read(file)
 	if err != nil {
-		logging.Error("Failed to read the file", "err", err, fileGroup)
-		return err
+		return fmt.Errorf("failed to read %s: %w", fp.FileName, err)
 	}
 
 	entries, err := handler.Process()
 	if err != nil {
-		logging.Error("Failed to process the file", "err", err, fileGroup)
-		return err
+		return fmt.Errorf("failed to process %s: %w", fp.FileName, err)
 	}
 
 	for entry := range entries {
@@ -96,15 +93,26 @@ func (fp *FileProcessor) Process() error {
 		newVal, err := value.ProcessValue(entry.GetValue())
 
 		if err != nil {
-			logging.Error("Failed to process the value", "err", err, "entry", entry.Path(), fileGroup)
-			return err
+			return fmt.Errorf("failed to process the value of %s in %s: %w", entry.Path(), fp.FileName, err)
 		}
 
 		logging.Debug("Setting new value", "entry", entry.Path(), "value", newVal, fileGroup)
 		entry.SetValue(fmt.Sprintf("%v", newVal))
 	}
 
-	return handler.Write(fp.Output)
+	if err := handler.Write(fp.Output); err != nil {
+		return fmt.Errorf("failed to write %s: %w", fp.FileName, err)
+	}
+
+	return nil
+}
+
+// appendToPath appends the key to the dot separated path
+func appendToPath(path string, key string) string {
+	if path == "" {
+		return key
+	}
+	return path + "." + key
 }
 
 // getFileProcessor returns the file processor based on the file type
@@ -122,6 +130,8 @@ func (fp *FileProcessor) getFileProcessor() (ConfigFileHandler, error) {
 		return NewPropertiesConfigFileHandler(), nil
 	case general.PLAIN:
 		return NewPlainFileProcessor(), nil
+	case general.Undefined:
+		return nil, fmt.Errorf("could not infer the file type of %q; use -t / --file-type to set it explicitly", fp.FileName)
 	default:
 		return nil, fmt.Errorf("unsupported file type: %v", fp.FileType)
 	}

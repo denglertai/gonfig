@@ -29,6 +29,14 @@ func TestValue(t *testing.T) {
 				"ABC": "123",
 			},
 		},
+		{
+			name:     "non-string result",
+			input:    "${PORT | to_int}",
+			expected: "80",
+			env: map[string]string{
+				"PORT": "80",
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -49,6 +57,7 @@ func TestValue(t *testing.T) {
 				outC <- buf.String()
 			}()
 
+			resetFlags(t)
 			rootCmd.SetArgs([]string{"value", tc.input})
 			err := rootCmd.Execute()
 			assert.NoError(t, err)

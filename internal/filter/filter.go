@@ -3,7 +3,9 @@ package filter
 import (
 	"crypto/md5"
 	"encoding/hex"
+	"fmt"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -69,9 +71,9 @@ type FileInterceptorFilter struct {
 
 // Process reads the file content if the value is a file reference
 func (f *FileInterceptorFilter) Process(value any) (any, error) {
-	s := value.(string)
+	s, ok := value.(string)
 
-	if strings.HasPrefix(s, "@") {
+	if ok && strings.HasPrefix(s, "@") {
 		path := s[1:]
 		logging.Debug("Processing FileInterceptorFilter", "path", path)
 		if _, err := os.Stat(path); err != nil {
@@ -94,6 +96,26 @@ func (f *FileInterceptorFilter) Process(value any) (any, error) {
 // NewFileInterceptorFilter creates a new FileInterceptorFilter
 func NewFileInterceptorFilter() *FileInterceptorFilter {
 	return &FileInterceptorFilter{}
+}
+
+// toString converts a filter input to a string, formatting non-string values
+func toString(value any) string {
+	if s, ok := value.(string); ok {
+		return s
+	}
+	return fmt.Sprint(value)
+}
+
+// toInt converts a filter input to an int, parsing string values
+func toInt(value any) (int, error) {
+	switch v := value.(type) {
+	case int:
+		return v, nil
+	case string:
+		return strconv.Atoi(v)
+	default:
+		return 0, fmt.Errorf("cannot convert %v (%T) to int", value, value)
+	}
 }
 
 // ApplyFilters applies a list of filters to a value
@@ -155,35 +177,35 @@ func init() {
 	filterMap["upper"] = func(token string) Filter {
 		return &FuncFilter{
 			fn: func(value any, _ map[string]string) (any, error) {
-				return strings.ToUpper(value.(string)), nil
+				return strings.ToUpper(toString(value)), nil
 			},
 		}
 	}
 	filterMap["lower"] = func(token string) Filter {
 		return &FuncFilter{
 			fn: func(value any, _ map[string]string) (any, error) {
-				return strings.ToLower(value.(string)), nil
+				return strings.ToLower(toString(value)), nil
 			},
 		}
 	}
 	filterMap["trim"] = func(token string) Filter {
 		return &FuncFilter{
 			fn: func(value any, _ map[string]string) (any, error) {
-				return strings.TrimSpace(value.(string)), nil
+				return strings.TrimSpace(toString(value)), nil
 			},
 		}
 	}
 	filterMap["trimleft"] = func(token string) Filter {
 		return &FuncFilter{
 			fn: func(value any, _ map[string]string) (any, error) {
-				return strings.TrimLeft(value.(string), " "), nil
+				return strings.TrimLeft(toString(value), " "), nil
 			},
 		}
 	}
 	filterMap["trimright"] = func(token string) Filter {
 		return &FuncFilter{
 			fn: func(value any, _ map[string]string) (any, error) {
-				return strings.TrimRight(value.(string), " "), nil
+				return strings.TrimRight(toString(value), " "), nil
 			},
 		}
 	}
@@ -191,7 +213,7 @@ func init() {
 	filterMap["to_int"] = func(token string) Filter {
 		return &FuncFilter{
 			fn: func(value any, _ map[string]string) (any, error) {
-				return strconv.Atoi(value.(string))
+				return toInt(value)
 			},
 		}
 	}
@@ -209,7 +231,12 @@ func init() {
 					return "", err
 				}
 
-				return value.(int) * m, nil
+				v, err := toInt(value)
+				if err != nil {
+					return "", err
+				}
+
+				return v * m, nil
 			},
 		}
 	}
@@ -217,7 +244,7 @@ func init() {
 	filterMap[bcryptFilterKey] = func(token string) Filter {
 		return &FuncFilter{
 			fn: func(value any, _ map[string]string) (any, error) {
-				hash, err := bcrypt.GenerateFromPassword([]byte(value.(string)), bcrypt.DefaultCost)
+				hash, err := bcrypt.GenerateFromPassword([]byte(toString(value)), bcrypt.DefaultCost)
 				if err != nil {
 					return "", err
 				}
@@ -231,7 +258,7 @@ func init() {
 		return &FuncFilter{
 			fn: func(value any, _ map[string]string) (any, error) {
 				hash := md5.New()
-				_, err := hash.Write([]byte(value.(string)))
+				_, err := hash.Write([]byte(toString(value)))
 				if err != nil {
 					return "", err
 				}
@@ -246,12 +273,31 @@ func init() {
 func AddPluginFilters(filters map[string]interface{}) {
 	for name, filter := range filters {
 		// Skip filters that are not of type Filter or already in the filter map
-		if _, ok := filter.(Filter); !ok || filterMap[name] != nil {
+		if _, ok := filter.(Filter); !ok {
+			logging.Warn("Skipping plugin filter not implementing Filter", "filter", name, "type", fmt.Sprintf("%T", filter))
+			continue
+		}
+		if filterMap[name] != nil {
+			logging.Warn("Skipping plugin filter with already registered name", "filter", name)
 			continue
 		}
 
 		filterMap[name] = func(token string) Filter {
-			return filter.(Filter)
+			return cloneFilter(filter.(Filter))
 		}
 	}
+}
+
+// cloneFilter returns a shallow copy of a filter provided by a pointer, so that parameters
+// accepted by one usage of the filter do not affect other usages
+func cloneFilter(f Filter) Filter {
+	v := reflect.ValueOf(f)
+	if v.Kind() != reflect.Pointer || v.IsNil() {
+		// Filters provided by value are copied when their methods are called anyway
+		return f
+	}
+
+	clone := reflect.New(v.Elem().Type())
+	clone.Elem().Set(v.Elem())
+	return clone.Interface().(Filter)
 }

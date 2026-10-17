@@ -1,323 +1,142 @@
 package file
 
 import (
-	"bytes"
-	"fmt"
+	"errors"
 	"io"
 	"iter"
 	"slices"
 	"strconv"
 
-	"github.com/samber/lo"
 	"gopkg.in/yaml.v3"
 )
 
-// Set sets a value in the hierarchical container
-func setHierarchical(container map[string]interface{}, value interface{}, hierarchy ...string) error {
-	if len(hierarchy) == 0 {
-		return fmt.Errorf("empty hierarchy")
-	}
-
-	// Hierarchy at the first level will always be a string
-	currentLocation := container[hierarchy[0]]
-	remainingHierarchy := hierarchy[1:]
-
-	return setInner(currentLocation, value, remainingHierarchy)
+// YamlConfigEntry represents a single scalar of a YAML document, which is either a value or the key of a mapping
+type YamlConfigEntry struct {
+	node  *yaml.Node
+	key   string
+	path  string
+	isKey bool
 }
 
-func setInner(location interface{}, value interface{}, hierarchy []string) error {
-	if len(hierarchy) == 0 {
-		return fmt.Errorf("empty hierarchy")
-	}
-
-	switch l := location.(type) {
-	case nil:
-		// If the current location is nil we cannot continue
-		return fmt.Errorf("nil hierarchy")
-	case map[string]interface{}:
-		if len(hierarchy) == 1 {
-			// We are at the end of the hierarchy, we can set the value
-			l[hierarchy[0]] = value
-			return nil
-		}
-
-		// If the current location is a map, we need to go deeper
-		currentLocation := l[hierarchy[0]]
-		remainingHierarchy := hierarchy[1:]
-		err := setInner(currentLocation, value, remainingHierarchy)
-		if err != nil {
-			return err
-		}
-		l[hierarchy[0]] = currentLocation
-	case []interface{}:
-		// If the current location is a list, we need to go deeper
-		if len(hierarchy) == 0 {
-			return fmt.Errorf("empty hierarchy at slice level")
-		}
-		// if this a slice, we expected the current entry to be an integer
-		index, err := strconv.Atoi(hierarchy[0])
-		if err != nil {
-			return err
-		}
-
-		if len(hierarchy) == 1 {
-			// We are at the end of the hierarchy, we can set the value
-			l[index] = value
-			return nil
-		}
-
-		// If the current location is a map, we need to go deeper
-		currentLocation := l[index]
-		remainingHierarchy := hierarchy[1:]
-		err = setInner(currentLocation, value, remainingHierarchy)
-		if err != nil {
-			return err
-		}
-		l[index] = currentLocation
-	default:
-		return fmt.Errorf("unsupported type: %T", l)
-	}
-
-	return nil
+// Key returns the key of the configuration entry
+func (y *YamlConfigEntry) Key() string {
+	return y.key
 }
 
-// moveYaml moves a value from one location to another
-func moveYaml(container map[string]interface{}, from []string, newKey string) error {
-	// If the from or the newKey is empty we cannot continue
-	if len(from) == 0 || len(newKey) == 0 {
-		return nil
-	}
-
-	return moveYamlInner(container, from, newKey)
+// Path returns the path of the configuration entry
+func (y *YamlConfigEntry) Path() string {
+	return y.path
 }
 
-func moveYamlInner(location interface{}, remainingHierachy []string, newKey string) error {
-	if len(remainingHierachy) == 0 {
-		return fmt.Errorf("empty hierarchy")
-	}
-
-	switch l := location.(type) {
-	case nil:
-		// If the current location is nil we cannot continue
-		return fmt.Errorf("nil hierarchy")
-	case map[string]interface{}:
-		if len(remainingHierachy) == 1 {
-			// We are at the end of the hierarchy, we can set the value
-			l[newKey] = l[remainingHierachy[0]]
-			delete(l, remainingHierachy[0])
-			return nil
-		}
-
-		// If the current location is a map, we need to go deeper
-		currentLocation := l[remainingHierachy[0]]
-		remainingHierarchy := remainingHierachy[1:]
-		err := moveYamlInner(currentLocation, remainingHierarchy, newKey)
-		if err != nil {
-			return err
-		}
-		l[remainingHierachy[0]] = currentLocation
-	case []interface{}:
-		// If the current location is a list, we need to go deeper
-		if len(remainingHierachy) == 0 {
-			return fmt.Errorf("empty hierarchy at slice level")
-		}
-		// if this a slice, we expected the current entry to be an integer
-		index, err := strconv.Atoi(remainingHierachy[0])
-		if err != nil {
-			return err
-		}
-
-		if len(remainingHierachy) == 1 {
-			// We are at the end of the hierarchy, we can set the value
-			// l[newKey] = l[index]
-			return nil
-		}
-
-		// If the current location is a map, we need to go deeper
-		currentLocation := l[index]
-		remainingHierarchy := remainingHierachy[1:]
-		err = moveYamlInner(currentLocation, remainingHierarchy, newKey)
-		if err != nil {
-			return err
-		}
-		l[index] = currentLocation
-	default:
-		return fmt.Errorf("unsupported type: %T", l)
-	}
-
-	return nil
+// GetValue returns the value of the configuration entry
+func (y *YamlConfigEntry) GetValue() string {
+	return y.node.Value
 }
 
-// YamlConfigFileHandler represents a configuration file handler
+// SetValue sets the value of the configuration entry
+func (y *YamlConfigEntry) SetValue(value string) {
+	y.node.Value = value
+}
+
+// IsKey returns whether the configuration entry represents the key of a mapping rather than a value
+func (y *YamlConfigEntry) IsKey() bool {
+	return y.isKey
+}
+
+// YamlConfigFileHandler represents a configuration file handler.
+// It operates on the YAML node tree, so comments, key order and styles are preserved.
 type YamlConfigFileHandler struct {
-	hierarchicalConfigHandler
-	container map[string]interface{}
+	documents []*yaml.Node
+	entries   []ConfigEntry
 }
 
 // NewYamlConfigFileHandler creates a new YAML configuration file handler
 func NewYamlConfigFileHandler() *YamlConfigFileHandler {
 	return &YamlConfigFileHandler{
-		hierarchicalConfigHandler: hierarchicalConfigHandler{
-			entries: make([]ConfigEntry, 0),
-		},
-		container: make(map[string]interface{}),
+		documents: make([]*yaml.Node, 0),
+		entries:   make([]ConfigEntry, 0),
 	}
 }
 
-// Read reads the configuration file
-func (y *YamlConfigFileHandler) Read(source io.Reader) (err error) {
-	buf := new(bytes.Buffer)
-	_, err = buf.ReadFrom(source)
-	if err != nil {
-		return err
-	}
-	err = yaml.Unmarshal(buf.Bytes(), &y.container)
-	if err != nil {
-		return err
-	}
-	err = y.handleChildren(y.container, "", []string{})
+// Read reads the configuration file, including all documents of a multi-document file
+func (y *YamlConfigFileHandler) Read(source io.Reader) error {
+	decoder := yaml.NewDecoder(source)
+	for {
+		document := &yaml.Node{}
+		err := decoder.Decode(document)
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
 
-	return err
+		y.documents = append(y.documents, document)
+		y.handleNode(document, "", "")
+	}
 }
 
-func (y *YamlConfigFileHandler) handleChildren(container map[string]interface{}, path string, hierarchy []string) error {
-	for key, value := range container {
-		currentPath := appendToPath(path, key)
-		copiedHierarchy := append(make([]string, 0), hierarchy...)
-		currentHierarchy := append(copiedHierarchy, key)
-		// Append currenty key as entry as well
-		y.appendKey(currentPath, key, currentHierarchy, key)
-		err := y.handleEntry(currentPath, key, currentHierarchy, value)
-		if err != nil {
-			return err
+// handleNode recursively collects all scalars of the given node as entries
+func (y *YamlConfigFileHandler) handleNode(node *yaml.Node, path string, key string) {
+	switch node.Kind {
+	case yaml.DocumentNode:
+		for _, child := range node.Content {
+			y.handleNode(child, path, key)
 		}
-	}
-	return nil
-}
+	case yaml.MappingNode:
+		for i := 0; i+1 < len(node.Content); i += 2 {
+			keyNode, valueNode := node.Content[i], node.Content[i+1]
+			currentPath := appendToPath(path, keyNode.Value)
 
-func (y *YamlConfigFileHandler) handleEntry(path string, key string, hierarchy []string, value interface{}) error {
-	switch v := value.(type) {
-	case int:
-		y.appendEntry(path, key, hierarchy, v)
-	case float64:
-		y.appendEntry(path, key, hierarchy, v)
-	case string:
-		y.appendEntry(path, key, hierarchy, v)
-	case bool:
-		y.appendEntry(path, key, hierarchy, v)
-	case map[interface{}]interface{}:
-		// Convert the map to a map[string]interface{}
-		m := make(map[string]interface{})
-		for k, v := range v {
-			m[fmt.Sprintf("%v", k)] = v
-		}
-		// Deeper down the rabbit hole
-		err := y.handleChildren(m, path, hierarchy)
-		if err != nil {
-			return err
-		}
-	case map[string]interface{}:
-		// Deeper down the rabbit hole
-		err := y.handleChildren(v, path, hierarchy)
-		if err != nil {
-			return err
-		}
-	case []interface{}:
-		for i, item := range v {
-			is := strconv.Itoa(i)
-			currentPath := appendToPath(path, is)
-			copiedHierarchy := append(make([]string, 0), hierarchy...)
-			currentHierarchy := append(copiedHierarchy, is)
-			err := y.handleEntry(currentPath, is, currentHierarchy, item)
-			if err != nil {
-				return err
+			// The encoder writes merge keys with an explicit tag ("!!merge <<"), which is
+			// valid but noisy; without the tag the key resolves to a merge key again
+			if keyNode.Tag == "!!merge" {
+				keyNode.Tag = ""
 			}
+
+			// Keys may contain placeholders as well
+			if keyNode.Kind == yaml.ScalarNode {
+				y.entries = append(y.entries, &YamlConfigEntry{
+					node:  keyNode,
+					key:   keyNode.Value,
+					path:  currentPath,
+					isKey: true,
+				})
+			}
+
+			y.handleNode(valueNode, currentPath, keyNode.Value)
 		}
-	default:
-		return fmt.Errorf("unsupported type: %T", v)
+	case yaml.SequenceNode:
+		for i, child := range node.Content {
+			is := strconv.Itoa(i)
+			y.handleNode(child, appendToPath(path, is), is)
+		}
+	case yaml.ScalarNode:
+		y.entries = append(y.entries, &YamlConfigEntry{
+			node: node,
+			key:  key,
+			path: path,
+		})
+	case yaml.AliasNode:
+		// Aliases refer to an anchored node, which is processed where it is defined
 	}
-	return nil
 }
 
 // Process processes the configuration file and returns the configuration entries
 func (y *YamlConfigFileHandler) Process() (iter.Seq[ConfigEntry], error) {
-	return func(yield func(ConfigEntry) bool) {
-		for _, entry := range y.entries {
-			if !yield(entry) {
-				break
-			}
-		}
-	}, nil
+	return slices.Values(y.entries), nil
 }
 
 // Write writes the configuration entries to the target
 func (y *YamlConfigFileHandler) Write(target io.Writer) error {
-	filteredEntries := lo.FilterMap(y.entries, func(entry ConfigEntry, _ int) (hierachicalConfigBase, bool) {
-		hce := entry.(hierachicalConfigBase)
+	enc := yaml.NewEncoder(target)
+	enc.SetIndent(2)
 
-		return hce, hce.isEdited()
-	})
-
-	for _, entry := range filteredEntries {
-		hce, isHce := entry.(*HierarchicalConfigEntry)
-		if isHce {
-			val, err := hce.getConvertedValue()
-			if err != nil {
-				return err
-			}
-
-			err = setHierarchical(y.container, val, hce.hierarchy...)
-			if err != nil {
-				return err
-			}
-
-			// We have processed the entry, we can
-			continue
-		}
-
-		hck, isHck := entry.(*HierarchicalConfigEntry)
-		if isHck {
-			err := setHierarchical(y.container, hck.key, hck.hierarchy...)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	hcks := lo.Filter(y.entries, func(entry ConfigEntry, _ int) bool {
-		hck, isHck := entry.(*HierarchicalConfigKey)
-		return isHck && hck.isEdited()
-	})
-
-	// Sort the entries by hierarchy length so that we can move the deeper nested entries first
-	slices.SortFunc(hcks, func(i, j ConfigEntry) int {
-		lenI := len(i.(*HierarchicalConfigKey).hierarchy)
-		lenJ := len(j.(*HierarchicalConfigKey).hierarchy)
-		if lenI < lenJ {
-			return 1
-		} else if lenI > lenJ {
-			return -1
-		}
-		return 0
-	})
-
-	for _, entry := range hcks {
-		hck := entry.(*HierarchicalConfigKey)
-		err := moveYaml(y.container, hck.hierarchy, hck.value)
-		if err != nil {
+	for _, document := range y.documents {
+		if err := enc.Encode(document); err != nil {
 			return err
 		}
 	}
 
-	buf := bytes.Buffer{}
-	enc := yaml.NewEncoder(&buf)
-	enc.SetIndent(2)
-	err := enc.Encode(y.container)
-	if err != nil {
-		return err
-	}
-
-	_, err = target.Write(buf.Bytes())
-
-	return err
+	return enc.Close()
 }

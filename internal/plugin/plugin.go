@@ -1,7 +1,9 @@
 package plugin
 
 import (
-	"os"
+	"errors"
+	"fmt"
+	"io/fs"
 	"path/filepath"
 	"plugin"
 	"strings"
@@ -11,75 +13,73 @@ import (
 	pkgplugin "github.com/denglertai/gonfig/pkg/plugin"
 )
 
+// InitPlugins loads all plugins (.so files) found in the plugin path.
+// Plugins that fail to load are logged and skipped, so they don't prevent other plugins from loading.
 func InitPlugins(pluginPath string) {
 	if pluginPath == "" {
 		pluginPath = "./plugins"
 	}
 
-	wd, err := os.Getwd()
-	if err != nil {
-		logging.Error("Failed to get current working directory", "error", err)
-		return
-	}
+	logging.Trace("Starting loading plugins", "pluginPath", pluginPath)
 
-	logging.Trace("Starting loading plugins", "pwd", wd, "pluginPath", pluginPath)
-
-	filepath.Walk(pluginPath, func(path string, info os.FileInfo, err error) error {
+	err := filepath.WalkDir(pluginPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			logging.Debug("Failed to walk plugin path", "pluginPath", pluginPath, "error", err)
 			return err
 		}
 
 		// Skip directories and non .so files
-		if info.IsDir() || !strings.HasSuffix(path, ".so") {
+		if d.IsDir() || !strings.HasSuffix(path, ".so") {
 			return nil
 		}
 
-		// Load the plugin
-		plugin, err := plugin.Open(path)
-		if err != nil {
+		if err := loadPlugin(path); err != nil {
 			logging.Error("Failed to load plugin", "path", path, "error", err)
-			return err
 		}
-
-		// Lookup for PluginFilter
-		pf, err := lookUpSymbol[pkgplugin.PluginFilter](plugin, "Filter")
-
-		if err == nil {
-			filters := (*pf).Filters()
-			filter.AddPluginFilters(filters)
-			logging.Debug("Loaded filter plugin", "plugin", path, "filters", len(filters))
-		} else {
-			logging.Error("Failed to lookup PluginFilter", "path", path, "error", err)
-		}
-
-		// Lookup for PluginCommand
-		// pc, err := lookUpSymbol[pkgplugin.PluginCommand](plugin, "Command")
-		// if err == nil {
-		// 	commands := (*pc).Commands()
-
-		// }
 
 		return nil
 	})
 
-	logging.Trace("Finished loading plugins", "pwd", wd, "pluginPath", pluginPath)
+	if errors.Is(err, fs.ErrNotExist) {
+		logging.Debug("Plugin path does not exist", "pluginPath", pluginPath)
+	} else if err != nil {
+		logging.Error("Failed to walk plugin path", "pluginPath", pluginPath, "error", err)
+	}
+
+	logging.Trace("Finished loading plugins", "pluginPath", pluginPath)
 }
 
-func lookUpSymbol[M any](plugin *plugin.Plugin, symbolName string) (*M, error) {
-	symbol, err := plugin.Lookup(symbolName)
+// loadPlugin loads a single plugin and registers the filters it provides
+func loadPlugin(path string) error {
+	p, err := plugin.Open(path)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	result := symbol.(M)
-	return &result, nil
-	// switch symbol.(type) {
-	// case *M:
-	// 	return symbol.(*M), nil
-	// case M:
-	// 	result := symbol.(M)
-	// 	return &result, nil
-	// default:
-	// 	return nil, fmt.Errorf("unexpected type from module symbol: %T", symbol)
-	// }
+
+	pf, err := lookUpSymbol[pkgplugin.PluginFilter](p, "Filter")
+	if err != nil {
+		return err
+	}
+
+	filters := pf.Filters()
+	filter.AddPluginFilters(filters)
+	logging.Debug("Loaded filter plugin", "plugin", path, "filters", len(filters))
+
+	return nil
+}
+
+// lookUpSymbol looks up the symbol in the plugin and ensures it is of the expected type
+func lookUpSymbol[M any](p *plugin.Plugin, symbolName string) (M, error) {
+	var zero M
+
+	symbol, err := p.Lookup(symbolName)
+	if err != nil {
+		return zero, err
+	}
+
+	result, ok := symbol.(M)
+	if !ok {
+		return zero, fmt.Errorf("symbol %s is of type %T, which does not implement %T", symbolName, symbol, (*M)(nil))
+	}
+
+	return result, nil
 }

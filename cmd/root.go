@@ -1,5 +1,5 @@
 /*
-Copyright © 2024 NAME HERE <EMAIL ADDRESS>
+Copyright © 2024 Daniel Englert
 */
 package cmd
 
@@ -17,36 +17,48 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "gonfig",
 	Short: "A configuration management tool for various formats and sources",
-	Long: `Gonfig is a powerful configuration management tool that supports multiple formats (YAML, JSON, TOML, etc.) and sources (files, environment variables, remote services). 
-	It provides a flexible plugin system for extending functionality and a robust filtering mechanism for dynamic configuration processing.`,
+	Long: `Gonfig is a configuration management tool that replaces placeholders in configuration files
+of multiple formats (JSON, YAML, XML, properties and plain text) with values from environment variables or files.
+It provides a flexible plugin system for extending functionality and a filtering mechanism for transforming values.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// Initialize Viper with configuration from multiple sources
-		v := config.SetupViper()
+		// Cobra validates required flags only after this hook, so validate them while the usage is still printed
+		if err := cmd.ValidateRequiredFlags(); err != nil {
+			return err
+		}
 
-		// Bind CLI flags to Viper so they override env vars & config files
-		v.BindPFlag("log-level", cmd.PersistentFlags().Lookup("log-level"))
-		v.BindPFlag("log-source", cmd.PersistentFlags().Lookup("log-source"))
-		v.BindPFlag("config-path", cmd.PersistentFlags().Lookup("config-path"))
-		v.BindPFlag("plugin-path", cmd.PersistentFlags().Lookup("plugin-path"))
+		// Flags and arguments are valid at this point, so don't print the usage for errors occurring from here on
+		cmd.SilenceUsage = true
+
+		// Initialize Viper with configuration from multiple sources.
+		// The root's persistent flags are used, as cmd is the executed subcommand.
+		v := config.SetupViper(cmd.Root().PersistentFlags())
 
 		// Load into AppConfig
 		cfg := config.LoadAppConfig(v)
 
 		// Store in context for access in all subcommands
-		ctx := context.WithValue(cmd.Context(), "appConfig", cfg)
+		ctx := context.WithValue(cmd.Context(), appConfigKey{}, cfg)
 		cmd.SetContext(ctx)
+
+		// Initialize logging first so plugin loading is logged as configured
+		if err := logging.InitLogging(cfg.LogLevel, cfg.LogSource); err != nil {
+			return err
+		}
 
 		// Initialize the Plugin system
 		plugin.InitPlugins(cfg.PluginPath)
 
-		return logging.InitLogging(cfg.LogLevel, cfg.LogSource)
+		return nil
 	},
 	TraverseChildren: true,
 }
 
+// appConfigKey is the context key under which the AppConfig is stored
+type appConfigKey struct{}
+
 // GetAppConfig retrieves the AppConfig from the command context
 func GetAppConfig(cmd *cobra.Command) *config.AppConfig {
-	if cfg, ok := cmd.Context().Value("appConfig").(*config.AppConfig); ok {
+	if cfg, ok := cmd.Context().Value(appConfigKey{}).(*config.AppConfig); ok {
 		return cfg
 	}
 	// Fallback to defaults if not found

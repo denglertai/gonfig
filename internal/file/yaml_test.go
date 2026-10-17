@@ -33,9 +33,8 @@ func TestYamlProcessor(t *testing.T) {
 
 	count := 0
 	for entry := range entries {
-		hce, ok := entry.(*HierarchicalConfigEntry)
-		if ok {
-			assert.Equal(t, hce.path, strings.Join(hce.hierarchy, "."))
+		ye, ok := entry.(*YamlConfigEntry)
+		if ok && !ye.IsKey() {
 			count++
 			assert.NotNil(t, entry)
 		}
@@ -71,16 +70,15 @@ func TestYamlProcessorEdit(t *testing.T) {
 
 	count := 0
 	for entry := range entries {
-		hce, ok := entry.(*HierarchicalConfigEntry)
-		if ok {
-			assert.Equal(t, hce.path, strings.Join(hce.hierarchy, "."))
+		ye, ok := entry.(*YamlConfigEntry)
+		if ok && !ye.IsKey() {
 			count++
 			assert.NotNil(t, entry)
 
-			if hce.path == "spec.replicas" {
+			if ye.Path() == "spec.replicas" {
 				entry.SetValue("777")
 			}
-			if hce.Key() == "app" {
+			if ye.Key() == "app" {
 				entry.SetValue("edited")
 			}
 		}
@@ -117,16 +115,13 @@ func TestYamlKeyTree(t *testing.T) {
 	count := 0
 	keyCount := 0
 	for entry := range entries {
-		hce, ok := entry.(*HierarchicalConfigEntry)
-		if ok {
-			assert.Equal(t, hce.path, strings.Join(hce.hierarchy, "."))
+		ye, ok := entry.(*YamlConfigEntry)
+		if ok && !ye.IsKey() {
 			count++
 			assert.NotNil(t, entry)
 		}
 
-		hck, ok := entry.(*HierarchicalConfigKey)
-		if ok {
-			assert.Equal(t, hck.path, strings.Join(hck.hierarchy, "."))
+		if ok && ye.IsKey() {
 			keyCount++
 			assert.NotNil(t, entry)
 		}
@@ -165,21 +160,18 @@ func TestYamlKeyTreeEdit(t *testing.T) {
 	count := 0
 	keyCount := 0
 	for entry := range entries {
-		hce, ok := entry.(*HierarchicalConfigEntry)
-		if ok {
-			assert.Equal(t, hce.path, strings.Join(hce.hierarchy, "."))
+		ye, ok := entry.(*YamlConfigEntry)
+		if ok && !ye.IsKey() {
 			count++
 			assert.NotNil(t, entry)
 		}
 
-		hck, ok := entry.(*HierarchicalConfigKey)
-		if ok {
-			assert.Equal(t, hck.path, strings.Join(hck.hierarchy, "."))
+		if ok && ye.IsKey() {
 			keyCount++
 			assert.NotNil(t, entry)
 
-			if hck.key == "backend_roles" {
-				hck.SetValue("frontend_roles")
+			if ye.Key() == "backend_roles" {
+				ye.SetValue("frontend_roles")
 			}
 		}
 	}
@@ -192,4 +184,90 @@ func TestYamlKeyTreeEdit(t *testing.T) {
 	assert.NoError(t, err)
 
 	snaps.MatchSnapshot(t, output.String())
+}
+
+// processYaml reads the given YAML, sets every value to the result of fn and returns the written output
+func processYaml(t *testing.T, input string, fn func(ConfigEntry) string) string {
+	t.Helper()
+
+	handler := NewYamlConfigFileHandler()
+	assert.NoError(t, handler.Read(strings.NewReader(input)))
+
+	entries, err := handler.Process()
+	assert.NoError(t, err)
+	for entry := range entries {
+		entry.SetValue(fn(entry))
+	}
+
+	output := new(bytes.Buffer)
+	assert.NoError(t, handler.Write(output))
+	return output.String()
+}
+
+func TestYamlRoundTrip(t *testing.T) {
+	testCases := []struct {
+		desc  string
+		input string
+	}{
+		{desc: "comments and key order", input: "# head comment\nz: 1 # inline\na:\n  # nested comment\n  c: x\n  b: y\n"},
+		{desc: "null and timestamp values", input: "a: null\nb:\nc: 2024-01-01\n"},
+		{desc: "top-level list", input: "- a\n- b: c\n"},
+		{desc: "multiple documents", input: "a: 1\n---\nb: 2\n"},
+		{desc: "anchors and aliases", input: "base: &base\n  a: 1\nderived:\n  <<: *base\n  b: 2\n"},
+		{desc: "block scalar", input: "script: |\n  echo a\n  echo b\n"},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			output := processYaml(t, tC.input, ConfigEntry.GetValue)
+			assert.Equal(t, tC.input, output)
+		})
+	}
+}
+
+func TestYamlSetValues(t *testing.T) {
+	testCases := []struct {
+		desc     string
+		input    string
+		values   map[string]string
+		expected string
+	}{
+		{
+			desc:     "top-level value",
+			input:    "key: placeholder\n",
+			values:   map[string]string{"key": "value"},
+			expected: "key: value\n",
+		},
+		{
+			desc:     "string keeps its type",
+			input:    "port: placeholder\nflag: placeholder\n",
+			values:   map[string]string{"port": "8080", "flag": "true"},
+			expected: "port: \"8080\"\nflag: \"true\"\n",
+		},
+		{
+			desc:     "value in later document",
+			input:    "a: 1\n---\nb: placeholder\n",
+			values:   map[string]string{"b": "value"},
+			expected: "a: 1\n---\nb: value\n",
+		},
+		{
+			desc:     "value in top-level list",
+			input:    "- placeholder\n",
+			values:   map[string]string{"0": "value"},
+			expected: "- value\n",
+		},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			output := processYaml(t, tC.input, func(entry ConfigEntry) string {
+				if entry.(*YamlConfigEntry).IsKey() {
+					return entry.GetValue()
+				}
+				if value, found := tC.values[entry.Path()]; found {
+					return value
+				}
+				return entry.GetValue()
+			})
+			assert.Equal(t, tC.expected, output)
+		})
+	}
 }

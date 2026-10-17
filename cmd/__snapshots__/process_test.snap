@@ -54,56 +54,56 @@
 [TestStdout/JSON_AutoDiscover - 1]
 {
   "quiz": {
-    "list": {
-      "list": [
-        "123",
-        "123.123",
-        "true",
-        "string",
-        "%^&*()_+"
-      ]
+    "sport": {
+      "q1": {
+        "question": "Which one is correct team name in NBA?",
+        "options": [
+          "New York Bulls",
+          "%^\u0026*()_+",
+          "Golden State Warriros",
+          "Huston Rocket"
+        ],
+        "answer": "Huston Rocket"
+      }
     },
     "maths": {
       "q1": {
-        "answer": "12",
+        "question": "5 + 7 = ?",
         "options": [
           "10",
           "11",
           "12",
           "13"
         ],
-        "question": "5 + 7 = ?"
+        "answer": "12"
       },
       "q2": {
-        "answer": "4",
+        "question": "12 - 8 = ?",
         "options": [
           "1",
           "2",
           "3",
           "4"
         ],
-        "question": "12 - 8 = ?"
-      }
-    },
-    "sport": {
-      "q1": {
-        "answer": "Huston Rocket",
-        "options": [
-          "New York Bulls",
-          "%^&*()_+",
-          "Golden State Warriros",
-          "Huston Rocket"
-        ],
-        "question": "Which one is correct team name in NBA?"
+        "answer": "4"
       }
     },
     "test": {
       "bla_blub": "yoyoyo",
-      "bool": "true",
-      "float": "123.123",
       "int": "123",
-      "special_characters": "%^&*()_+",
-      "string": "string"
+      "float": "123.123",
+      "bool": "true",
+      "string": "string",
+      "special_characters": "%^\u0026*()_+"
+    },
+    "list": {
+      "list": [
+        "123",
+        "123.123",
+        "true",
+        "string",
+        "%^\u0026*()_+"
+      ]
     }
   }
 }
@@ -112,56 +112,56 @@
 [TestStdout/JSON_Explicit - 1]
 {
   "quiz": {
-    "list": {
-      "list": [
-        "123",
-        "123.123",
-        "true",
-        "string",
-        "%^&*()_+"
-      ]
+    "sport": {
+      "q1": {
+        "question": "Which one is correct team name in NBA?",
+        "options": [
+          "New York Bulls",
+          "%^\u0026*()_+",
+          "Golden State Warriros",
+          "Huston Rocket"
+        ],
+        "answer": "Huston Rocket"
+      }
     },
     "maths": {
       "q1": {
-        "answer": "12",
+        "question": "5 + 7 = ?",
         "options": [
           "10",
           "11",
           "12",
           "13"
         ],
-        "question": "5 + 7 = ?"
+        "answer": "12"
       },
       "q2": {
-        "answer": "4",
+        "question": "12 - 8 = ?",
         "options": [
           "1",
           "2",
           "3",
           "4"
         ],
-        "question": "12 - 8 = ?"
-      }
-    },
-    "sport": {
-      "q1": {
-        "answer": "Huston Rocket",
-        "options": [
-          "New York Bulls",
-          "%^&*()_+",
-          "Golden State Warriros",
-          "Huston Rocket"
-        ],
-        "question": "Which one is correct team name in NBA?"
+        "answer": "4"
       }
     },
     "test": {
       "bla_blub": "yoyoyo",
-      "bool": "true",
-      "float": "123.123",
       "int": "123",
-      "special_characters": "%^&*()_+",
-      "string": "string"
+      "float": "123.123",
+      "bool": "true",
+      "string": "string",
+      "special_characters": "%^\u0026*()_+"
+    },
+    "list": {
+      "list": [
+        "123",
+        "123.123",
+        "true",
+        "string",
+        "%^\u0026*()_+"
+      ]
     }
   }
 }
@@ -173,32 +173,32 @@ kind: Deployment
 metadata:
   name: nginx-deployment
 spec:
-  replicas: "123"
   selector:
     matchLabels:
       app: nginx
+  replicas: "123" # tells deployment to run 2 pods matching the template  
   template:
+    metadata:
+      labels:
+        app: nginx
+        bool: "true"
+        int: "123"
+        float: "123.123"
+        string: string
+        special_characters: '%^&*()_+'
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.14.2
+          ports:
+            - containerPort: 80
+          imagePullPolicy: '%^&*()_+'
     list:
       - "123"
       - "123.123"
       - string
       - "true"
       - '%^&*()_+'
-    metadata:
-      labels:
-        app: nginx
-        bool: "true"
-        float: "123.123"
-        int: "123"
-        special_characters: '%^&*()_+'
-        string: string
-    spec:
-      containers:
-        - image: nginx:1.14.2
-          imagePullPolicy: '%^&*()_+'
-          name: nginx
-          ports:
-            - containerPort: 80
 
 ---
 
@@ -208,40 +208,43 @@ kind: Deployment
 metadata:
   name: nginx-deployment
 spec:
-  replicas: "123"
   selector:
     matchLabels:
       app: nginx
+  replicas: "123" # tells deployment to run 2 pods matching the template  
   template:
+    metadata:
+      labels:
+        app: nginx
+        bool: "true"
+        int: "123"
+        float: "123.123"
+        string: string
+        special_characters: '%^&*()_+'
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.14.2
+          ports:
+            - containerPort: 80
+          imagePullPolicy: '%^&*()_+'
     list:
       - "123"
       - "123.123"
       - string
       - "true"
       - '%^&*()_+'
-    metadata:
-      labels:
-        app: nginx
-        bool: "true"
-        float: "123.123"
-        int: "123"
-        special_characters: '%^&*()_+'
-        string: string
-    spec:
-      containers:
-        - image: nginx:1.14.2
-          imagePullPolicy: '%^&*()_+'
-          name: nginx
-          ports:
-            - containerPort: 80
 
 ---
 
 [TestStdout/PROPERTIES_AutoDiscover - 1]
+# Database Configuration
 database.url = jdbc:mysql://localhost:3306/mydatabase
 database.username = test
 database.password = password
 port = 9000
+
+# Server Configuration
 server.host = 127.0.0.1
 server.port = 8080
 bool.x = true
@@ -254,10 +257,13 @@ inty.mc.int.int = 123
 ---
 
 [TestStdout/PROPERTIES_Explicit - 1]
+# Database Configuration
 database.url = jdbc:mysql://localhost:3306/mydatabase
 database.username = test
 database.password = password
 port = 9000
+
+# Server Configuration
 server.host = 127.0.0.1
 server.port = 8080
 bool.x = true
@@ -324,56 +330,56 @@ inty.mc.int.int = 123
 [TestFile/JSON_AutoDiscover - 1]
 {
   "quiz": {
-    "list": {
-      "list": [
-        "123",
-        "123.123",
-        "true",
-        "string",
-        "%^&*()_+"
-      ]
+    "sport": {
+      "q1": {
+        "question": "Which one is correct team name in NBA?",
+        "options": [
+          "New York Bulls",
+          "%^\u0026*()_+",
+          "Golden State Warriros",
+          "Huston Rocket"
+        ],
+        "answer": "Huston Rocket"
+      }
     },
     "maths": {
       "q1": {
-        "answer": "12",
+        "question": "5 + 7 = ?",
         "options": [
           "10",
           "11",
           "12",
           "13"
         ],
-        "question": "5 + 7 = ?"
+        "answer": "12"
       },
       "q2": {
-        "answer": "4",
+        "question": "12 - 8 = ?",
         "options": [
           "1",
           "2",
           "3",
           "4"
         ],
-        "question": "12 - 8 = ?"
-      }
-    },
-    "sport": {
-      "q1": {
-        "answer": "Huston Rocket",
-        "options": [
-          "New York Bulls",
-          "%^&*()_+",
-          "Golden State Warriros",
-          "Huston Rocket"
-        ],
-        "question": "Which one is correct team name in NBA?"
+        "answer": "4"
       }
     },
     "test": {
       "bla_blub": "yoyoyo",
-      "bool": "true",
-      "float": "123.123",
       "int": "123",
-      "special_characters": "%^&*()_+",
-      "string": "string"
+      "float": "123.123",
+      "bool": "true",
+      "string": "string",
+      "special_characters": "%^\u0026*()_+"
+    },
+    "list": {
+      "list": [
+        "123",
+        "123.123",
+        "true",
+        "string",
+        "%^\u0026*()_+"
+      ]
     }
   }
 }
@@ -382,56 +388,56 @@ inty.mc.int.int = 123
 [TestFile/JSON_Explicit - 1]
 {
   "quiz": {
-    "list": {
-      "list": [
-        "123",
-        "123.123",
-        "true",
-        "string",
-        "%^&*()_+"
-      ]
+    "sport": {
+      "q1": {
+        "question": "Which one is correct team name in NBA?",
+        "options": [
+          "New York Bulls",
+          "%^\u0026*()_+",
+          "Golden State Warriros",
+          "Huston Rocket"
+        ],
+        "answer": "Huston Rocket"
+      }
     },
     "maths": {
       "q1": {
-        "answer": "12",
+        "question": "5 + 7 = ?",
         "options": [
           "10",
           "11",
           "12",
           "13"
         ],
-        "question": "5 + 7 = ?"
+        "answer": "12"
       },
       "q2": {
-        "answer": "4",
+        "question": "12 - 8 = ?",
         "options": [
           "1",
           "2",
           "3",
           "4"
         ],
-        "question": "12 - 8 = ?"
-      }
-    },
-    "sport": {
-      "q1": {
-        "answer": "Huston Rocket",
-        "options": [
-          "New York Bulls",
-          "%^&*()_+",
-          "Golden State Warriros",
-          "Huston Rocket"
-        ],
-        "question": "Which one is correct team name in NBA?"
+        "answer": "4"
       }
     },
     "test": {
       "bla_blub": "yoyoyo",
-      "bool": "true",
-      "float": "123.123",
       "int": "123",
-      "special_characters": "%^&*()_+",
-      "string": "string"
+      "float": "123.123",
+      "bool": "true",
+      "string": "string",
+      "special_characters": "%^\u0026*()_+"
+    },
+    "list": {
+      "list": [
+        "123",
+        "123.123",
+        "true",
+        "string",
+        "%^\u0026*()_+"
+      ]
     }
   }
 }
@@ -443,32 +449,32 @@ kind: Deployment
 metadata:
   name: nginx-deployment
 spec:
-  replicas: "123"
   selector:
     matchLabels:
       app: nginx
+  replicas: "123" # tells deployment to run 2 pods matching the template  
   template:
+    metadata:
+      labels:
+        app: nginx
+        bool: "true"
+        int: "123"
+        float: "123.123"
+        string: string
+        special_characters: '%^&*()_+'
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.14.2
+          ports:
+            - containerPort: 80
+          imagePullPolicy: '%^&*()_+'
     list:
       - "123"
       - "123.123"
       - string
       - "true"
       - '%^&*()_+'
-    metadata:
-      labels:
-        app: nginx
-        bool: "true"
-        float: "123.123"
-        int: "123"
-        special_characters: '%^&*()_+'
-        string: string
-    spec:
-      containers:
-        - image: nginx:1.14.2
-          imagePullPolicy: '%^&*()_+'
-          name: nginx
-          ports:
-            - containerPort: 80
 
 ---
 
@@ -478,40 +484,43 @@ kind: Deployment
 metadata:
   name: nginx-deployment
 spec:
-  replicas: "123"
   selector:
     matchLabels:
       app: nginx
+  replicas: "123" # tells deployment to run 2 pods matching the template  
   template:
+    metadata:
+      labels:
+        app: nginx
+        bool: "true"
+        int: "123"
+        float: "123.123"
+        string: string
+        special_characters: '%^&*()_+'
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.14.2
+          ports:
+            - containerPort: 80
+          imagePullPolicy: '%^&*()_+'
     list:
       - "123"
       - "123.123"
       - string
       - "true"
       - '%^&*()_+'
-    metadata:
-      labels:
-        app: nginx
-        bool: "true"
-        float: "123.123"
-        int: "123"
-        special_characters: '%^&*()_+'
-        string: string
-    spec:
-      containers:
-        - image: nginx:1.14.2
-          imagePullPolicy: '%^&*()_+'
-          name: nginx
-          ports:
-            - containerPort: 80
 
 ---
 
 [TestFile/PROPERTIES_AutoDiscover - 1]
+# Database Configuration
 database.url = jdbc:mysql://localhost:3306/mydatabase
 database.username = test
 database.password = password
 port = 9000
+
+# Server Configuration
 server.host = 127.0.0.1
 server.port = 8080
 bool.x = true
@@ -524,10 +533,13 @@ inty.mc.int.int = 123
 ---
 
 [TestFile/PROPERTIES_Explicit - 1]
+# Database Configuration
 database.url = jdbc:mysql://localhost:3306/mydatabase
 database.username = test
 database.password = password
 port = 9000
+
+# Server Configuration
 server.host = 127.0.0.1
 server.port = 8080
 bool.x = true
@@ -594,56 +606,56 @@ inty.mc.int.int = 123
 [TestFileOverwrite/JSON_AutoDiscover - 1]
 {
   "quiz": {
-    "list": {
-      "list": [
-        "123",
-        "123.123",
-        "true",
-        "string",
-        "%^&*()_+"
-      ]
+    "sport": {
+      "q1": {
+        "question": "Which one is correct team name in NBA?",
+        "options": [
+          "New York Bulls",
+          "%^\u0026*()_+",
+          "Golden State Warriros",
+          "Huston Rocket"
+        ],
+        "answer": "Huston Rocket"
+      }
     },
     "maths": {
       "q1": {
-        "answer": "12",
+        "question": "5 + 7 = ?",
         "options": [
           "10",
           "11",
           "12",
           "13"
         ],
-        "question": "5 + 7 = ?"
+        "answer": "12"
       },
       "q2": {
-        "answer": "4",
+        "question": "12 - 8 = ?",
         "options": [
           "1",
           "2",
           "3",
           "4"
         ],
-        "question": "12 - 8 = ?"
-      }
-    },
-    "sport": {
-      "q1": {
-        "answer": "Huston Rocket",
-        "options": [
-          "New York Bulls",
-          "%^&*()_+",
-          "Golden State Warriros",
-          "Huston Rocket"
-        ],
-        "question": "Which one is correct team name in NBA?"
+        "answer": "4"
       }
     },
     "test": {
       "bla_blub": "yoyoyo",
-      "bool": "true",
-      "float": "123.123",
       "int": "123",
-      "special_characters": "%^&*()_+",
-      "string": "string"
+      "float": "123.123",
+      "bool": "true",
+      "string": "string",
+      "special_characters": "%^\u0026*()_+"
+    },
+    "list": {
+      "list": [
+        "123",
+        "123.123",
+        "true",
+        "string",
+        "%^\u0026*()_+"
+      ]
     }
   }
 }
@@ -652,56 +664,56 @@ inty.mc.int.int = 123
 [TestFileOverwrite/JSON_Explicit - 1]
 {
   "quiz": {
-    "list": {
-      "list": [
-        "123",
-        "123.123",
-        "true",
-        "string",
-        "%^&*()_+"
-      ]
+    "sport": {
+      "q1": {
+        "question": "Which one is correct team name in NBA?",
+        "options": [
+          "New York Bulls",
+          "%^\u0026*()_+",
+          "Golden State Warriros",
+          "Huston Rocket"
+        ],
+        "answer": "Huston Rocket"
+      }
     },
     "maths": {
       "q1": {
-        "answer": "12",
+        "question": "5 + 7 = ?",
         "options": [
           "10",
           "11",
           "12",
           "13"
         ],
-        "question": "5 + 7 = ?"
+        "answer": "12"
       },
       "q2": {
-        "answer": "4",
+        "question": "12 - 8 = ?",
         "options": [
           "1",
           "2",
           "3",
           "4"
         ],
-        "question": "12 - 8 = ?"
-      }
-    },
-    "sport": {
-      "q1": {
-        "answer": "Huston Rocket",
-        "options": [
-          "New York Bulls",
-          "%^&*()_+",
-          "Golden State Warriros",
-          "Huston Rocket"
-        ],
-        "question": "Which one is correct team name in NBA?"
+        "answer": "4"
       }
     },
     "test": {
       "bla_blub": "yoyoyo",
-      "bool": "true",
-      "float": "123.123",
       "int": "123",
-      "special_characters": "%^&*()_+",
-      "string": "string"
+      "float": "123.123",
+      "bool": "true",
+      "string": "string",
+      "special_characters": "%^\u0026*()_+"
+    },
+    "list": {
+      "list": [
+        "123",
+        "123.123",
+        "true",
+        "string",
+        "%^\u0026*()_+"
+      ]
     }
   }
 }
@@ -713,32 +725,32 @@ kind: Deployment
 metadata:
   name: nginx-deployment
 spec:
-  replicas: "123"
   selector:
     matchLabels:
       app: nginx
+  replicas: "123" # tells deployment to run 2 pods matching the template  
   template:
+    metadata:
+      labels:
+        app: nginx
+        bool: "true"
+        int: "123"
+        float: "123.123"
+        string: string
+        special_characters: '%^&*()_+'
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.14.2
+          ports:
+            - containerPort: 80
+          imagePullPolicy: '%^&*()_+'
     list:
       - "123"
       - "123.123"
       - string
       - "true"
       - '%^&*()_+'
-    metadata:
-      labels:
-        app: nginx
-        bool: "true"
-        float: "123.123"
-        int: "123"
-        special_characters: '%^&*()_+'
-        string: string
-    spec:
-      containers:
-        - image: nginx:1.14.2
-          imagePullPolicy: '%^&*()_+'
-          name: nginx
-          ports:
-            - containerPort: 80
 
 ---
 
@@ -748,40 +760,43 @@ kind: Deployment
 metadata:
   name: nginx-deployment
 spec:
-  replicas: "123"
   selector:
     matchLabels:
       app: nginx
+  replicas: "123" # tells deployment to run 2 pods matching the template  
   template:
+    metadata:
+      labels:
+        app: nginx
+        bool: "true"
+        int: "123"
+        float: "123.123"
+        string: string
+        special_characters: '%^&*()_+'
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.14.2
+          ports:
+            - containerPort: 80
+          imagePullPolicy: '%^&*()_+'
     list:
       - "123"
       - "123.123"
       - string
       - "true"
       - '%^&*()_+'
-    metadata:
-      labels:
-        app: nginx
-        bool: "true"
-        float: "123.123"
-        int: "123"
-        special_characters: '%^&*()_+'
-        string: string
-    spec:
-      containers:
-        - image: nginx:1.14.2
-          imagePullPolicy: '%^&*()_+'
-          name: nginx
-          ports:
-            - containerPort: 80
 
 ---
 
 [TestFileOverwrite/PROPERTIES_AutoDiscover - 1]
+# Database Configuration
 database.url = jdbc:mysql://localhost:3306/mydatabase
 database.username = test
 database.password = password
 port = 9000
+
+# Server Configuration
 server.host = 127.0.0.1
 server.port = 8080
 bool.x = true
@@ -794,10 +809,13 @@ inty.mc.int.int = 123
 ---
 
 [TestFileOverwrite/PROPERTIES_Explicit - 1]
+# Database Configuration
 database.url = jdbc:mysql://localhost:3306/mydatabase
 database.username = test
 database.password = password
 port = 9000
+
+# Server Configuration
 server.host = 127.0.0.1
 server.port = 8080
 bool.x = true
@@ -838,56 +856,56 @@ inty.mc.int.int = 123
 [TestPassingExtension/JSON_Explicit - 1]
 {
   "quiz": {
-    "list": {
-      "list": [
-        "123",
-        "123.123",
-        "true",
-        "string",
-        "%^&*()_+"
-      ]
+    "sport": {
+      "q1": {
+        "question": "Which one is correct team name in NBA?",
+        "options": [
+          "New York Bulls",
+          "%^\u0026*()_+",
+          "Golden State Warriros",
+          "Huston Rocket"
+        ],
+        "answer": "Huston Rocket"
+      }
     },
     "maths": {
       "q1": {
-        "answer": "12",
+        "question": "5 + 7 = ?",
         "options": [
           "10",
           "11",
           "12",
           "13"
         ],
-        "question": "5 + 7 = ?"
+        "answer": "12"
       },
       "q2": {
-        "answer": "4",
+        "question": "12 - 8 = ?",
         "options": [
           "1",
           "2",
           "3",
           "4"
         ],
-        "question": "12 - 8 = ?"
-      }
-    },
-    "sport": {
-      "q1": {
-        "answer": "Huston Rocket",
-        "options": [
-          "New York Bulls",
-          "%^&*()_+",
-          "Golden State Warriros",
-          "Huston Rocket"
-        ],
-        "question": "Which one is correct team name in NBA?"
+        "answer": "4"
       }
     },
     "test": {
       "bla_blub": "yoyoyo",
-      "bool": "true",
-      "float": "123.123",
       "int": "123",
-      "special_characters": "%^&*()_+",
-      "string": "string"
+      "float": "123.123",
+      "bool": "true",
+      "string": "string",
+      "special_characters": "%^\u0026*()_+"
+    },
+    "list": {
+      "list": [
+        "123",
+        "123.123",
+        "true",
+        "string",
+        "%^\u0026*()_+"
+      ]
     }
   }
 }
@@ -899,40 +917,43 @@ kind: Deployment
 metadata:
   name: nginx-deployment
 spec:
-  replicas: "123"
   selector:
     matchLabels:
       app: nginx
+  replicas: "123" # tells deployment to run 2 pods matching the template  
   template:
+    metadata:
+      labels:
+        app: nginx
+        bool: "true"
+        int: "123"
+        float: "123.123"
+        string: string
+        special_characters: '%^&*()_+'
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.14.2
+          ports:
+            - containerPort: 80
+          imagePullPolicy: '%^&*()_+'
     list:
       - "123"
       - "123.123"
       - string
       - "true"
       - '%^&*()_+'
-    metadata:
-      labels:
-        app: nginx
-        bool: "true"
-        float: "123.123"
-        int: "123"
-        special_characters: '%^&*()_+'
-        string: string
-    spec:
-      containers:
-        - image: nginx:1.14.2
-          imagePullPolicy: '%^&*()_+'
-          name: nginx
-          ports:
-            - containerPort: 80
 
 ---
 
 [TestPassingExtension/PROPERTIES_Explicit - 1]
+# Database Configuration
 database.url = jdbc:mysql://localhost:3306/mydatabase
 database.username = test
 database.password = password
 port = 9000
+
+# Server Configuration
 server.host = 127.0.0.1
 server.port = 8080
 bool.x = true
@@ -946,19 +967,19 @@ inty.mc.int.int = 123
 
 [TestYamlMove/YAML_AutoDiscover - 1]
 Random User with spaces:
+  hash: "0819afba2ba9206442ddea68249ff02a"
   backend_roles:
-    - admin
-  description: Demo admin user
-  hash: 0819afba2ba9206442ddea68249ff02a
+    - "admin"
+  description: "Demo admin user"
 
 ---
 
 [TestYamlMove/YAML_Explicit - 1]
 Random User with spaces:
+  hash: "0819afba2ba9206442ddea68249ff02a"
   backend_roles:
-    - admin
-  description: Demo admin user
-  hash: 0819afba2ba9206442ddea68249ff02a
+    - "admin"
+  description: "Demo admin user"
 
 ---
 
@@ -968,32 +989,32 @@ kind: Deployment
 metadata:
   name: nginx-deployment
 spec:
-  replicas: "123"
   selector:
     matchLabels:
       app: nginx
+  replicas: "123" # tells deployment to run 2 pods matching the template  
   template:
+    metadata:
+      labels:
+        app: nginx
+        bool: "true"
+        int: "123"
+        float: "123.123"
+        string: string
+        special_characters: '%^&*()_+'
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.14.2
+          ports:
+            - containerPort: 80
+          imagePullPolicy: '%^&*()_+'
     list:
       - "123"
       - "123.123"
       - string
       - "true"
       - '%^&*()_+'
-    metadata:
-      labels:
-        app: nginx
-        bool: "true"
-        float: "123.123"
-        int: "123"
-        special_characters: '%^&*()_+'
-        string: string
-    spec:
-      containers:
-        - image: nginx:1.14.2
-          imagePullPolicy: '%^&*()_+'
-          name: nginx
-          ports:
-            - containerPort: 80
 
 ---
 
@@ -1003,32 +1024,32 @@ kind: Deployment
 metadata:
   name: nginx-deployment
 spec:
-  replicas: "123"
   selector:
     matchLabels:
       app: nginx
+  replicas: "123" # tells deployment to run 2 pods matching the template  
   template:
+    metadata:
+      labels:
+        app: nginx
+        bool: "true"
+        int: "123"
+        float: "123.123"
+        string: string
+        special_characters: '%^&*()_+'
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.14.2
+          ports:
+            - containerPort: 80
+          imagePullPolicy: '%^&*()_+'
     list:
       - "123"
       - "123.123"
       - string
       - "true"
       - '%^&*()_+'
-    metadata:
-      labels:
-        app: nginx
-        bool: "true"
-        float: "123.123"
-        int: "123"
-        special_characters: '%^&*()_+'
-        string: string
-    spec:
-      containers:
-        - image: nginx:1.14.2
-          imagePullPolicy: '%^&*()_+'
-          name: nginx
-          ports:
-            - containerPort: 80
 
 ---
 
@@ -1049,5 +1070,4 @@ else
     echo "Test failed: %^&*()_+ does not exist."
     exit 1
 fi
-
 ---

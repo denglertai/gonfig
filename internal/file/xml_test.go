@@ -3,11 +3,14 @@ package file
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path"
 	"strings"
 	"testing"
 
+	"github.com/denglertai/gonfig/internal/general"
+	"github.com/denglertai/gonfig/internal/value"
 	"github.com/gkampitakis/go-snaps/snaps"
 	"github.com/stretchr/testify/assert"
 )
@@ -111,6 +114,11 @@ func TestXmlCDataWithJsonNotParsed(t *testing.T) {
 	var cdataText string
 	var foundPattern bool
 	for entry := range entries {
+		// Process the values the same way the FileProcessor does
+		newVal, err := value.ProcessValue(entry.GetValue())
+		assert.NoError(t, err)
+		entry.SetValue(fmt.Sprintf("%v", newVal))
+
 		if entry.Key() == "pattern" {
 			foundPattern = true
 			cdataText = entry.GetValue()
@@ -171,4 +179,35 @@ func TestCDataJsonSyntaxValid(t *testing.T) {
 	var js map[string]interface{}
 	err = json.Unmarshal([]byte(strings.TrimSpace(cdataJson)), &js)
 	assert.NoError(t, err, "CDATA content should be valid JSON")
+}
+
+func TestXmlCDataProcessedOnce(t *testing.T) {
+	// The resolved value contains a placeholder itself, which must not be expanded again
+	t.Setenv("CDATA_OUTER", "${CDATA_INNER}")
+	t.Setenv("CDATA_INNER", "expanded twice")
+
+	file := path.Join(t.TempDir(), "cdata.xml")
+	assert.NoError(t, os.WriteFile(file, []byte(`<r><a><![CDATA[${CDATA_OUTER}]]></a></r>`), 0o644))
+
+	output := new(bytes.Buffer)
+	assert.NoError(t, NewFileProcessor(file, general.Undefined, output).Process())
+	assert.Equal(t, `<r><a><![CDATA[${CDATA_INNER}]]></a></r>`, output.String())
+}
+
+func TestXmlNamespacedAttributes(t *testing.T) {
+	handler := NewXmlConfigFileHandler()
+	assert.NoError(t, handler.Read(strings.NewReader(`<r xmlns:x="urn:x"><a x:loc="old" plain="old"/></r>`)))
+
+	entries, err := handler.Process()
+	assert.NoError(t, err)
+	for entry := range entries {
+		if entry.GetValue() == "old" {
+			entry.SetValue("new")
+			assert.Equal(t, "new", entry.GetValue())
+		}
+	}
+
+	output := new(bytes.Buffer)
+	assert.NoError(t, handler.Write(output))
+	assert.Equal(t, `<r xmlns:x="urn:x"><a x:loc="new" plain="new"/></r>`, output.String())
 }

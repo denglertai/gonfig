@@ -1,5 +1,5 @@
 /*
-Copyright © 2024 NAME HERE <EMAIL ADDRESS>
+Copyright © 2024 Daniel Englert
 */
 package cmd
 
@@ -12,56 +12,40 @@ import (
 
 // configCmd represents the config command
 var configCmd = &cobra.Command{
-	Use:              "config",
-	Short:            "",
-	Long:             ``,
+	Use:   "config",
+	Short: "Work with configuration files",
+	Long: `Work with configuration files in JSON, YAML, XML, properties or plain text format.
+The format is inferred from the file extension unless set via --file-type.`,
 	TraverseChildren: true,
 }
 
-func getConfigSettings(args []string) *config.Settings {
-	err := configCmd.ParseFlags(args)
-
+// getConfigSettings reads the config settings from the flags of the command
+func getConfigSettings(cmd *cobra.Command) (*config.Settings, error) {
+	fileName, err := cmd.Flags().GetString("file")
 	if err != nil {
-		logging.Error("Error parsing flags", "error", err)
+		return nil, err
+	}
+
+	fileType, err := cmd.Flags().GetString("file-type")
+	if err != nil {
+		return nil, err
 	}
 
 	configSettings := config.NewSettings()
-
 	configSettings.File = fileName
-
-	if len(fileType) > 0 {
-		configSettings.FileType = general.FileType(fileType)
-	} else {
-		configSettings.FileType = general.Undefined
-	}
-
-	// Unset the global variables after reading the values to prevent them from being reused in subsequent tests
-	fileType = ""
-	fileName = ""
+	// An empty file type equals general.Undefined, so the file type gets inferred from the file extension
+	configSettings.FileType = general.FileType(fileType)
 
 	logging.Debug("Config settings", "settings", configSettings)
 
-	return configSettings
+	return configSettings, nil
 }
-
-var fileType string
-var fileName string
 
 func init() {
 	rootCmd.AddCommand(configCmd)
 
-	// Here you will define your flags and configuration settings.
+	configCmd.PersistentFlags().StringP("file", "f", "", "Path to the configuration file")
+	configCmd.MarkPersistentFlagRequired("file")
 
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// configCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// configCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-
-	configCmd.PersistentFlags().StringVarP(&fileName, "file", "f", "", "Path to the configuration file")
-	configCmd.MarkFlagRequired("file")
-
-	configCmd.PersistentFlags().StringVarP(&fileType, "file-type", "t", "", "Type of file to be read. If not set, the file type will be inferred from the file extension")
+	configCmd.PersistentFlags().StringP("file-type", "t", "", "Type of file to be read. If not set, the file type will be inferred from the file extension")
 }

@@ -3,9 +3,11 @@ package file
 import (
 	"io"
 	"os"
+	"path"
 	"testing"
 
 	"github.com/denglertai/gonfig/internal/general"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMain(m *testing.M) {
@@ -35,4 +37,12 @@ func TestFileProcessor_Process(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestFileProcessorWithoutExtension(t *testing.T) {
+	file := path.Join(t.TempDir(), "Dockerfile")
+	assert.NoError(t, os.WriteFile(file, []byte("FROM scratch"), 0o644))
+
+	err := NewFileProcessor(file, general.Undefined, io.Discard).Process()
+	assert.ErrorContains(t, err, "could not infer the file type")
 }

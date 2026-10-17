@@ -1,5 +1,5 @@
 /*
-Copyright © 2024 NAME HERE <EMAIL ADDRESS>
+Copyright © 2024 Daniel Englert
 */
 package cmd
 
@@ -13,18 +13,33 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var output string
-var inline bool
-var overwriteExistingFile bool
-
 // processCmd represents the process command
 var processCmd = &cobra.Command{
-	Use:              "process",
-	Short:            "Processes a file",
-	Long:             `Processes a file and outputs the result to the dersired output. Defaults to stdout`,
+	Use:   "process",
+	Short: "Processes a file",
+	Long: `Processes a file by replacing all placeholders like ${ENV_VAR | filter} and outputs the result
+to the desired output. Defaults to stdout`,
 	TraverseChildren: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		configSettings := getConfigSettings(args)
+		configSettings, err := getConfigSettings(cmd)
+		if err != nil {
+			return err
+		}
+
+		output, err := cmd.Flags().GetString("output")
+		if err != nil {
+			return err
+		}
+
+		inline, err := cmd.Flags().GetBool("inline")
+		if err != nil {
+			return err
+		}
+
+		overwriteExistingFile, err := cmd.Flags().GetBool("overwrite")
+		if err != nil {
+			return err
+		}
 
 		logging.Info("RunE", "command", cmd.Name(), "args", args, "configSettings", configSettings)
 
@@ -39,7 +54,7 @@ var processCmd = &cobra.Command{
 		var o = new(bytes.Buffer)
 		logging.Info("Processing file", "file", configSettings.File, "type", configSettings.FileType)
 		processor := file.NewFileProcessor(configSettings.File, configSettings.FileType, o)
-		err := processor.Process()
+		err = processor.Process()
 		if err != nil {
 			return err
 		}
@@ -53,32 +68,24 @@ var processCmd = &cobra.Command{
 			// Write the output to the file
 			logging.Info("Writing output", "file", output)
 
-			f, err := os.Create(output)
-			if err != nil {
-				return err
-			}
-			defer f.Close()
-			_, err = f.Write(o.Bytes())
-			if err != nil {
-				return err
-			}
-		} else {
-			// Dump the content to stdout
-			os.Stdout.Write(o.Bytes())
+			// Unlike a deferred Close, WriteFile also reports errors on closing the file
+			return os.WriteFile(output, o.Bytes(), 0o666)
 		}
 
-		return nil
+		// Dump the content to stdout
+		_, err = cmd.OutOrStdout().Write(o.Bytes())
+		return err
 	},
 }
 
 func init() {
 	configCmd.AddCommand(processCmd)
 
-	processCmd.Flags().StringVarP(&output, "output", "o", "-", "Controls where to put the results (defaults to stdout)")
+	processCmd.Flags().StringP("output", "o", "-", "Controls where to put the results (defaults to stdout)")
 
-	processCmd.Flags().BoolVarP(&inline, "inline", "i", false, "Controls if the output should get written to the source file directly (defaults to false)")
+	processCmd.Flags().BoolP("inline", "i", false, "Controls if the output should get written to the source file directly (defaults to false)")
 
-	processCmd.Flags().BoolVarP(&overwriteExistingFile, "overwrite", "w", false, "Controls if the output should overwrite the source file (defaults to false). This implies -i (--inline). If the source file does not exist, it will be created.")
+	processCmd.Flags().BoolP("overwrite", "w", false, "Controls if an already existing output file may be overwritten (defaults to false). Not needed for -i (--inline)")
 }
 
 type ErrFileExists error
