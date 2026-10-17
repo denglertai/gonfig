@@ -150,3 +150,11 @@ func TestComplexValues(t *testing.T) {
 		})
 	}
 }
+
+func TestProcessValueNonASCIIPrefix(t *testing.T) {
+	t.Setenv("NON_ASCII_TEST", "value")
+
+	result, err := ProcessValue("ää ${NON_ASCII_TEST} ü ${NON_ASCII_TEST}")
+	assert.NoError(t, err)
+	assert.Equal(t, "ää value ü value", result)
+}

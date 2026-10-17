@@ -97,9 +97,9 @@ func (t TokenFilterParam) Apply(input string, offset int) (any, int, error) {
 
 	lenBefore := len(input)
 
-	asRunes := []rune(input)
-	before := string(asRunes[0 : t.start+offset])
-	after := string(asRunes[t.end+offset:])
+	// start and end are byte offsets, so slice the bytes rather than the runes
+	before := input[:t.start+offset]
+	after := input[t.end+offset:]
 
 	switch result.(type) {
 	case string:
