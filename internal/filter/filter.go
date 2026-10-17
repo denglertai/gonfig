@@ -2,10 +2,12 @@ package filter
 
 import (
 	"crypto/md5"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"os"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -16,7 +18,13 @@ import (
 const (
 	bcryptFilterKey = "bcrypt"
 	md5FilterKey    = "md5"
+
+	// defaultListDelimiter is used by split and join if no delimiter is given
+	defaultListDelimiter = ","
 )
+
+// backReferenceRe matches back references like \1 within regex replacements
+var backReferenceRe = regexp.MustCompile(`\\(\d+)`)
 
 // Filter provides a basic abstraction for being able to process input and transform or validate it as needed
 type Filter interface {
@@ -118,6 +126,44 @@ func toInt(value any) (int, error) {
 	}
 }
 
+// param returns the filter param given either by name or by position
+func param(params map[string]string, name string, position int) (string, bool) {
+	if value, found := params[name]; found {
+		return value, true
+	}
+	value, found := params[strconv.Itoa(position)]
+	return value, found
+}
+
+// requiredParam returns the filter param given either by name or by position or an error if it is missing
+func requiredParam(filter string, params map[string]string, name string, position int) (string, error) {
+	value, found := param(params, name, position)
+	if !found {
+		return "", fmt.Errorf("filter %s requires the param %s", filter, name)
+	}
+	return value, nil
+}
+
+// stringFunc creates a filter function applying fn to the string value, or to each element of a list created by split
+func stringFunc(fn func(string, map[string]string) (string, error)) func(any, map[string]string) (any, error) {
+	return func(value any, params map[string]string) (any, error) {
+		list, ok := value.([]string)
+		if !ok {
+			return fn(toString(value), params)
+		}
+
+		result := make([]string, len(list))
+		for i, s := range list {
+			var err error
+			result[i], err = fn(s, params)
+			if err != nil {
+				return "", err
+			}
+		}
+		return result, nil
+	}
+}
+
 // ApplyFilters applies a list of filters to a value
 func ApplyFilters(value any, filters []Filter) (any, error) {
 	logging.Debug("Applying filters", "filters", len(filters))
@@ -176,37 +222,37 @@ func (f *FuncFilter) Process(value any) (any, error) {
 func init() {
 	filterMap["upper"] = func(token string) Filter {
 		return &FuncFilter{
-			fn: func(value any, _ map[string]string) (any, error) {
-				return strings.ToUpper(toString(value)), nil
-			},
+			fn: stringFunc(func(s string, _ map[string]string) (string, error) {
+				return strings.ToUpper(s), nil
+			}),
 		}
 	}
 	filterMap["lower"] = func(token string) Filter {
 		return &FuncFilter{
-			fn: func(value any, _ map[string]string) (any, error) {
-				return strings.ToLower(toString(value)), nil
-			},
+			fn: stringFunc(func(s string, _ map[string]string) (string, error) {
+				return strings.ToLower(s), nil
+			}),
 		}
 	}
 	filterMap["trim"] = func(token string) Filter {
 		return &FuncFilter{
-			fn: func(value any, _ map[string]string) (any, error) {
-				return strings.TrimSpace(toString(value)), nil
-			},
+			fn: stringFunc(func(s string, _ map[string]string) (string, error) {
+				return strings.TrimSpace(s), nil
+			}),
 		}
 	}
 	filterMap["trimleft"] = func(token string) Filter {
 		return &FuncFilter{
-			fn: func(value any, _ map[string]string) (any, error) {
-				return strings.TrimLeft(toString(value), " "), nil
-			},
+			fn: stringFunc(func(s string, _ map[string]string) (string, error) {
+				return strings.TrimLeft(s, " "), nil
+			}),
 		}
 	}
 	filterMap["trimright"] = func(token string) Filter {
 		return &FuncFilter{
-			fn: func(value any, _ map[string]string) (any, error) {
-				return strings.TrimRight(toString(value), " "), nil
-			},
+			fn: stringFunc(func(s string, _ map[string]string) (string, error) {
+				return strings.TrimRight(s, " "), nil
+			}),
 		}
 	}
 
@@ -264,6 +310,95 @@ func init() {
 				}
 				// return the md5 hash as a string
 				return hex.EncodeToString(hash.Sum(nil)), nil
+			},
+		}
+	}
+
+	filterMap["base64"] = func(token string) Filter {
+		return &FuncFilter{
+			fn: stringFunc(func(s string, _ map[string]string) (string, error) {
+				return base64.StdEncoding.EncodeToString([]byte(s)), nil
+			}),
+		}
+	}
+
+	filterMap["base64_decode"] = func(token string) Filter {
+		return &FuncFilter{
+			fn: stringFunc(func(s string, _ map[string]string) (string, error) {
+				decoded, err := base64.StdEncoding.DecodeString(s)
+				if err != nil {
+					return "", fmt.Errorf("filter base64_decode: %w", err)
+				}
+				return string(decoded), nil
+			}),
+		}
+	}
+
+	filterMap["replace"] = func(token string) Filter {
+		return &FuncFilter{
+			fn: stringFunc(func(s string, params map[string]string) (string, error) {
+				oldStr, err := requiredParam(token, params, "old", 0)
+				if err != nil {
+					return "", err
+				}
+				newStr, err := requiredParam(token, params, "new", 1)
+				if err != nil {
+					return "", err
+				}
+				return strings.ReplaceAll(s, oldStr, newStr), nil
+			}),
+		}
+	}
+
+	filterMap["regex"] = func(token string) Filter {
+		return &FuncFilter{
+			fn: stringFunc(func(s string, params map[string]string) (string, error) {
+				pattern, err := requiredParam(token, params, "pattern", 0)
+				if err != nil {
+					return "", err
+				}
+				replacement, err := requiredParam(token, params, "replacement", 1)
+				if err != nil {
+					return "", err
+				}
+
+				re, err := regexp.Compile(pattern)
+				if err != nil {
+					return "", fmt.Errorf("filter regex: invalid pattern %q: %w", pattern, err)
+				}
+
+				// Support \1 style back references in addition to Go's ${1}
+				replacement = backReferenceRe.ReplaceAllString(replacement, "$${$1}")
+				return re.ReplaceAllString(s, replacement), nil
+			}),
+		}
+	}
+
+	filterMap["split"] = func(token string) Filter {
+		return &FuncFilter{
+			fn: func(value any, params map[string]string) (any, error) {
+				delimiter, found := param(params, "delimiter", 0)
+				if !found {
+					delimiter = defaultListDelimiter
+				}
+				return strings.Split(toString(value), delimiter), nil
+			},
+		}
+	}
+
+	filterMap["join"] = func(token string) Filter {
+		return &FuncFilter{
+			fn: func(value any, params map[string]string) (any, error) {
+				delimiter, found := param(params, "delimiter", 0)
+				if !found {
+					delimiter = defaultListDelimiter
+				}
+				list, ok := value.([]string)
+				if !ok {
+					// a single value is a list with one element
+					return toString(value), nil
+				}
+				return strings.Join(list, delimiter), nil
 			},
 		}
 	}

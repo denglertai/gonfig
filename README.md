@@ -1,5 +1,7 @@
 # gonfig
 
+[![codecov](https://codecov.io/gh/denglertai/gonfig/graph/badge.svg?token=QYIQ2BO0IV)](https://codecov.io/gh/denglertai/gonfig)
+
 gonfig is a project intended to process different types of config files and fill their contents using environment variables.
 
 The idea for creating this was while having to handle application's config files inside containers by filling their parameters and making sure to not to have to rely on secure input values. 
@@ -319,7 +321,7 @@ After the tag is pushed, monitor the workflow runs in GitHub Actions and verify 
 
 Filters are being used to process the values retrieved from environment variables.
 
-The currently supported set of filters may be found in [filters](./internal/filter/filter.go).
+All built-in filters are listed under [available filters](#available-filters). Additional filters may be provided by [plugins](#plugins).
 
 The syntax for applying a filter is by adding it using a pipe `|`
 ```console
@@ -334,6 +336,44 @@ $ gonfig value https://${DOMAIN}/search?${QUERY | url_escape}
 https://google.com/search?q=Nanowar+of+Steel+-+HelloWorld.java
 ```
 Note: The filter `url_escape` does not exist. But it may be added either to the list of default filters or as a plugin.
+
+### Filter params
+
+Some filters accept params in brackets, either by position or by name:
+```console
+${ENV_VAR | replace(foo,bar)}
+${ENV_VAR | replace(old=foo,new=bar)}
+```
+
+The characters `,`, `=`, `(`, `)`, `{`, `}` and `\` have to be escaped with a backslash when used within a param,
+e.g. `${ENV_VAR | replace(\,,;)}` replaces every comma with a semicolon.
+
+### Available filters
+
+| Filter | Description | Example |
+| --- | --- | --- |
+| `upper` | Converts the value to upper case | `${VAL \| upper}` |
+| `lower` | Converts the value to lower case | `${VAL \| lower}` |
+| `trim` | Removes leading and trailing whitespace | `${VAL \| trim}` |
+| `trimleft` | Removes leading spaces | `${VAL \| trimleft}` |
+| `trimright` | Removes trailing spaces | `${VAL \| trimright}` |
+| `to_int` | Converts the value to an integer, fails if it is not numeric | `${VAL \| to_int}` |
+| `multiply(m=factor)` | Multiplies an integer value by `m`, which defaults to `1` | `${VAL \| to_int \| multiply(m=2)}` |
+| `md5` | Hashes the value with MD5 (hex encoded) | `${VAL \| md5}` |
+| `bcrypt` | Hashes the value with bcrypt, fails for values longer than 72 bytes | `${VAL \| bcrypt}` |
+| `base64` | Encodes the value to base64 | `${VAL \| base64}` |
+| `base64_decode` | Decodes a base64 value, fails on invalid input | `${VAL \| base64_decode}` |
+| `replace(old,new)` | Replaces every occurrence of `old` by `new` | `${VAL \| replace(foo,bar)}` |
+| `regex(pattern,replacement)` | Replaces every match of the [regular expression](https://pkg.go.dev/regexp/syntax) `pattern`. Capture groups may be referenced by `\1` or `${1}` | `${EMAIL \| regex(^\(\w+\)@.+,\1)}` |
+| `split(delimiter)` | Splits the value into a list, the delimiter defaults to `,` | `${VAL \| split(;)}` |
+| `join(delimiter)` | Joins a list into a single value, the delimiter defaults to `,` | `${VAL \| split \| join(;)}` |
+
+After `split`, the filters `upper`, `lower`, `trim`, `trimleft`, `trimright`, `base64`, `base64_decode`, `replace` and `regex` are applied to each element.
+Lists should always be joined again before being written to a file:
+```console
+$ LIST="a, b ,c" gonfig value '${LIST | split | trim | upper | join(;)}'
+A;B;C
+```
 
 ## Future goals
 
