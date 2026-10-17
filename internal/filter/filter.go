@@ -1,9 +1,11 @@
 package filter
 
 import (
+	"cmp"
 	"crypto/md5"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net/url"
@@ -112,6 +114,9 @@ func NewFileInterceptorFilter() *FileInterceptorFilter {
 // The text is parsed by the file type the fragment is inserted into.
 type Fragment struct {
 	Text string
+	// IsList marks fragments created from lists, e.g. of split, whose text is a JSON array.
+	// They can only be inserted into file types supporting lists, like YAML and JSON.
+	IsList bool
 }
 
 // String returns the text of the fragment, e.g. for filters following the fragment filter
@@ -480,6 +485,13 @@ func init() {
 	filterMap["fragment"] = func(token string) Filter {
 		return &FuncFilter{
 			fn: func(value any, _ map[string]string) (any, error) {
+				// Lists, e.g. of split, become JSON arrays, which are valid YAML as well
+				if list, ok := value.([]string); ok {
+					// Encoding strings cannot fail, invalid UTF-8 is replaced
+					data, _ := json.Marshal(list)
+					return Fragment{Text: string(data), IsList: true}, nil
+				}
+
 				return Fragment{Text: toString(value)}, nil
 			},
 		}
@@ -578,11 +590,16 @@ func init() {
 	filterMap["split"] = func(token string) Filter {
 		return &FuncFilter{
 			fn: func(value any, params map[string]string) (any, error) {
-				delimiter, found := param(params, "delimiter", 0)
-				if !found {
-					delimiter = defaultListDelimiter
+				// An empty delimiter, e.g. of split(,) whose comma separates two empty params, uses the default as well
+				delimiter, _ := param(params, "delimiter", 0)
+				delimiter = cmp.Or(delimiter, defaultListDelimiter)
+
+				// An empty value is an empty list, e.g. for fragments
+				s := toString(value)
+				if s == "" {
+					return []string{}, nil
 				}
-				return strings.Split(toString(value), delimiter), nil
+				return strings.Split(s, delimiter), nil
 			},
 		}
 	}
@@ -590,10 +607,10 @@ func init() {
 	filterMap["join"] = func(token string) Filter {
 		return &FuncFilter{
 			fn: func(value any, params map[string]string) (any, error) {
-				delimiter, found := param(params, "delimiter", 0)
-				if !found {
-					delimiter = defaultListDelimiter
-				}
+				// An empty delimiter, e.g. of join(,) whose comma separates two empty params, uses the default as well
+				delimiter, _ := param(params, "delimiter", 0)
+				delimiter = cmp.Or(delimiter, defaultListDelimiter)
+
 				list, ok := value.([]string)
 				if !ok {
 					// a single value is a list with one element

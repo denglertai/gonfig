@@ -260,3 +260,52 @@ a=1
 result:
 error: failed to process the value of key in config.properties: fragments are not supported here, only for YAML and JSON values and keys and the content of XML elements
 ---
+
+[TestFragmentSnapshots/yaml_list_from_split - 1]
+file (config.yaml):
+a: "val"
+b: "${FRAGMENT | split(,) | fragment}"
+trimmed: ${FRAGMENT | split | trim | fragment}
+
+FRAGMENT:
+alpha, beta ,gamma
+
+result:
+a: "val"
+b:
+  - alpha
+  - ' beta '
+  - gamma
+trimmed:
+  - alpha
+  - beta
+  - gamma
+---
+
+[TestFragmentSnapshots/json_list_from_split - 1]
+file (config.json):
+{"hosts": "${FRAGMENT | split | trim | fragment}"}
+
+FRAGMENT:
+db-1, db-2, db-3
+
+result:
+{
+  "hosts": [
+    "db-1",
+    "db-2",
+    "db-3"
+  ]
+}
+---
+
+[TestFragmentSnapshots/error_for_a_list_in_an_xml_file - 1]
+file (config.xml):
+<server><hosts>${FRAGMENT | split | fragment}</hosts></server>
+
+FRAGMENT:
+db-1,db-2
+
+result:
+error: failed to insert the fragment of /server/hosts in config.xml: lists can only be inserted into YAML and JSON files
+---
