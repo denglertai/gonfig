@@ -158,3 +158,65 @@ func TestProcessValueNonASCIIPrefix(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "ää value ü value", result)
 }
+
+func TestParseParams(t *testing.T) {
+	testCases := []struct {
+		desc  string
+		input string
+		want  map[string]string
+	}{
+		{desc: "empty", input: "()", want: map[string]string{}},
+		{desc: "named", input: "(m=2)", want: map[string]string{"m": "2"}},
+		{desc: "multiple named", input: "(a=1,b=2)", want: map[string]string{"a": "1", "b": "2"}},
+		{desc: "positional", input: "(foo,bar)", want: map[string]string{"0": "foo", "1": "bar"}},
+		{desc: "empty positional", input: "(foo,)", want: map[string]string{"0": "foo", "1": ""}},
+		{desc: "mixed", input: "(old=foo,bar)", want: map[string]string{"old": "foo", "1": "bar"}},
+		{desc: "equals in named value", input: "(a=b=c)", want: map[string]string{"a": "b=c"}},
+		{desc: "escaped delimiters", input: `(\,,\=)`, want: map[string]string{"0": ",", "1": "="}},
+		{desc: "escaped brackets", input: `(\(\w+\){2})`, want: map[string]string{"0": `(\w+){2}`}},
+		{desc: "escaped backslash", input: `(a\\,b)`, want: map[string]string{"0": `a\`, "1": "b"}},
+		{desc: "trailing backslash", input: `(a\)`, want: map[string]string{"0": `a\`}},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			assert.Equal(t, tC.want, parseParams(tC.input))
+		})
+	}
+}
+
+func TestProcessValueWithStringFilters(t *testing.T) {
+	testCases := []struct {
+		desc  string
+		value string
+		input string
+		want  any
+	}{
+		{desc: "base64 round trip", value: "${FILTER_TEST|base64|base64_decode}", input: "secret", want: "secret"},
+		{desc: "base64 within text", value: "Basic ${FILTER_TEST|base64}", input: "user:pass", want: "Basic dXNlcjpwYXNz"},
+		{desc: "replace", value: "${FILTER_TEST|replace(foo,bar)}", input: "foo.foo", want: "bar.bar"},
+		{desc: "replace escaped comma", value: `${FILTER_TEST|replace(\,,;)}`, input: "a,b", want: "a;b"},
+		{desc: "regex with escaped group", value: `${FILTER_TEST|regex(^\(\w+\)@.+,\1)}`, input: "jane@example.com", want: "jane"},
+		{desc: "regex with escaped quantifier", value: `${FILTER_TEST|regex(\d\{2\},xx)}`, input: "a123", want: "axx3"},
+		{desc: "split upper join", value: "${FILTER_TEST|split|upper|join(\\, )}", input: "a,b,c", want: "A, B, C"},
+		{desc: "split trim join", value: "${FILTER_TEST|split(;)|trim|join}", input: " a ; b ", want: "a,b"},
+		{desc: "existing named params", value: "${FILTER_TEST|to_int|multiply(m=3)}", input: "2", want: 6},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			t.Setenv("FILTER_TEST", tC.input)
+
+			result, err := ProcessValue(tC.value)
+			assert.NoError(t, err)
+			assert.Equal(t, tC.want, result)
+		})
+	}
+}
+
+func TestProcessValueWithInvalidFilterParams(t *testing.T) {
+	t.Setenv("FILTER_TEST", "abc")
+
+	for _, value := range []string{"${FILTER_TEST|replace}", "${FILTER_TEST|regex(\\()}", "${FILTER_TEST|base64_decode}"} {
+		_, err := ProcessValue(value)
+		assert.Error(t, err, value)
+	}
+}

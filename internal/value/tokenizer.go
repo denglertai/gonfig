@@ -2,7 +2,8 @@ package value
 
 import (
 	"fmt"
-	"regexp"
+	"strconv"
+	"strings"
 
 	"github.com/bzick/tokenizer"
 	"github.com/denglertai/gonfig/internal/filter"
@@ -19,11 +20,12 @@ const (
 
 func init() {
 	parser = tokenizer.New()
-	parser.DefineStringToken(TokenParam, "${", "}")
+	// Allow escaping the closing brackets, e.g. for regex quantifiers within filter params
+	parser.DefineStringToken(TokenParam, "${", "}").SetEscapeSymbol('\\')
 
 	filterParser = tokenizer.New()
 	filterParser.DefineTokens(TokenFilterSeparator, []string{"|", " |", " | "})
-	filterParser.DefineStringToken(TokenParam, "(", ")")
+	filterParser.DefineStringToken(TokenParam, "(", ")").SetEscapeSymbol('\\')
 	filterParser.AllowKeywordSymbols(tokenizer.Underscore, tokenizer.Numbers)
 }
 
@@ -111,17 +113,57 @@ func (t TokenFilterParam) Apply(input string, offset int) (any, int, error) {
 	}
 }
 
-var kvPairRe = regexp.MustCompile(`(.*?)=([^=]*)(?:,|$)`)
+// paramEscapes are the characters which may be escaped by a backslash within filter params
+const paramEscapes = `,=(){}\`
 
-// parseKV parses a key value string into a map
-func parseKV(kvStr string) map[string]string {
+// parseParams parses filter params, e.g. "(key=value,positional)", into a map.
+// Named params are stored by their key, positional params by their position ("0", "1", ...).
+// A backslash escapes the following character if it is one of paramEscapes, otherwise it is kept.
+func parseParams(paramStr string) map[string]string {
 	// remove leading and trailing brackets
-	kvStr = kvStr[1 : len(kvStr)-1]
+	paramStr = paramStr[1 : len(paramStr)-1]
 
 	res := map[string]string{}
-	for _, kv := range kvPairRe.FindAllStringSubmatch(kvStr, -1) {
-		res[kv[1]] = kv[2]
+	if paramStr == "" {
+		return res
 	}
+
+	var current strings.Builder
+	key := ""
+	hasKey := false
+	position := 0
+
+	flush := func() {
+		if !hasKey {
+			key = strconv.Itoa(position)
+		}
+		res[key] = current.String()
+		current.Reset()
+		hasKey = false
+		position++
+	}
+
+	for i := 0; i < len(paramStr); i++ {
+		c := paramStr[i]
+		switch {
+		case c == '\\' && i+1 < len(paramStr):
+			i++
+			if !strings.ContainsRune(paramEscapes, rune(paramStr[i])) {
+				current.WriteByte(c)
+			}
+			current.WriteByte(paramStr[i])
+		case c == ',':
+			flush()
+		case c == '=' && !hasKey:
+			key = current.String()
+			hasKey = true
+			current.Reset()
+		default:
+			current.WriteByte(c)
+		}
+	}
+	flush()
+
 	return res
 }
 
@@ -181,7 +223,7 @@ func parseFilters(content string) []filter.Filter {
 			// Parse the Params for the filter and apply it to the last generated filter
 			lastFilter, acceptsParams := filters[len(filters)-1].(filter.FilterParams)
 			if acceptsParams {
-				params := parseKV(filterToken.ValueString())
+				params := parseParams(filterToken.ValueString())
 				lastFilter.AcceptParams(params)
 			}
 		}
