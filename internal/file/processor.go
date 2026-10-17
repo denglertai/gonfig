@@ -89,7 +89,8 @@ func (fp *FileProcessor) Process() error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	// The file is only read, so an error closing it does not affect the result
+	defer func() { _ = file.Close() }()
 
 	err = handler.Read(file)
 	if err != nil {

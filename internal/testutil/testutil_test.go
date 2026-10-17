@@ -15,7 +15,7 @@ func TestIsolateFromEnvironment(t *testing.T) {
 	t.Setenv("HOME", "/original/home")
 	// t.Setenv restores the variable after the test, which os.Unsetenv alone would not
 	t.Setenv("GONFIG_CONFIG_PATH", "")
-	os.Unsetenv("GONFIG_CONFIG_PATH")
+	assert.NoError(t, os.Unsetenv("GONFIG_CONFIG_PATH"))
 
 	restore, err := IsolateFromEnvironment()
 	assert.NoError(t, err)

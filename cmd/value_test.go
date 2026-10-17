@@ -2,13 +2,12 @@ package cmd
 
 import (
 	"bytes"
-	"io"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
+// TestValue checks that results of gonfig value, including non-string ones, are printed exactly as they are
 func TestValue(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -45,29 +44,15 @@ func TestValue(t *testing.T) {
 				t.Setenv(k, v)
 			}
 
-			old := os.Stdout // keep backup of the real stdout
-			r, w, _ := os.Pipe()
-			os.Stdout = w
-
-			outC := make(chan string)
-			// copy the output in a separate goroutine so printing can't block indefinitely
-			go func() {
-				var buf bytes.Buffer
-				io.Copy(&buf, r)
-				outC <- buf.String()
-			}()
+			var out bytes.Buffer
+			rootCmd.SetOut(&out)
+			t.Cleanup(func() { rootCmd.SetOut(nil) })
 
 			resetFlags(t)
 			rootCmd.SetArgs([]string{"value", tc.input})
-			err := rootCmd.Execute()
-			assert.NoError(t, err)
+			assert.NoError(t, rootCmd.Execute())
 
-			// back to normal state
-			w.Close()
-			os.Stdout = old // restoring the real stdout
-			out := <-outC
-
-			assert.Equal(t, tc.expected, out)
+			assert.Equal(t, tc.expected, out.String())
 		})
 	}
 }

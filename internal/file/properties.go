@@ -87,7 +87,8 @@ func (p *PropertiesFileHandler) Process() (iter.Seq[ConfigEntry], error) {
 // Write writes the configuration file
 func (p *PropertiesFileHandler) Write(destination io.Writer) (err error) {
 	for _, w := range p.wrapped {
-		p.props.Set(w.Key(), w.GetValue())
+		// Expansion is disabled, so setting a value cannot fail because of circular references
+		_, _, _ = p.props.Set(w.Key(), w.GetValue())
 	}
 
 	// Write including the comments of the original file

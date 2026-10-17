@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// TestPlainFileHandler reads a shell script line by line, counts its lines and writes it back unchanged
 func TestPlainFileHandler(t *testing.T) {
 	wd, err := os.Getwd()
 	assert.NoError(t, err)
@@ -19,7 +20,7 @@ func TestPlainFileHandler(t *testing.T) {
 	input, err := os.Open(file)
 	assert.NoError(t, err)
 
-	defer input.Close()
+	defer func() { assert.NoError(t, input.Close()) }()
 
 	handler := NewPlainFileProcessor()
 
@@ -39,7 +40,7 @@ func TestPlainFileHandler(t *testing.T) {
 	assert.Equal(t, 16, count)
 
 	output := new(bytes.Buffer)
-	handler.Write(output)
+	assert.NoError(t, handler.Write(output))
 
 	snaps.MatchSnapshot(t, output.String())
 }

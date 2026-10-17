@@ -57,6 +57,7 @@ Run these before reporting the work as done. Report results faithfully, includin
 ```bash
 gofmt -l cmd internal          # must print nothing
 go vet ./...
+make lint                      # golangci-lint as in CI, configured in .golangci.yml
 go test ./...
 go test -shuffle=on -count=3 ./cmd/ ./internal/...   # when package-level state is involved
 ```
