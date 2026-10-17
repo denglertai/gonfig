@@ -1,0 +1,10 @@
+version: "2"
+
+linters:
+  # errcheck, govet, ineffassign, staticcheck and unused
+  default: standard
+
+issues:
+  # Report every finding instead of only the first ones of each kind
+  max-issues-per-linter: 0
+  max-same-issues: 0

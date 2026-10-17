@@ -41,11 +41,13 @@ func getConfigSettings(cmd *cobra.Command) (*config.Settings, error) {
 	return configSettings, nil
 }
 
+// init registers the config command and its persistent flags, of which --file is required
 func init() {
 	rootCmd.AddCommand(configCmd)
 
 	configCmd.PersistentFlags().StringP("file", "f", "", "Path to the configuration file")
-	configCmd.MarkPersistentFlagRequired("file")
+	// Marking fails only for flags that are not defined
+	cobra.CheckErr(configCmd.MarkPersistentFlagRequired("file"))
 
 	configCmd.PersistentFlags().StringP("file-type", "t", "", "Type of file to be read. If not set, the file type will be inferred from the file extension")
 }

@@ -1,4 +1,4 @@
-.PHONY: build build-all release prepare-release-branch release-draft release-dry-run snapshot clean install-deps install-zig install-goreleaser test bench profile check-clean check-main-up-to-date check-version-format check-melange-version
+.PHONY: build build-all release prepare-release-branch release-draft release-dry-run snapshot clean install-deps install-zig install-goreleaser test lint bench profile check-clean check-main-up-to-date check-version-format check-melange-version
 
 MELANGE_VERSION := $(strip $(shell awk '/^  version:/ {print $$2; exit}' melange.yaml))
 VERSION ?= v$(MELANGE_VERSION)
@@ -158,6 +158,11 @@ install-zig:
 # Test
 test:
 	go test ./...
+
+# Run the linters configured in .golangci.yml with the version used in CI (.github/workflows/go.yml)
+GOLANGCI_LINT_VERSION ?= v2.14.0
+lint:
+	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) run ./...
 
 # Run the benchmarks, e.g. make bench BENCH=ProcessFile/yaml
 BENCH ?= .

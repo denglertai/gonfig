@@ -16,8 +16,10 @@ var levelNames = map[slog.Leveler]string{
 	LevelFatal: "FATAL",
 }
 
+// InitLogging sets the default logger, writing JSON to stderr at the given level including trace and fatal,
+// optionally with the source location. It fails for unknown levels.
 func InitLogging(logLevel string, addSource bool) error {
-	slogLogLevel := slog.LevelInfo
+	var slogLogLevel slog.Level
 	switch logLevel {
 	case "debug":
 		slogLogLevel = slog.LevelDebug

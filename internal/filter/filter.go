@@ -380,7 +380,7 @@ type FuncFilter struct {
 
 // Process executes the filter's function
 func (f *FuncFilter) Process(value any) (any, error) {
-	return f.fn(value, f.DefaultFilterParamsHandler.params)
+	return f.fn(value, f.params)
 }
 
 // init initializes the filter map

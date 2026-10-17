@@ -39,6 +39,7 @@ func TestInitLoggingInvalidLevel(t *testing.T) {
 	assert.Error(t, InitLogging("verbose", false))
 }
 
+// TestInitLoggingCustomLevelNames checks that the custom levels trace and fatal are logged with their names
 func TestInitLoggingCustomLevelNames(t *testing.T) {
 	// The handler writes to os.Stderr as it is at initialization
 	old := os.Stderr
@@ -50,7 +51,7 @@ func TestInitLoggingCustomLevelNames(t *testing.T) {
 	assert.NoError(t, InitLogging("trace", false))
 	slog.Log(context.Background(), LevelTrace, "trace message")
 	slog.Log(context.Background(), LevelFatal, "fatal message")
-	w.Close()
+	assert.NoError(t, w.Close())
 
 	var buf bytes.Buffer
 	_, err = io.Copy(&buf, r)

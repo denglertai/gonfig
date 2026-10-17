@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// TestXmlProcessor reads an XML file, counts its elements and attributes and writes it back unchanged
 func TestXmlProcessor(t *testing.T) {
 	wd, err := os.Getwd()
 	assert.NoError(t, err)
@@ -24,7 +25,7 @@ func TestXmlProcessor(t *testing.T) {
 	input, err := os.Open(file)
 	assert.NoError(t, err)
 
-	defer input.Close()
+	defer func() { assert.NoError(t, input.Close()) }()
 
 	handler := NewXmlConfigFileHandler()
 
@@ -44,11 +45,12 @@ func TestXmlProcessor(t *testing.T) {
 	assert.Equal(t, 17, count)
 
 	output := new(bytes.Buffer)
-	handler.Write(output)
+	assert.NoError(t, handler.Write(output))
 
 	snaps.MatchSnapshot(t, output.String())
 }
 
+// TestXmlProcessorEdit sets values of elements and attributes, including characters that need escaping, and compares the output with the snapshot
 func TestXmlProcessorEdit(t *testing.T) {
 	wd, err := os.Getwd()
 	assert.NoError(t, err)
@@ -58,7 +60,7 @@ func TestXmlProcessorEdit(t *testing.T) {
 	input, err := os.Open(file)
 	assert.NoError(t, err)
 
-	defer input.Close()
+	defer func() { assert.NoError(t, input.Close()) }()
 
 	handler := NewXmlConfigFileHandler()
 
@@ -86,14 +88,14 @@ func TestXmlProcessorEdit(t *testing.T) {
 	assert.Equal(t, 17, count)
 
 	output := new(bytes.Buffer)
-	handler.Write(output)
+	assert.NoError(t, handler.Write(output))
 
 	snaps.MatchSnapshot(t, output.String())
 }
 
+// TestXmlCDataWithJsonNotParsed checks that JSON within a CDATA section is processed as text and written back as CDATA
 func TestXmlCDataWithJsonNotParsed(t *testing.T) {
-	os.Setenv("SERVICE_NAME", "Service")
-	defer os.Unsetenv("SERVICE_NAME")
+	t.Setenv("SERVICE_NAME", "Service")
 
 	wd, err := os.Getwd()
 	assert.NoError(t, err)
@@ -101,7 +103,7 @@ func TestXmlCDataWithJsonNotParsed(t *testing.T) {
 	file := path.Join(wd, "/testdata/xml/cdata.xml")
 	input, err := os.Open(file)
 	assert.NoError(t, err)
-	defer input.Close()
+	defer func() { assert.NoError(t, input.Close()) }()
 
 	handler := NewXmlConfigFileHandler()
 	err = handler.Read(input)
@@ -143,11 +145,12 @@ func TestXmlCDataWithJsonNotParsed(t *testing.T) {
 	assert.Equal(t, normalize(expected), normalize(cdataText), "CDATA JSON content should be present as text, not parsed")
 
 	output := new(bytes.Buffer)
-	handler.Write(output)
+	assert.NoError(t, handler.Write(output))
 
 	snaps.MatchSnapshot(t, output.String())
 }
 
+// TestCDataJsonSyntaxValid checks that the JSON within the CDATA section of the test data is valid JSON
 func TestCDataJsonSyntaxValid(t *testing.T) {
 	wd, err := os.Getwd()
 	assert.NoError(t, err)
@@ -155,7 +158,7 @@ func TestCDataJsonSyntaxValid(t *testing.T) {
 	file := path.Join(wd, "/testdata/xml/cdata.xml")
 	input, err := os.Open(file)
 	assert.NoError(t, err)
-	defer input.Close()
+	defer func() { assert.NoError(t, input.Close()) }()
 
 	handler := NewXmlConfigFileHandler()
 	err = handler.Read(input)

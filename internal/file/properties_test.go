@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// TestPropertiesFileHandler reads a properties file, counts its entries and writes it back including its comments
 func TestPropertiesFileHandler(t *testing.T) {
 	wd, err := os.Getwd()
 	assert.NoError(t, err)
@@ -19,7 +20,7 @@ func TestPropertiesFileHandler(t *testing.T) {
 	input, err := os.Open(file)
 	assert.NoError(t, err)
 
-	defer input.Close()
+	defer func() { assert.NoError(t, input.Close()) }()
 
 	handler := NewPropertiesConfigFileHandler()
 
@@ -39,11 +40,12 @@ func TestPropertiesFileHandler(t *testing.T) {
 	assert.Equal(t, 6, count)
 
 	output := new(bytes.Buffer)
-	handler.Write(output)
+	assert.NoError(t, handler.Write(output))
 
 	snaps.MatchSnapshot(t, output.String())
 }
 
+// TestPropertiesFileHandlerEdit sets values of a properties file and compares the output with the snapshot
 func TestPropertiesFileHandlerEdit(t *testing.T) {
 	wd, err := os.Getwd()
 	assert.NoError(t, err)
@@ -53,7 +55,7 @@ func TestPropertiesFileHandlerEdit(t *testing.T) {
 	input, err := os.Open(file)
 	assert.NoError(t, err)
 
-	defer input.Close()
+	defer func() { assert.NoError(t, input.Close()) }()
 
 	handler := NewPropertiesConfigFileHandler()
 
@@ -77,7 +79,7 @@ func TestPropertiesFileHandlerEdit(t *testing.T) {
 	assert.Equal(t, 6, count)
 
 	output := new(bytes.Buffer)
-	handler.Write(output)
+	assert.NoError(t, handler.Write(output))
 
 	snaps.MatchSnapshot(t, output.String())
 }

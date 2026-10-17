@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"os"
 	"path"
@@ -15,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// TestStdout processes the test data of each file type to stdout and compares the output with the snapshots
 func TestStdout(t *testing.T) {
 	wd, err := os.Getwd()
 	assert.NoError(t, err)
@@ -68,17 +68,9 @@ func TestStdout(t *testing.T) {
 	}
 	for _, tC := range testCases {
 		t.Run(tC.desc, func(t *testing.T) {
-			old := os.Stdout // keep backup of the real stdout
-			r, w, _ := os.Pipe()
-			os.Stdout = w
-
-			outC := make(chan string)
-			// copy the output in a separate goroutine so printing can't block indefinitely
-			go func() {
-				var buf bytes.Buffer
-				io.Copy(&buf, r)
-				outC <- buf.String()
-			}()
+			var out bytes.Buffer
+			rootCmd.SetOut(&out)
+			t.Cleanup(func() { rootCmd.SetOut(nil) })
 
 			// BLA_BLUB is expected to be present in the environment variables and the value should be YOYOYO after the command is executed
 			t.Setenv("BLA_BLUB", "yoyoyo")
@@ -97,15 +89,9 @@ func TestStdout(t *testing.T) {
 
 			resetFlags(t)
 			rootCmd.SetArgs(args)
-			err = rootCmd.Execute()
-			assert.NoError(t, err)
+			assert.NoError(t, rootCmd.Execute())
 
-			// back to normal state
-			w.Close()
-			os.Stdout = old // restoring the real stdout
-			out := <-outC
-
-			snaps.MatchSnapshot(t, out)
+			snaps.MatchSnapshot(t, out.String())
 		})
 	}
 }
@@ -187,15 +173,7 @@ func TestFile(t *testing.T) {
 			t.Setenv("STRING", "string")
 			t.Setenv("SPECIAL_CHARACTERS", "%^&*()_+")
 
-			tmp := t.TempDir()
-			file, err := os.CreateTemp(tmp, "gonfig-test-*")
-			assert.NoError(t, err)
-			fileName := file.Name()
-
-			defer func() {
-				file.Close()
-				os.Remove(fileName)
-			}()
+			fileName := path.Join(t.TempDir(), "output")
 
 			// Take the path of the file and pass it as an argument to the command and see if it works
 			args := []string{"config", "process", "-f", tC.file, "-o", fileName, "-w", "-l", "trace", "-s"}
@@ -206,18 +184,10 @@ func TestFile(t *testing.T) {
 
 			resetFlags(t)
 			rootCmd.SetArgs(args)
-			err = rootCmd.Execute()
-			assert.NoError(t, err)
+			assert.NoError(t, rootCmd.Execute())
 
 			// Read the file and compare it with the snapshot
-			file, err = os.Open(fileName)
-			assert.NoError(t, err)
-			stat, err := file.Stat()
-			assert.NoError(t, err)
-			res := make([]byte, stat.Size())
-			file.Read(res)
-
-			snaps.MatchSnapshot(t, string(res))
+			snaps.MatchSnapshot(t, readFile(t, fileName))
 		})
 	}
 }
@@ -264,39 +234,18 @@ func TestPassingExtension(t *testing.T) {
 
 	for _, tC := range testCases {
 		t.Run(tC.desc, func(t *testing.T) {
-			tmp := t.TempDir()
-			file, err := os.CreateTemp(tmp, "gonfig-test-*")
-			assert.NoError(t, err)
-			fileName := file.Name()
-
-			c, err := os.ReadFile(tC.file)
-			assert.NoError(t, err)
-
-			_, err = file.Write(c)
-			assert.NoError(t, err)
-
-			file.Close()
-			defer func() {
-				os.Remove(fileName)
-			}()
+			// The copy has no extension, so the file type has to be passed with -t
+			fileName := copyToTempFile(t, tC.file, false)
 
 			// Take the path of the file and pass it as an argument to the command and see if it works
 			args := []string{"config", "process", "-f", fileName, "-i", "-l", "trace", "-s", "-t", string(tC.fileType)}
 
 			resetFlags(t)
 			rootCmd.SetArgs(args)
-			err = rootCmd.Execute()
-			assert.NoError(t, err)
+			assert.NoError(t, rootCmd.Execute())
 
 			// Read the file and compare it with the snapshot
-			file, err = os.Open(fileName)
-			assert.NoError(t, err)
-			stat, err := file.Stat()
-			assert.NoError(t, err)
-			res := make([]byte, stat.Size())
-			file.Read(res)
-
-			snaps.MatchSnapshot(t, string(res))
+			snaps.MatchSnapshot(t, readFile(t, fileName))
 		})
 	}
 }
@@ -363,24 +312,7 @@ func TestFileOverwrite(t *testing.T) {
 			t.Setenv("STRING", "string")
 			t.Setenv("SPECIAL_CHARACTERS", "%^&*()_+")
 
-			tmp := t.TempDir()
-			file, err := os.CreateTemp(tmp, fmt.Sprintf("gonfig-test-*%s", path.Ext(tC.file)))
-			assert.NoError(t, err)
-			fileName := file.Name()
-
-			// Copy the file to the temp file
-			source, err := os.Open(tC.file) //open the source file
-			assert.NoError(t, err)
-			defer source.Close()
-
-			defer func() {
-				file.Close()
-				os.Remove(fileName)
-			}()
-
-			_, err = io.Copy(file, source) //copy the contents of source to destination file
-			assert.NoError(t, err)
-			file.Close()
+			fileName := copyToTempFile(t, tC.file, true)
 
 			// Take the path of the file and pass it as an argument to the command and see if it works
 			args := []string{"config", "process", "-f", fileName, "-i", "-l", "trace", "-s"}
@@ -391,18 +323,10 @@ func TestFileOverwrite(t *testing.T) {
 
 			resetFlags(t)
 			rootCmd.SetArgs(args)
-			err = rootCmd.Execute()
-			assert.NoError(t, err)
+			assert.NoError(t, rootCmd.Execute())
 
 			// Read the file and compare it with the snapshot
-			file, err = os.Open(fileName)
-			assert.NoError(t, err)
-			stat, err := file.Stat()
-			assert.NoError(t, err)
-			res := make([]byte, stat.Size())
-			file.Read(res)
-
-			snaps.MatchSnapshot(t, string(res))
+			snaps.MatchSnapshot(t, readFile(t, fileName))
 		})
 	}
 }
@@ -434,24 +358,7 @@ func TestYamlMove(t *testing.T) {
 			t.Setenv("PASSWORD", "adjkgadjgjagdjdag")
 			t.Setenv("USERNAME", "Random User with spaces")
 
-			tmp := t.TempDir()
-			file, err := os.CreateTemp(tmp, fmt.Sprintf("gonfig-test-*%s", path.Ext(tC.file)))
-			assert.NoError(t, err)
-			fileName := file.Name()
-
-			// Copy the file to the temp file
-			source, err := os.Open(tC.file) //open the source file
-			assert.NoError(t, err)
-			defer source.Close()
-
-			defer func() {
-				file.Close()
-				os.Remove(fileName)
-			}()
-
-			_, err = io.Copy(file, source) //copy the contents of source to destination file
-			assert.NoError(t, err)
-			file.Close()
+			fileName := copyToTempFile(t, tC.file, true)
 
 			// Take the path of the file and pass it as an argument to the command and see if it works
 			args := []string{"config", "process", "-f", fileName, "-i", "-l", "trace", "-s"}
@@ -462,18 +369,10 @@ func TestYamlMove(t *testing.T) {
 
 			resetFlags(t)
 			rootCmd.SetArgs(args)
-			err = rootCmd.Execute()
-			assert.NoError(t, err)
+			assert.NoError(t, rootCmd.Execute())
 
 			// Read the file and compare it with the snapshot
-			file, err = os.Open(fileName)
-			assert.NoError(t, err)
-			stat, err := file.Stat()
-			assert.NoError(t, err)
-			res := make([]byte, stat.Size())
-			file.Read(res)
-
-			snaps.MatchSnapshot(t, string(res))
+			snaps.MatchSnapshot(t, readFile(t, fileName))
 		})
 	}
 }
@@ -696,12 +595,8 @@ func captureStderr(t *testing.T, run func()) string {
 
 // TestSuccessfulRunsAreSilent checks that processing a file writes nothing to stderr at the default log level
 func TestSuccessfulRunsAreSilent(t *testing.T) {
-	// Options like log-values log warnings, so neither the environment nor a config file of the machine may enable them
-	t.Setenv("HOME", t.TempDir())
-	t.Chdir(t.TempDir())
-	for _, key := range []string{"GONFIG_LOG_LEVEL", "GONFIG_LOG_SOURCE", "GONFIG_CONFIG_PATH", "GONFIG_PLUGIN_PATH", "GONFIG_ALLOW_UNKNOWN_FILTERS", "GONFIG_LOG_VALUES", "GONFIG_FAIL_ON_MISSING"} {
-		t.Setenv(key, "")
-	}
+	// TestMain isolates the tests from the environment and config files of the machine, which could enable
+	// options logging warnings like log-values
 	t.Setenv("SILENT_TEST_VALUE", "value")
 
 	dir := t.TempDir()
@@ -730,4 +625,31 @@ func TestSuccessfulRunsAreSilent(t *testing.T) {
 	})
 	assert.Contains(t, stderr, `"msg":"Running command"`)
 	assert.Contains(t, stderr, `"msg":"Processing file"`)
+}
+
+// copyToTempFile copies the file into a temporary directory and returns the path of the copy.
+// The copy keeps the extension of the file if keepExtension is set, so its type can be inferred.
+func copyToTempFile(t *testing.T, source string, keepExtension bool) string {
+	t.Helper()
+
+	content, err := os.ReadFile(source)
+	assert.NoError(t, err)
+
+	name := "config"
+	if keepExtension {
+		name += path.Ext(source)
+	}
+
+	target := path.Join(t.TempDir(), name)
+	assert.NoError(t, os.WriteFile(target, content, 0o644))
+	return target
+}
+
+// readFile returns the content of the file
+func readFile(t *testing.T, name string) string {
+	t.Helper()
+
+	content, err := os.ReadFile(name)
+	assert.NoError(t, err)
+	return string(content)
 }

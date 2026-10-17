@@ -34,25 +34,27 @@ func IsolateFromEnvironment() (restore func(), err error) {
 		key, _, _ := strings.Cut(entry, "=")
 		if strings.HasPrefix(key, envPrefix) {
 			save(key)
-			os.Unsetenv(key)
+			// Setting and removing variables with valid names cannot fail
+			_ = os.Unsetenv(key)
 		}
 	}
 
 	save("HOME")
-	os.Setenv("HOME", dir)
-	os.Setenv(envPrefix+"CONFIG_PATH", dir)
+	_ = os.Setenv("HOME", dir)
+	_ = os.Setenv(envPrefix+"CONFIG_PATH", dir)
 
 	return func() {
-		os.Unsetenv("HOME")
+		_ = os.Unsetenv("HOME")
 		for _, entry := range os.Environ() {
 			key, _, _ := strings.Cut(entry, "=")
 			if strings.HasPrefix(key, envPrefix) {
-				os.Unsetenv(key)
+				_ = os.Unsetenv(key)
 			}
 		}
 		for key, value := range saved {
-			os.Setenv(key, value)
+			_ = os.Setenv(key, value)
 		}
-		os.RemoveAll(dir)
+		// A directory left behind in the temporary directory does not affect the tests
+		_ = os.RemoveAll(dir)
 	}, nil
 }

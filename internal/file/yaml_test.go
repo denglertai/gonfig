@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// TestYamlProcessor reads a YAML file, counts its entries and writes it back unchanged
 func TestYamlProcessor(t *testing.T) {
 	wd, err := os.Getwd()
 	assert.NoError(t, err)
@@ -20,7 +21,7 @@ func TestYamlProcessor(t *testing.T) {
 	input, err := os.Open(file)
 	assert.NoError(t, err)
 
-	defer input.Close()
+	defer func() { assert.NoError(t, input.Close()) }()
 
 	handler := NewYamlConfigFileHandler()
 
@@ -43,11 +44,12 @@ func TestYamlProcessor(t *testing.T) {
 	assert.Equal(t, 9, count)
 
 	output := new(bytes.Buffer)
-	handler.Write(output)
+	assert.NoError(t, handler.Write(output))
 
 	snaps.MatchSnapshot(t, output.String())
 }
 
+// TestYamlProcessorEdit sets values of a YAML file and compares the output with the snapshot
 func TestYamlProcessorEdit(t *testing.T) {
 	wd, err := os.Getwd()
 	assert.NoError(t, err)
@@ -57,7 +59,7 @@ func TestYamlProcessorEdit(t *testing.T) {
 	input, err := os.Open(file)
 	assert.NoError(t, err)
 
-	defer input.Close()
+	defer func() { assert.NoError(t, input.Close()) }()
 
 	handler := NewYamlConfigFileHandler()
 
@@ -87,11 +89,12 @@ func TestYamlProcessorEdit(t *testing.T) {
 	assert.Equal(t, 9, count)
 
 	output := new(bytes.Buffer)
-	handler.Write(output)
+	assert.NoError(t, handler.Write(output))
 
 	snaps.MatchSnapshot(t, output.String())
 }
 
+// TestYamlKeyTree checks that keys of YAML mappings are entries as well, and counts values and keys separately
 func TestYamlKeyTree(t *testing.T) {
 	wd, err := os.Getwd()
 	assert.NoError(t, err)
@@ -101,7 +104,7 @@ func TestYamlKeyTree(t *testing.T) {
 	input, err := os.Open(file)
 	assert.NoError(t, err)
 
-	defer input.Close()
+	defer func() { assert.NoError(t, input.Close()) }()
 
 	handler := NewYamlConfigFileHandler()
 
@@ -137,6 +140,7 @@ func TestYamlKeyTree(t *testing.T) {
 	snaps.MatchSnapshot(t, output.String())
 }
 
+// TestYamlKeyTreeEdit renames a key of a YAML mapping and compares the output with the snapshot
 func TestYamlKeyTreeEdit(t *testing.T) {
 	wd, err := os.Getwd()
 	assert.NoError(t, err)
@@ -146,7 +150,7 @@ func TestYamlKeyTreeEdit(t *testing.T) {
 	input, err := os.Open(file)
 	assert.NoError(t, err)
 
-	defer input.Close()
+	defer func() { assert.NoError(t, input.Close()) }()
 
 	handler := NewYamlConfigFileHandler()
 

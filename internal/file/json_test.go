@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// TestJsonFileHandlerList reads a JSON array of objects, counts its entries and writes it back unchanged
 func TestJsonFileHandlerList(t *testing.T) {
 	wd, err := os.Getwd()
 	assert.NoError(t, err)
@@ -20,7 +21,7 @@ func TestJsonFileHandlerList(t *testing.T) {
 	input, err := os.Open(file)
 	assert.NoError(t, err)
 
-	defer input.Close()
+	defer func() { assert.NoError(t, input.Close()) }()
 
 	handler := NewJsonConfigFileHandler()
 
@@ -40,11 +41,12 @@ func TestJsonFileHandlerList(t *testing.T) {
 	assert.Equal(t, 3940, count)
 
 	output := new(bytes.Buffer)
-	handler.Write(output)
+	assert.NoError(t, handler.Write(output))
 
 	snaps.MatchSnapshot(t, output.String())
 }
 
+// TestJsonFileHandlerListEdit sets values of a JSON array of objects and compares the output with the snapshot
 func TestJsonFileHandlerListEdit(t *testing.T) {
 	wd, err := os.Getwd()
 	assert.NoError(t, err)
@@ -54,7 +56,7 @@ func TestJsonFileHandlerListEdit(t *testing.T) {
 	input, err := os.Open(file)
 	assert.NoError(t, err)
 
-	defer input.Close()
+	defer func() { assert.NoError(t, input.Close()) }()
 
 	handler := NewJsonConfigFileHandler()
 
@@ -83,6 +85,7 @@ func TestJsonFileHandlerListEdit(t *testing.T) {
 	snaps.MatchSnapshot(t, output.String())
 }
 
+// TestJsonFileHandlerObject reads a nested JSON object, counts its entries and writes it back unchanged
 func TestJsonFileHandlerObject(t *testing.T) {
 	wd, err := os.Getwd()
 	assert.NoError(t, err)
@@ -92,7 +95,7 @@ func TestJsonFileHandlerObject(t *testing.T) {
 	input, err := os.Open(file)
 	assert.NoError(t, err)
 
-	defer input.Close()
+	defer func() { assert.NoError(t, input.Close()) }()
 
 	handler := NewJsonConfigFileHandler()
 
@@ -112,11 +115,12 @@ func TestJsonFileHandlerObject(t *testing.T) {
 	assert.Equal(t, 18, count)
 
 	output := new(bytes.Buffer)
-	handler.Write(output)
+	assert.NoError(t, handler.Write(output))
 
 	snaps.MatchSnapshot(t, output.String())
 }
 
+// TestJsonFileHandlerObjectEdit sets values of a nested JSON object, including a large number, and compares the output with the snapshot
 func TestJsonFileHandlerObjectEdit(t *testing.T) {
 	wd, err := os.Getwd()
 	assert.NoError(t, err)
@@ -126,7 +130,7 @@ func TestJsonFileHandlerObjectEdit(t *testing.T) {
 	input, err := os.Open(file)
 	assert.NoError(t, err)
 
-	defer input.Close()
+	defer func() { assert.NoError(t, input.Close()) }()
 
 	handler := NewJsonConfigFileHandler()
 
@@ -149,7 +153,7 @@ func TestJsonFileHandlerObjectEdit(t *testing.T) {
 	assert.Equal(t, 18, count)
 
 	output := new(bytes.Buffer)
-	handler.Write(output)
+	assert.NoError(t, handler.Write(output))
 
 	snaps.MatchSnapshot(t, output.String())
 }
