@@ -103,7 +103,7 @@ file (config.yaml):
 port: ${PORT | to_int}
 
 result:
-error: failed to process the value of port in config.yaml: strconv.Atoi: parsing "eighty": invalid syntax
+error: failed to process the value of port in config.yaml: filter to_int: the value is not an integer
 ---
 
 [TestTemplateSnapshots/defaults - 1]

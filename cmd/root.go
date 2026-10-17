@@ -63,8 +63,9 @@ It provides a flexible plugin system for extending functionality and a filtering
 		filter.SetFailOnMissing(cfg.FailOnMissing)
 
 		file.SetLogValues(cfg.LogValues)
+		filter.SetValuesInErrors(cfg.LogValues)
 		if cfg.LogValues {
-			pkglogging.Warn("Processed values are included in debug logs and may expose secrets")
+			pkglogging.Warn("Processed values are included in debug logs and error messages and may expose secrets")
 		}
 
 		// Templates are validated after the filters of plugins are registered, so they are known
@@ -113,7 +114,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("log-source", "s", false, "Whether to include source location in log output or not")
 	rootCmd.PersistentFlags().String("config-path", "", "Path to the directory containing .gonfig config file (env var: GONFIG_CONFIG_PATH)")
 	rootCmd.PersistentFlags().String("plugin-path", "./plugins", "Path to plugin directory (env var: GONFIG_PLUGIN_PATH)")
-	rootCmd.PersistentFlags().Bool("log-values", false, "Include processed values in debug logs, which may expose secrets (env var: GONFIG_LOG_VALUES)")
+	rootCmd.PersistentFlags().Bool("log-values", false, "Include processed values in debug logs and error messages, which may expose secrets (env var: GONFIG_LOG_VALUES)")
 	rootCmd.PersistentFlags().Bool("fail-on-missing", false, "Fail for environment variables that are not set instead of using empty strings, unless a default is provided (env var: GONFIG_FAIL_ON_MISSING)")
 	rootCmd.PersistentFlags().Bool("allow-unknown-filters", false, "Pass values on unchanged instead of failing for unknown filters, which may write secrets unhashed (env var: GONFIG_ALLOW_UNKNOWN_FILTERS)")
 }

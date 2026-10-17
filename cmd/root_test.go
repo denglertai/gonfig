@@ -7,6 +7,7 @@ import (
 
 	"github.com/denglertai/gonfig/internal/config"
 	"github.com/denglertai/gonfig/internal/file"
+	"github.com/denglertai/gonfig/internal/filter"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 )
@@ -75,17 +76,22 @@ func TestDefaultAppConfig(t *testing.T) {
 // TestLogValuesFlagIsApplied checks that --log-values and GONFIG_LOG_VALUES enable logging values in the file processor
 func TestLogValuesFlagIsApplied(t *testing.T) {
 	t.Setenv("GONFIG_LOG_VALUES", "")
-	t.Cleanup(func() { file.SetLogValues(false) })
+	t.Cleanup(func() {
+		file.SetLogValues(false)
+		filter.SetValuesInErrors(false)
+	})
 
 	resetFlags(t)
 	rootCmd.SetArgs([]string{"--log-values", "value", "x"})
 	assert.NoError(t, rootCmd.Execute())
 	assert.True(t, file.LogValues())
+	assert.True(t, filter.ValuesInErrors())
 
 	resetFlags(t)
 	rootCmd.SetArgs([]string{"value", "x"})
 	assert.NoError(t, rootCmd.Execute())
 	assert.False(t, file.LogValues())
+	assert.False(t, filter.ValuesInErrors())
 
 	t.Setenv("GONFIG_LOG_VALUES", "true")
 	resetFlags(t)
