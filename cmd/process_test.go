@@ -627,6 +627,7 @@ func TestFragmentFromTemplate(t *testing.T) {
 
 // TestFailOnMissingKeepsFileUnchanged checks that --fail-on-missing and GONFIG_FAIL_ON_MISSING fail for missing variables without writing
 func TestFailOnMissingKeepsFileUnchanged(t *testing.T) {
+	t.Setenv("GONFIG_FAIL_ON_MISSING", "")
 	t.Setenv("FAIL_ON_MISSING_PORT", "")
 	t.Cleanup(func() { filter.SetFailOnMissing(false) })
 
