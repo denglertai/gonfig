@@ -1,0 +1,345 @@
+
+[TestTypedValueSnapshots/yaml - 1]
+environment:
+ENABLED="1"
+PORT="8080"
+RATIO="0.75"
+WHOLE="2"
+ZIP="01701"
+
+file (config.yaml):
+port: ${PORT | to_int}
+quoted_port: "${PORT | to_int}" # to_int wins over quotes
+ratio: ${RATIO | to_float}
+whole: ${WHOLE | to_float}
+enabled: ${ENABLED | to_bool}
+zip: ${ZIP} # strings stay strings
+url: http://localhost:${PORT | to_int}/api
+${PORT | to_int}: keys are always text
+list: ["${PORT | to_int}", "${ENABLED | to_bool}"]
+
+result:
+port: 8080
+quoted_port: 8080 # to_int wins over quotes
+ratio: 0.75
+whole: 2.0
+enabled: true
+zip: "01701" # strings stay strings
+url: http://localhost:8080/api
+"8080": keys are always text
+list: [8080, true]
+---
+
+[TestTypedValueSnapshots/json - 1]
+environment:
+ENABLED="1"
+PORT="8080"
+RATIO="0.75"
+WHOLE="2"
+ZIP="01701"
+
+file (config.json):
+{
+  "port": "${PORT | to_int}",
+  "ratio": "${RATIO | to_float}",
+  "whole": "${WHOLE | to_float}",
+  "enabled": "${ENABLED | to_bool}",
+  "zip": "${ZIP}",
+  "url": "http://localhost:${PORT | to_int}/api",
+  "${PORT | to_int}": "keys are always text"
+}
+
+result:
+{
+  "port": 8080,
+  "ratio": 0.75,
+  "whole": 2.0,
+  "enabled": true,
+  "zip": "01701",
+  "url": "http://localhost:8080/api",
+  "8080": "keys are always text"
+}
+---
+
+[TestTypedValueSnapshots/xml - 1]
+environment:
+ENABLED="1"
+PORT="8080"
+RATIO="0.75"
+WHOLE="2"
+ZIP="01701"
+
+file (config.xml):
+<server port="${PORT | to_int}"><ratio>${RATIO | to_float}</ratio><enabled>${ENABLED | to_bool}</enabled></server>
+
+result:
+<server port="8080"><ratio>0.75</ratio><enabled>true</enabled></server>
+---
+
+[TestTypedValueSnapshots/properties - 1]
+environment:
+ENABLED="1"
+PORT="8080"
+RATIO="0.75"
+WHOLE="2"
+ZIP="01701"
+
+file (config.properties):
+port=${PORT | to_int}
+whole=${WHOLE | to_float}
+enabled=${ENABLED | to_bool}
+
+result:
+port = 8080
+whole = 2
+enabled = true
+---
+
+[TestTypedValueSnapshots/error_for_an_invalid_number - 1]
+environment:
+PORT="eighty"
+
+file (config.yaml):
+port: ${PORT | to_int}
+
+result:
+error: failed to process the value of port in config.yaml: strconv.Atoi: parsing "eighty": invalid syntax
+---
+
+[TestTemplateSnapshots/defaults - 1]
+.gonfig.yaml:
+templates:
+  filters:
+    clean:
+      description: Trims and lowers a value
+      filters: trim | lower
+    secret:
+      description: Trims a secret and encodes it to base64
+      filters: trim | base64
+  placeholders:
+    db_host:
+      env: DB_HOST
+      default: localhost
+    db_port:
+      env: DB_PORT
+      default: "5432"
+    db_name:
+      env: DB_NAME
+      default: app
+      filters: "@clean"
+    db_url:
+      description: JDBC URL of the database
+      value: "jdbc:postgresql://${@db_host}:${@db_port}/${@db_name}"
+    db_url_with_credentials:
+      value: "${@db_url}?user=${DB_USER | url_encode}&password=${DB_PASSWORD | url_encode}"
+
+environment:
+(none)
+
+file (config.yaml):
+datasource:
+  host: ${@db_host}
+  url: ${@db_url}
+  url_ssl: ${@db_url}?ssl=true
+  port: ${@db_port | to_int}
+
+result:
+datasource:
+  host: localhost
+  url: jdbc:postgresql://localhost:5432/app
+  url_ssl: jdbc:postgresql://localhost:5432/app?ssl=true
+  port: 5432
+---
+
+[TestTemplateSnapshots/environment_variables - 1]
+.gonfig.yaml:
+templates:
+  filters:
+    clean:
+      description: Trims and lowers a value
+      filters: trim | lower
+    secret:
+      description: Trims a secret and encodes it to base64
+      filters: trim | base64
+  placeholders:
+    db_host:
+      env: DB_HOST
+      default: localhost
+    db_port:
+      env: DB_PORT
+      default: "5432"
+    db_name:
+      env: DB_NAME
+      default: app
+      filters: "@clean"
+    db_url:
+      description: JDBC URL of the database
+      value: "jdbc:postgresql://${@db_host}:${@db_port}/${@db_name}"
+    db_url_with_credentials:
+      value: "${@db_url}?user=${DB_USER | url_encode}&password=${DB_PASSWORD | url_encode}"
+
+environment:
+DB_HOST="db.prod"
+DB_NAME=" Orders "
+DB_PASSWORD="p@ss/w rd&"
+DB_USER="app"
+
+file (config.yaml):
+datasource:
+  url: ${@db_url_with_credentials}
+  port: ${@db_port | to_int}
+
+result:
+datasource:
+  url: jdbc:postgresql://db.prod:5432/orders?user=app&password=p%40ss%2Fw+rd%26
+  port: 5432
+---
+
+[TestTemplateSnapshots/filter_templates - 1]
+.gonfig.yaml:
+templates:
+  filters:
+    clean:
+      description: Trims and lowers a value
+      filters: trim | lower
+    secret:
+      description: Trims a secret and encodes it to base64
+      filters: trim | base64
+  placeholders:
+    db_host:
+      env: DB_HOST
+      default: localhost
+    db_port:
+      env: DB_PORT
+      default: "5432"
+    db_name:
+      env: DB_NAME
+      default: app
+      filters: "@clean"
+    db_url:
+      description: JDBC URL of the database
+      value: "jdbc:postgresql://${@db_host}:${@db_port}/${@db_name}"
+    db_url_with_credentials:
+      value: "${@db_url}?user=${DB_USER | url_encode}&password=${DB_PASSWORD | url_encode}"
+
+environment:
+NAME=" Gonfig "
+PASSWORD=" s3cret "
+
+file (config.yaml):
+password: ${PASSWORD | @secret}
+name: ${NAME | @clean}
+chained: ${NAME | @clean | upper | @secret}
+
+result:
+password: czNjcmV0
+name: gonfig
+chained: R09ORklH
+---
+
+[TestTemplateSnapshots/json - 1]
+.gonfig.yaml:
+templates:
+  filters:
+    clean:
+      description: Trims and lowers a value
+      filters: trim | lower
+    secret:
+      description: Trims a secret and encodes it to base64
+      filters: trim | base64
+  placeholders:
+    db_host:
+      env: DB_HOST
+      default: localhost
+    db_port:
+      env: DB_PORT
+      default: "5432"
+    db_name:
+      env: DB_NAME
+      default: app
+      filters: "@clean"
+    db_url:
+      description: JDBC URL of the database
+      value: "jdbc:postgresql://${@db_host}:${@db_port}/${@db_name}"
+    db_url_with_credentials:
+      value: "${@db_url}?user=${DB_USER | url_encode}&password=${DB_PASSWORD | url_encode}"
+
+environment:
+DB_PORT="6543"
+
+file (config.json):
+{"url": "${@db_url}", "port": "${@db_port | to_int}"}
+
+result:
+{
+  "url": "jdbc:postgresql://localhost:6543/app",
+  "port": 6543
+}
+---
+
+[TestTemplateSnapshots/error_for_an_unknown_template_in_the_file - 1]
+.gonfig.yaml:
+templates:
+  filters:
+    clean:
+      description: Trims and lowers a value
+      filters: trim | lower
+    secret:
+      description: Trims a secret and encodes it to base64
+      filters: trim | base64
+  placeholders:
+    db_host:
+      env: DB_HOST
+      default: localhost
+    db_port:
+      env: DB_PORT
+      default: "5432"
+    db_name:
+      env: DB_NAME
+      default: app
+      filters: "@clean"
+    db_url:
+      description: JDBC URL of the database
+      value: "jdbc:postgresql://${@db_host}:${@db_port}/${@db_name}"
+    db_url_with_credentials:
+      value: "${@db_url}?user=${DB_USER | url_encode}&password=${DB_PASSWORD | url_encode}"
+
+environment:
+(none)
+
+file (config.yaml):
+url: ${@db_uri}
+
+result:
+error: failed to process the value of url in config.yaml: unknown placeholder template "db_uri"
+---
+
+[TestTemplateSnapshots/error_for_invalid_templates - 1]
+.gonfig.yaml:
+templates:
+  filters:
+    secret:
+      filters: trim | bas64
+    loop_a:
+      filters: "@loop_b"
+    loop_b:
+      filters: "@loop_a"
+  placeholders:
+    db_host:
+      env: DB_HOST
+      value: localhost
+    db_url:
+      value: "jdbc:postgresql://${@db_hots}/app"
+
+environment:
+(none)
+
+file (config.yaml):
+url: ${@db_url}
+
+result:
+error: invalid templates in config file: filter template "secret": unknown filter "bas64"
+placeholder template "db_host": define either env or value, not both
+placeholder template "db_url": unknown placeholder template "db_hots" in value
+filter templates refer to each other in a cycle: loop_a -> loop_b -> loop_a
+---
