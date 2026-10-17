@@ -67,21 +67,13 @@ var processCmd = &cobra.Command{
 			// Write the output to the file
 			logging.Info("Writing output", "file", output)
 
-			f, err := os.Create(output)
-			if err != nil {
-				return err
-			}
-			defer f.Close()
-			_, err = f.Write(o.Bytes())
-			if err != nil {
-				return err
-			}
-		} else {
-			// Dump the content to stdout
-			os.Stdout.Write(o.Bytes())
+			// Unlike a deferred Close, WriteFile also reports errors on closing the file
+			return os.WriteFile(output, o.Bytes(), 0o666)
 		}
 
-		return nil
+		// Dump the content to stdout
+		_, err = cmd.OutOrStdout().Write(o.Bytes())
+		return err
 	},
 }
 
