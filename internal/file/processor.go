@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path"
+	"strings"
 
 	"github.com/denglertai/gonfig/internal/general"
 	"github.com/denglertai/gonfig/internal/value"
@@ -48,9 +49,8 @@ type FileProcessor struct {
 // NewFileProcessor creates a new file processor
 func NewFileProcessor(fileName string, fileType general.FileType, output io.Writer) *FileProcessor {
 	if fileType == general.Undefined {
-		ext := path.Ext(fileName)
-		// strip the leading dot
-		ext = ext[1:]
+		// strip the leading dot; files without an extension yield an undefined type
+		ext := strings.TrimPrefix(path.Ext(fileName), ".")
 		fileType = general.FileType(ext)
 		logging.Debug("File type not provided, using the file's extension", "file", fileName, "type", fileType)
 	}
@@ -122,6 +122,8 @@ func (fp *FileProcessor) getFileProcessor() (ConfigFileHandler, error) {
 		return NewPropertiesConfigFileHandler(), nil
 	case general.PLAIN:
 		return NewPlainFileProcessor(), nil
+	case general.Undefined:
+		return nil, fmt.Errorf("could not infer the file type of %q; use -t / --file-type to set it explicitly", fp.FileName)
 	default:
 		return nil, fmt.Errorf("unsupported file type: %v", fp.FileType)
 	}
