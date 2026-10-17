@@ -28,7 +28,7 @@ var rootCmd = &cobra.Command{
 		cfg := config.LoadAppConfig(v)
 
 		// Store in context for access in all subcommands
-		ctx := context.WithValue(cmd.Context(), "appConfig", cfg)
+		ctx := context.WithValue(cmd.Context(), appConfigKey{}, cfg)
 		cmd.SetContext(ctx)
 
 		// Initialize logging first so plugin loading is logged as configured
@@ -44,9 +44,12 @@ var rootCmd = &cobra.Command{
 	TraverseChildren: true,
 }
 
+// appConfigKey is the context key under which the AppConfig is stored
+type appConfigKey struct{}
+
 // GetAppConfig retrieves the AppConfig from the command context
 func GetAppConfig(cmd *cobra.Command) *config.AppConfig {
-	if cfg, ok := cmd.Context().Value("appConfig").(*config.AppConfig); ok {
+	if cfg, ok := cmd.Context().Value(appConfigKey{}).(*config.AppConfig); ok {
 		return cfg
 	}
 	// Fallback to defaults if not found
