@@ -41,7 +41,8 @@ to the desired output. Defaults to stdout`,
 			return err
 		}
 
-		logging.Info("RunE", "command", cmd.Name(), "args", args, "configSettings", configSettings)
+		// Successful runs are silent by default, so their details are only logged at debug level
+		logging.Debug("Running command", "command", cmd.Name(), "args", args, "configSettings", configSettings)
 
 		// In case we want to write the output to the source file directly
 		if inline {
@@ -52,7 +53,7 @@ to the desired output. Defaults to stdout`,
 
 		// Store the output temporarily in a buffer
 		var o = new(bytes.Buffer)
-		logging.Info("Processing file", "file", configSettings.File, "type", configSettings.FileType)
+		logging.Debug("Processing file", "file", configSettings.File, "type", configSettings.FileType)
 		processor := file.NewFileProcessor(configSettings.File, configSettings.FileType, o)
 		err = processor.Process()
 		if err != nil {
@@ -66,7 +67,7 @@ to the desired output. Defaults to stdout`,
 			}
 
 			// Write the output to the file
-			logging.Info("Writing output", "file", output)
+			logging.Debug("Writing output", "file", output)
 
 			// Unlike a deferred Close, WriteFile also reports errors on closing the file
 			return os.WriteFile(output, o.Bytes(), 0o666)

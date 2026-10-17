@@ -442,6 +442,7 @@ The wrappers in `./pkg/logging` also support `trace` and `fatal` levels.
 `fatal` exits with status code `1`.
 
 Since the CLI command output may be written to stdout, logs are written to stderr by default.
+Successful runs write nothing to stderr at the default level `info`, so gonfig can be used in scripts and entrypoints without noise. Use `--log-level debug` to see which files are processed and written.
 
 Processed values are not logged by default, even at `trace` level, since they may contain secrets. Debug logs show the entry and the type of its result instead, e.g. `"entry":"database.password","type":"string"`.
 To include the values for debugging, enable `log-values` with `--log-values`, `GONFIG_LOG_VALUES=true` or in `.gonfig.yaml`. gonfig then logs a warning on startup, so the option is not left enabled by accident.
