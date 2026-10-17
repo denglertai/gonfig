@@ -61,7 +61,7 @@ func init() {
 	// configCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 
 	configCmd.PersistentFlags().StringVarP(&fileName, "file", "f", "", "Path to the configuration file")
-	configCmd.MarkFlagRequired("file")
+	configCmd.MarkPersistentFlagRequired("file")
 
 	configCmd.PersistentFlags().StringVarP(&fileType, "file-type", "t", "", "Type of file to be read. If not set, the file type will be inferred from the file extension")
 }
