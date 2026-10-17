@@ -54,56 +54,56 @@
 [TestStdout/JSON_AutoDiscover - 1]
 {
   "quiz": {
-    "list": {
-      "list": [
-        "123",
-        "123.123",
-        "true",
-        "string",
-        "%^&*()_+"
-      ]
+    "sport": {
+      "q1": {
+        "question": "Which one is correct team name in NBA?",
+        "options": [
+          "New York Bulls",
+          "%^\u0026*()_+",
+          "Golden State Warriros",
+          "Huston Rocket"
+        ],
+        "answer": "Huston Rocket"
+      }
     },
     "maths": {
       "q1": {
-        "answer": "12",
+        "question": "5 + 7 = ?",
         "options": [
           "10",
           "11",
           "12",
           "13"
         ],
-        "question": "5 + 7 = ?"
+        "answer": "12"
       },
       "q2": {
-        "answer": "4",
+        "question": "12 - 8 = ?",
         "options": [
           "1",
           "2",
           "3",
           "4"
         ],
-        "question": "12 - 8 = ?"
-      }
-    },
-    "sport": {
-      "q1": {
-        "answer": "Huston Rocket",
-        "options": [
-          "New York Bulls",
-          "%^&*()_+",
-          "Golden State Warriros",
-          "Huston Rocket"
-        ],
-        "question": "Which one is correct team name in NBA?"
+        "answer": "4"
       }
     },
     "test": {
       "bla_blub": "yoyoyo",
-      "bool": "true",
-      "float": "123.123",
       "int": "123",
-      "special_characters": "%^&*()_+",
-      "string": "string"
+      "float": "123.123",
+      "bool": "true",
+      "string": "string",
+      "special_characters": "%^\u0026*()_+"
+    },
+    "list": {
+      "list": [
+        "123",
+        "123.123",
+        "true",
+        "string",
+        "%^\u0026*()_+"
+      ]
     }
   }
 }
@@ -112,56 +112,56 @@
 [TestStdout/JSON_Explicit - 1]
 {
   "quiz": {
-    "list": {
-      "list": [
-        "123",
-        "123.123",
-        "true",
-        "string",
-        "%^&*()_+"
-      ]
+    "sport": {
+      "q1": {
+        "question": "Which one is correct team name in NBA?",
+        "options": [
+          "New York Bulls",
+          "%^\u0026*()_+",
+          "Golden State Warriros",
+          "Huston Rocket"
+        ],
+        "answer": "Huston Rocket"
+      }
     },
     "maths": {
       "q1": {
-        "answer": "12",
+        "question": "5 + 7 = ?",
         "options": [
           "10",
           "11",
           "12",
           "13"
         ],
-        "question": "5 + 7 = ?"
+        "answer": "12"
       },
       "q2": {
-        "answer": "4",
+        "question": "12 - 8 = ?",
         "options": [
           "1",
           "2",
           "3",
           "4"
         ],
-        "question": "12 - 8 = ?"
-      }
-    },
-    "sport": {
-      "q1": {
-        "answer": "Huston Rocket",
-        "options": [
-          "New York Bulls",
-          "%^&*()_+",
-          "Golden State Warriros",
-          "Huston Rocket"
-        ],
-        "question": "Which one is correct team name in NBA?"
+        "answer": "4"
       }
     },
     "test": {
       "bla_blub": "yoyoyo",
-      "bool": "true",
-      "float": "123.123",
       "int": "123",
-      "special_characters": "%^&*()_+",
-      "string": "string"
+      "float": "123.123",
+      "bool": "true",
+      "string": "string",
+      "special_characters": "%^\u0026*()_+"
+    },
+    "list": {
+      "list": [
+        "123",
+        "123.123",
+        "true",
+        "string",
+        "%^\u0026*()_+"
+      ]
     }
   }
 }
@@ -324,56 +324,56 @@ inty.mc.int.int = 123
 [TestFile/JSON_AutoDiscover - 1]
 {
   "quiz": {
-    "list": {
-      "list": [
-        "123",
-        "123.123",
-        "true",
-        "string",
-        "%^&*()_+"
-      ]
+    "sport": {
+      "q1": {
+        "question": "Which one is correct team name in NBA?",
+        "options": [
+          "New York Bulls",
+          "%^\u0026*()_+",
+          "Golden State Warriros",
+          "Huston Rocket"
+        ],
+        "answer": "Huston Rocket"
+      }
     },
     "maths": {
       "q1": {
-        "answer": "12",
+        "question": "5 + 7 = ?",
         "options": [
           "10",
           "11",
           "12",
           "13"
         ],
-        "question": "5 + 7 = ?"
+        "answer": "12"
       },
       "q2": {
-        "answer": "4",
+        "question": "12 - 8 = ?",
         "options": [
           "1",
           "2",
           "3",
           "4"
         ],
-        "question": "12 - 8 = ?"
-      }
-    },
-    "sport": {
-      "q1": {
-        "answer": "Huston Rocket",
-        "options": [
-          "New York Bulls",
-          "%^&*()_+",
-          "Golden State Warriros",
-          "Huston Rocket"
-        ],
-        "question": "Which one is correct team name in NBA?"
+        "answer": "4"
       }
     },
     "test": {
       "bla_blub": "yoyoyo",
-      "bool": "true",
-      "float": "123.123",
       "int": "123",
-      "special_characters": "%^&*()_+",
-      "string": "string"
+      "float": "123.123",
+      "bool": "true",
+      "string": "string",
+      "special_characters": "%^\u0026*()_+"
+    },
+    "list": {
+      "list": [
+        "123",
+        "123.123",
+        "true",
+        "string",
+        "%^\u0026*()_+"
+      ]
     }
   }
 }
@@ -382,56 +382,56 @@ inty.mc.int.int = 123
 [TestFile/JSON_Explicit - 1]
 {
   "quiz": {
-    "list": {
-      "list": [
-        "123",
-        "123.123",
-        "true",
-        "string",
-        "%^&*()_+"
-      ]
+    "sport": {
+      "q1": {
+        "question": "Which one is correct team name in NBA?",
+        "options": [
+          "New York Bulls",
+          "%^\u0026*()_+",
+          "Golden State Warriros",
+          "Huston Rocket"
+        ],
+        "answer": "Huston Rocket"
+      }
     },
     "maths": {
       "q1": {
-        "answer": "12",
+        "question": "5 + 7 = ?",
         "options": [
           "10",
           "11",
           "12",
           "13"
         ],
-        "question": "5 + 7 = ?"
+        "answer": "12"
       },
       "q2": {
-        "answer": "4",
+        "question": "12 - 8 = ?",
         "options": [
           "1",
           "2",
           "3",
           "4"
         ],
-        "question": "12 - 8 = ?"
-      }
-    },
-    "sport": {
-      "q1": {
-        "answer": "Huston Rocket",
-        "options": [
-          "New York Bulls",
-          "%^&*()_+",
-          "Golden State Warriros",
-          "Huston Rocket"
-        ],
-        "question": "Which one is correct team name in NBA?"
+        "answer": "4"
       }
     },
     "test": {
       "bla_blub": "yoyoyo",
-      "bool": "true",
-      "float": "123.123",
       "int": "123",
-      "special_characters": "%^&*()_+",
-      "string": "string"
+      "float": "123.123",
+      "bool": "true",
+      "string": "string",
+      "special_characters": "%^\u0026*()_+"
+    },
+    "list": {
+      "list": [
+        "123",
+        "123.123",
+        "true",
+        "string",
+        "%^\u0026*()_+"
+      ]
     }
   }
 }
@@ -594,56 +594,56 @@ inty.mc.int.int = 123
 [TestFileOverwrite/JSON_AutoDiscover - 1]
 {
   "quiz": {
-    "list": {
-      "list": [
-        "123",
-        "123.123",
-        "true",
-        "string",
-        "%^&*()_+"
-      ]
+    "sport": {
+      "q1": {
+        "question": "Which one is correct team name in NBA?",
+        "options": [
+          "New York Bulls",
+          "%^\u0026*()_+",
+          "Golden State Warriros",
+          "Huston Rocket"
+        ],
+        "answer": "Huston Rocket"
+      }
     },
     "maths": {
       "q1": {
-        "answer": "12",
+        "question": "5 + 7 = ?",
         "options": [
           "10",
           "11",
           "12",
           "13"
         ],
-        "question": "5 + 7 = ?"
+        "answer": "12"
       },
       "q2": {
-        "answer": "4",
+        "question": "12 - 8 = ?",
         "options": [
           "1",
           "2",
           "3",
           "4"
         ],
-        "question": "12 - 8 = ?"
-      }
-    },
-    "sport": {
-      "q1": {
-        "answer": "Huston Rocket",
-        "options": [
-          "New York Bulls",
-          "%^&*()_+",
-          "Golden State Warriros",
-          "Huston Rocket"
-        ],
-        "question": "Which one is correct team name in NBA?"
+        "answer": "4"
       }
     },
     "test": {
       "bla_blub": "yoyoyo",
-      "bool": "true",
-      "float": "123.123",
       "int": "123",
-      "special_characters": "%^&*()_+",
-      "string": "string"
+      "float": "123.123",
+      "bool": "true",
+      "string": "string",
+      "special_characters": "%^\u0026*()_+"
+    },
+    "list": {
+      "list": [
+        "123",
+        "123.123",
+        "true",
+        "string",
+        "%^\u0026*()_+"
+      ]
     }
   }
 }
@@ -652,56 +652,56 @@ inty.mc.int.int = 123
 [TestFileOverwrite/JSON_Explicit - 1]
 {
   "quiz": {
-    "list": {
-      "list": [
-        "123",
-        "123.123",
-        "true",
-        "string",
-        "%^&*()_+"
-      ]
+    "sport": {
+      "q1": {
+        "question": "Which one is correct team name in NBA?",
+        "options": [
+          "New York Bulls",
+          "%^\u0026*()_+",
+          "Golden State Warriros",
+          "Huston Rocket"
+        ],
+        "answer": "Huston Rocket"
+      }
     },
     "maths": {
       "q1": {
-        "answer": "12",
+        "question": "5 + 7 = ?",
         "options": [
           "10",
           "11",
           "12",
           "13"
         ],
-        "question": "5 + 7 = ?"
+        "answer": "12"
       },
       "q2": {
-        "answer": "4",
+        "question": "12 - 8 = ?",
         "options": [
           "1",
           "2",
           "3",
           "4"
         ],
-        "question": "12 - 8 = ?"
-      }
-    },
-    "sport": {
-      "q1": {
-        "answer": "Huston Rocket",
-        "options": [
-          "New York Bulls",
-          "%^&*()_+",
-          "Golden State Warriros",
-          "Huston Rocket"
-        ],
-        "question": "Which one is correct team name in NBA?"
+        "answer": "4"
       }
     },
     "test": {
       "bla_blub": "yoyoyo",
-      "bool": "true",
-      "float": "123.123",
       "int": "123",
-      "special_characters": "%^&*()_+",
-      "string": "string"
+      "float": "123.123",
+      "bool": "true",
+      "string": "string",
+      "special_characters": "%^\u0026*()_+"
+    },
+    "list": {
+      "list": [
+        "123",
+        "123.123",
+        "true",
+        "string",
+        "%^\u0026*()_+"
+      ]
     }
   }
 }
@@ -838,56 +838,56 @@ inty.mc.int.int = 123
 [TestPassingExtension/JSON_Explicit - 1]
 {
   "quiz": {
-    "list": {
-      "list": [
-        "123",
-        "123.123",
-        "true",
-        "string",
-        "%^&*()_+"
-      ]
+    "sport": {
+      "q1": {
+        "question": "Which one is correct team name in NBA?",
+        "options": [
+          "New York Bulls",
+          "%^\u0026*()_+",
+          "Golden State Warriros",
+          "Huston Rocket"
+        ],
+        "answer": "Huston Rocket"
+      }
     },
     "maths": {
       "q1": {
-        "answer": "12",
+        "question": "5 + 7 = ?",
         "options": [
           "10",
           "11",
           "12",
           "13"
         ],
-        "question": "5 + 7 = ?"
+        "answer": "12"
       },
       "q2": {
-        "answer": "4",
+        "question": "12 - 8 = ?",
         "options": [
           "1",
           "2",
           "3",
           "4"
         ],
-        "question": "12 - 8 = ?"
-      }
-    },
-    "sport": {
-      "q1": {
-        "answer": "Huston Rocket",
-        "options": [
-          "New York Bulls",
-          "%^&*()_+",
-          "Golden State Warriros",
-          "Huston Rocket"
-        ],
-        "question": "Which one is correct team name in NBA?"
+        "answer": "4"
       }
     },
     "test": {
       "bla_blub": "yoyoyo",
-      "bool": "true",
-      "float": "123.123",
       "int": "123",
-      "special_characters": "%^&*()_+",
-      "string": "string"
+      "float": "123.123",
+      "bool": "true",
+      "string": "string",
+      "special_characters": "%^\u0026*()_+"
+    },
+    "list": {
+      "list": [
+        "123",
+        "123.123",
+        "true",
+        "string",
+        "%^\u0026*()_+"
+      ]
     }
   }
 }

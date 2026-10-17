@@ -3,12 +3,10 @@ module github.com/denglertai/gonfig
 go 1.27
 
 require (
-	github.com/Jeffail/gabs/v2 v2.7.0
 	github.com/beevik/etree v1.8.1
 	github.com/bzick/tokenizer v1.5.1
 	github.com/gkampitakis/go-snaps v0.5.23
 	github.com/magiconair/properties v1.18.12
-	github.com/samber/lo v1.53.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
 	github.com/spf13/viper v1.21.0

@@ -107,6 +107,14 @@ func (fp *FileProcessor) Process() error {
 	return handler.Write(fp.Output)
 }
 
+// appendToPath appends the key to the dot separated path
+func appendToPath(path string, key string) string {
+	if path == "" {
+		return key
+	}
+	return path + "." + key
+}
+
 // getFileProcessor returns the file processor based on the file type
 func (fp *FileProcessor) getFileProcessor() (ConfigFileHandler, error) {
 	switch fp.FileType {
