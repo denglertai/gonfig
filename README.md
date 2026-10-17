@@ -322,7 +322,9 @@ Usage:
     second
     ```
    By default, results are printed exactly as they are, without a newline, so they can be written to files or piped into other tools byte for byte.
-   Command substitution like `TOKEN=$(gonfig value ...)` removes trailing newlines anyway, so it works the same with and without the flag.
+   For a single value, command substitution like `TOKEN=$(gonfig value ...)` works the same with and without the flag, since it removes trailing newlines.
+   With several values, `--newline` keeps them on separate lines, while the default joins them, e.g. `firstsecond`.
+   If processing any value fails, nothing is printed.
 
 ## Filters
 

@@ -6,6 +6,7 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/denglertai/gonfig/internal/value"
 	"github.com/spf13/cobra"
@@ -22,6 +23,8 @@ trimming whitespace, or applying cryptographic functions like bcrypt or md5.`,
 		// The flag is defined in init, so reading it cannot fail
 		newline, _ := cmd.Flags().GetBool("newline")
 
+		// Collect all results first, so an error processing a later value does not leave partial output
+		var output strings.Builder
 		for _, arg := range args {
 			result, err := value.ProcessValue(arg)
 
@@ -30,19 +33,16 @@ trimming whitespace, or applying cryptographic functions like bcrypt or md5.`,
 			}
 
 			// Filters may produce non-string results (e.g. to_int)
-			text := fmt.Sprint(result)
+			fmt.Fprint(&output, result)
 
 			// Results are printed exactly as they are by default, since scripts may write them to files or pipe them into other tools
 			if newline {
-				text += "\n"
-			}
-
-			if _, err := io.WriteString(cmd.OutOrStdout(), text); err != nil {
-				return err
+				output.WriteString("\n")
 			}
 		}
 
-		return nil
+		_, err := io.WriteString(cmd.OutOrStdout(), output.String())
+		return err
 	},
 }
 

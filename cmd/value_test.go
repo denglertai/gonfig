@@ -101,3 +101,17 @@ func TestValueNewline(t *testing.T) {
 		})
 	}
 }
+
+// TestValueWritesNothingOnError checks that no result is written if processing any of the values fails
+func TestValueWritesNothingOnError(t *testing.T) {
+	t.Setenv("PARTIAL_INVALID", "abc")
+
+	var out bytes.Buffer
+	rootCmd.SetOut(&out)
+	t.Cleanup(func() { rootCmd.SetOut(nil) })
+
+	resetFlags(t)
+	rootCmd.SetArgs([]string{"value", "--newline", "first", "${PARTIAL_INVALID | to_int}"})
+	assert.Error(t, rootCmd.Execute())
+	assert.Empty(t, out.String())
+}
