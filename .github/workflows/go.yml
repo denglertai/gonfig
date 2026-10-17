@@ -26,7 +26,12 @@ jobs:
       run: go mod download
 
     - name: Run tests
-      run: go test ./...
+      run: go test ./... -coverprofile=coverage.txt
+
+    - name: Upload coverage reports to Codecov
+      uses: codecov/codecov-action@v5
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
 
   trivy-scan:
     runs-on: ubuntu-latest
