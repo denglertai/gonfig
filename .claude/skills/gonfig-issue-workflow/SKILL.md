@@ -63,6 +63,12 @@ go test -shuffle=on -count=3 ./cmd/ ./internal/...   # when package-level state 
 
 Package-level state exists (allowed unknown filters, templates); tests that change it reset it with `t.Cleanup`.
 
+Tests must not depend on the machine's `GONFIG_*` variables or config files. When adding options or tests that depend on config, run them in a polluted environment:
+
+```bash
+sh $SKILL/scripts/test_polluted.sh
+```
+
 ### Snapshots
 
 `go-snaps` snapshots live in `__snapshots__/`. For behavior that is easier to review visually, add cases to the readable snapshot helpers in `internal/file` (`runBehaviorSnapshots`, `TestFragmentSnapshots`), which render the `.gonfig.yaml`, environment, file and result together.

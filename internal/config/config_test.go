@@ -129,16 +129,16 @@ func TestLoadAppConfig_AllowUnknownFilters(t *testing.T) {
 	}
 }
 
-// isolateConfig ensures that neither a config file nor environment variables of the machine running the tests are used
+// isolateConfig prepares a test of the default config search: HOME and the working directory are empty directories,
+// and the config path set by TestMain is cleared, so the default search paths are used without finding a config file
 func isolateConfig(t *testing.T) {
 	t.Helper()
 
 	t.Setenv("HOME", t.TempDir())
 	t.Chdir(t.TempDir())
-	for _, key := range []string{"GONFIG_LOG_LEVEL", "GONFIG_LOG_SOURCE", "GONFIG_CONFIG_PATH", "GONFIG_PLUGIN_PATH", "GONFIG_ALLOW_UNKNOWN_FILTERS", "GONFIG_LOG_VALUES", "GONFIG_FAIL_ON_MISSING"} {
-		// Viper ignores empty environment variables
-		t.Setenv(key, "")
-	}
+	// TestMain removes all other GONFIG_* variables, but points the config path to an empty directory,
+	// which this test clears to check the default search paths. Viper ignores empty environment variables.
+	t.Setenv("GONFIG_CONFIG_PATH", "")
 }
 
 // TestLoadAppConfig_Defaults checks the complete default config without any config file or environment variables
