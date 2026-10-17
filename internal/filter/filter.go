@@ -273,7 +273,12 @@ func init() {
 func AddPluginFilters(filters map[string]interface{}) {
 	for name, filter := range filters {
 		// Skip filters that are not of type Filter or already in the filter map
-		if _, ok := filter.(Filter); !ok || filterMap[name] != nil {
+		if _, ok := filter.(Filter); !ok {
+			logging.Warn("Skipping plugin filter not implementing Filter", "filter", name, "type", fmt.Sprintf("%T", filter))
+			continue
+		}
+		if filterMap[name] != nil {
+			logging.Warn("Skipping plugin filter with already registered name", "filter", name)
 			continue
 		}
 
