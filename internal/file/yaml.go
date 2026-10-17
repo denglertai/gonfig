@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strconv"
 
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 // YamlConfigEntry represents a single scalar of a YAML document, which is either a value or the key of a mapping
