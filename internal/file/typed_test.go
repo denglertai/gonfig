@@ -3,6 +3,7 @@ package file
 import (
 	"bytes"
 	"encoding/json"
+	"math"
 	"os"
 	"path"
 	"testing"
@@ -111,6 +112,8 @@ func TestNewTypedValue(t *testing.T) {
 		{desc: "large float", value: 1e21, want: typedValue{typedFloat, "1e+21"}, ok: true},
 		{desc: "float32", value: float32(0.1), want: typedValue{typedFloat, "0.1"}, ok: true},
 		{desc: "bool", value: false, want: typedValue{typedBool, "false"}, ok: true},
+		{desc: "infinity", value: math.Inf(1), ok: false},
+		{desc: "NaN", value: math.NaN(), ok: false},
 		{desc: "string", value: "5", ok: false},
 		{desc: "list", value: []string{"a"}, ok: false},
 		{desc: "nil", value: nil, ok: false},
@@ -132,5 +135,21 @@ func TestTypedValuesJsonValid(t *testing.T) {
 		data, err := json.Marshal(entry.typed)
 		assert.NoError(t, err)
 		assert.True(t, json.Valid(data), string(data))
+	}
+}
+
+func TestTypedValuesUnsupported(t *testing.T) {
+	// Values that cannot be typed, e.g. lists returned by split, leave the entries unchanged so they are set as text instead
+	for _, value := range []any{[]string{"a", "b"}, math.Inf(1)} {
+		jsonEntry := &JsonConfigEntry{node: &jsonNode{value: "${X}"}, value: "${X}"}
+		assert.False(t, jsonEntry.SetTypedValue(value))
+		assert.Equal(t, "${X}", jsonEntry.GetValue())
+		assert.Nil(t, jsonEntry.typed)
+		assert.False(t, jsonEntry.edited)
+
+		yamlEntry := &YamlConfigEntry{node: &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "${X}"}}
+		assert.False(t, yamlEntry.SetTypedValue(value))
+		assert.Equal(t, "${X}", yamlEntry.GetValue())
+		assert.Equal(t, "!!str", yamlEntry.node.Tag)
 	}
 }
