@@ -68,7 +68,6 @@ func (fp *FileProcessor) Process() error {
 
 	handler, err := fp.getFileProcessor()
 	if err != nil {
-		logging.Error("Error initializing file processor", "err", err, fileGroup)
 		return err
 	}
 
@@ -80,14 +79,12 @@ func (fp *FileProcessor) Process() error {
 
 	err = handler.Read(file)
 	if err != nil {
-		logging.Error("Failed to read the file", "err", err, fileGroup)
-		return err
+		return fmt.Errorf("failed to read %s: %w", fp.FileName, err)
 	}
 
 	entries, err := handler.Process()
 	if err != nil {
-		logging.Error("Failed to process the file", "err", err, fileGroup)
-		return err
+		return fmt.Errorf("failed to process %s: %w", fp.FileName, err)
 	}
 
 	for entry := range entries {
@@ -96,15 +93,18 @@ func (fp *FileProcessor) Process() error {
 		newVal, err := value.ProcessValue(entry.GetValue())
 
 		if err != nil {
-			logging.Error("Failed to process the value", "err", err, "entry", entry.Path(), fileGroup)
-			return err
+			return fmt.Errorf("failed to process the value of %s in %s: %w", entry.Path(), fp.FileName, err)
 		}
 
 		logging.Debug("Setting new value", "entry", entry.Path(), "value", newVal, fileGroup)
 		entry.SetValue(fmt.Sprintf("%v", newVal))
 	}
 
-	return handler.Write(fp.Output)
+	if err := handler.Write(fp.Output); err != nil {
+		return fmt.Errorf("failed to write %s: %w", fp.FileName, err)
+	}
+
+	return nil
 }
 
 // appendToPath appends the key to the dot separated path
