@@ -230,7 +230,7 @@ $ gonfig config process -f config.template.yaml -o config.yaml -w
 
 `gonfig config` is intended to interact with various kinds of config file types including `.json`, `.xml`, `.yaml` and `.properties` files, as well as plain text files (`-t plain`).
 
-By now the only subcommand included is `process`. This is being used to actually process the given config file.
+It has two subcommands: `process` processes the given config file and is described below, while [`check`](#check) reports missing variables and errors without writing anything.
 
 In general, process takes the given input file and creates a flat list of all given keys, nodes and attributes depending on the file type.
 Afterwards every entry in that list is being processed individually by applying the filters.
