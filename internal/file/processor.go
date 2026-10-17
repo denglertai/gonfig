@@ -132,7 +132,12 @@ func (fp *FileProcessor) processEntry(entry ConfigEntry, allowFragments bool, fi
 		return fmt.Errorf("failed to process the value of %s in %s: %w", entry.Path(), fp.FileName, err)
 	}
 
-	logging.Debug("Setting new value", "entry", entryPath{entry}, "value", newVal, fileGroup)
+	// Only the type of the value is logged by default, since the value may contain secrets
+	if logValues {
+		logging.Debug("Setting new value", "entry", entryPath{entry}, "type", valueType{newVal}, "value", newVal, fileGroup)
+	} else {
+		logging.Debug("Setting new value", "entry", entryPath{entry}, "type", valueType{newVal}, fileGroup)
+	}
 
 	if fragment, isFragment := newVal.(filter.Fragment); isFragment {
 		return fp.insertFragment(entry, fragment, allowFragments, fileGroup)
@@ -188,6 +193,31 @@ type entryPath struct {
 // LogValue returns the path of the entry
 func (p entryPath) LogValue() slog.Value {
 	return slog.StringValue(p.entry.Path())
+}
+
+// logValues includes processed values in debug logs, see SetLogValues
+var logValues bool
+
+// SetLogValues sets whether processed values are included in debug logs.
+// Values may contain secrets read from environment variables or files, so this is meant for debugging only.
+func SetLogValues(enabled bool) {
+	logValues = enabled
+}
+
+// LogValues returns whether processed values are included in debug logs
+func LogValues() bool {
+	return logValues
+}
+
+// valueType logs the type of a processed value, e.g. string, int or filter.Fragment.
+// The value itself is only logged if enabled by SetLogValues, since it may contain secrets.
+type valueType struct {
+	value any
+}
+
+// LogValue returns the type of the value. It is only computed if the log record is written.
+func (t valueType) LogValue() slog.Value {
+	return slog.StringValue(fmt.Sprintf("%T", t.value))
 }
 
 // appendToPath appends the key to the dot separated path
