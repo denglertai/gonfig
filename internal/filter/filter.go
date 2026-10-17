@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -277,7 +278,21 @@ func AddPluginFilters(filters map[string]interface{}) {
 		}
 
 		filterMap[name] = func(token string) Filter {
-			return filter.(Filter)
+			return cloneFilter(filter.(Filter))
 		}
 	}
+}
+
+// cloneFilter returns a shallow copy of a filter provided by a pointer, so that parameters
+// accepted by one usage of the filter do not affect other usages
+func cloneFilter(f Filter) Filter {
+	v := reflect.ValueOf(f)
+	if v.Kind() != reflect.Pointer || v.IsNil() {
+		// Filters provided by value are copied when their methods are called anyway
+		return f
+	}
+
+	clone := reflect.New(v.Elem().Type())
+	clone.Elem().Set(v.Elem())
+	return clone.Interface().(Filter)
 }

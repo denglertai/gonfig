@@ -135,3 +135,25 @@ func TestFiltersWithNonStringInput(t *testing.T) {
 		})
 	}
 }
+
+// paramFilter is a plugin-like filter returning its parameter
+type paramFilter struct {
+	DefaultFilterParamsHandler
+}
+
+func (f *paramFilter) Process(_ any) (any, error) {
+	return f.params["v"], nil
+}
+
+func TestPluginFiltersDoNotShareParams(t *testing.T) {
+	AddPluginFilters(map[string]interface{}{"test_param_filter": &paramFilter{}})
+
+	first := NewFilter("test_param_filter")
+	second := NewFilter("test_param_filter")
+	first.(FilterParams).AcceptParams(map[string]string{"v": "first"})
+	second.(FilterParams).AcceptParams(map[string]string{"v": "second"})
+
+	result, err := first.Process("")
+	assert.NoError(t, err)
+	assert.Equal(t, "first", result)
+}
