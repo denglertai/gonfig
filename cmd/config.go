@@ -12,9 +12,10 @@ import (
 
 // configCmd represents the config command
 var configCmd = &cobra.Command{
-	Use:              "config",
-	Short:            "",
-	Long:             ``,
+	Use:   "config",
+	Short: "Work with configuration files",
+	Long: `Work with configuration files in JSON, YAML, XML, properties or plain text format.
+The format is inferred from the file extension unless set via --file-type.`,
 	TraverseChildren: true,
 }
 
@@ -42,16 +43,6 @@ func getConfigSettings(cmd *cobra.Command) (*config.Settings, error) {
 
 func init() {
 	rootCmd.AddCommand(configCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// configCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// configCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 
 	configCmd.PersistentFlags().StringP("file", "f", "", "Path to the configuration file")
 	configCmd.MarkPersistentFlagRequired("file")

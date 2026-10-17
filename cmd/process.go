@@ -15,9 +15,10 @@ import (
 
 // processCmd represents the process command
 var processCmd = &cobra.Command{
-	Use:              "process",
-	Short:            "Processes a file",
-	Long:             `Processes a file and outputs the result to the dersired output. Defaults to stdout`,
+	Use:   "process",
+	Short: "Processes a file",
+	Long: `Processes a file by replacing all placeholders like ${ENV_VAR | filter} and outputs the result
+to the desired output. Defaults to stdout`,
 	TraverseChildren: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		configSettings, err := getConfigSettings(cmd)
@@ -84,7 +85,7 @@ func init() {
 
 	processCmd.Flags().BoolP("inline", "i", false, "Controls if the output should get written to the source file directly (defaults to false)")
 
-	processCmd.Flags().BoolP("overwrite", "w", false, "Controls if the output should overwrite the source file (defaults to false). This implies -i (--inline). If the source file does not exist, it will be created.")
+	processCmd.Flags().BoolP("overwrite", "w", false, "Controls if an already existing output file may be overwritten (defaults to false). Not needed for -i (--inline)")
 }
 
 type ErrFileExists error

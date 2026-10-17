@@ -17,8 +17,9 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "gonfig",
 	Short: "A configuration management tool for various formats and sources",
-	Long: `Gonfig is a powerful configuration management tool that supports multiple formats (YAML, JSON, TOML, etc.) and sources (files, environment variables, remote services). 
-	It provides a flexible plugin system for extending functionality and a robust filtering mechanism for dynamic configuration processing.`,
+	Long: `Gonfig is a configuration management tool that replaces placeholders in configuration files
+of multiple formats (JSON, YAML, XML, properties and plain text) with values from environment variables or files.
+It provides a flexible plugin system for extending functionality and a filtering mechanism for transforming values.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Cobra validates required flags only after this hook, so validate them while the usage is still printed
 		if err := cmd.ValidateRequiredFlags(); err != nil {
