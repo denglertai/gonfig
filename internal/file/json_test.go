@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path"
+	"strings"
 	"testing"
 
 	"github.com/gkampitakis/go-snaps/snaps"
@@ -151,4 +152,20 @@ func TestJsonFileHandlerObjectEdit(t *testing.T) {
 	handler.Write(output)
 
 	snaps.MatchSnapshot(t, output.String())
+}
+
+func TestJsonFileHandlerDeeplyNestedSiblings(t *testing.T) {
+	handler := NewJsonConfigFileHandler()
+	err := handler.Read(strings.NewReader(`{"a":{"b":{"c":{"w":"0","x":"0","y":"0","z":"0"}}}}`))
+	assert.NoError(t, err)
+
+	entries, err := handler.Process()
+	assert.NoError(t, err)
+	for entry := range entries {
+		entry.SetValue(entry.Key())
+	}
+
+	output := new(bytes.Buffer)
+	assert.NoError(t, handler.Write(output))
+	assert.JSONEq(t, `{"a":{"b":{"c":{"w":"w","x":"x","y":"y","z":"z"}}}}`, output.String())
 }

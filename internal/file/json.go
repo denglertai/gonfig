@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"iter"
+	"slices"
 	"strconv"
 
 	"github.com/Jeffail/gabs/v2"
@@ -153,7 +154,8 @@ func (j *JsonConfigFileHandler) handleChildren(container *gabs.Container, path s
 	if len(childrenMap) > 0 {
 		for key, value := range childrenMap {
 			currentPath := appendToPath(path, key)
-			currentHierarchy := append(hierarchy, key)
+			// Clone to prevent siblings from sharing the same backing array
+			currentHierarchy := append(slices.Clone(hierarchy), key)
 			data := value.Data()
 			switch v := data.(type) {
 			case int:
@@ -180,7 +182,7 @@ func (j *JsonConfigFileHandler) handleChildren(container *gabs.Container, path s
 	children := container.Children()
 	for i, child := range children {
 		currentPath := appendToPath(path, fmt.Sprint(i))
-		currentHierarchy := append(hierarchy, fmt.Sprint(i))
+		currentHierarchy := append(slices.Clone(hierarchy), fmt.Sprint(i))
 		if err := j.handleChildren(child, currentPath, currentHierarchy); err != nil {
 		}
 	}
