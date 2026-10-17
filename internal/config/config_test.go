@@ -103,3 +103,32 @@ func TestLoadAppConfig_AllowUnknownFilters(t *testing.T) {
 		})
 	}
 }
+
+// isolateConfig ensures that neither a config file nor environment variables of the machine running the tests are used
+func isolateConfig(t *testing.T) {
+	t.Helper()
+
+	t.Setenv("HOME", t.TempDir())
+	t.Chdir(t.TempDir())
+	for _, key := range []string{"GONFIG_LOG_LEVEL", "GONFIG_LOG_SOURCE", "GONFIG_CONFIG_PATH", "GONFIG_PLUGIN_PATH", "GONFIG_ALLOW_UNKNOWN_FILTERS"} {
+		// Viper ignores empty environment variables
+		t.Setenv(key, "")
+	}
+}
+
+func TestLoadAppConfig_Defaults(t *testing.T) {
+	isolateConfig(t)
+
+	cfg := LoadAppConfig(SetupViper(nil))
+
+	want := AppConfig{
+		LogLevel:            "info",
+		LogSource:           false,
+		ConfigPath:          "",
+		PluginPath:          "./plugins",
+		AllowUnknownFilters: false,
+	}
+	if *cfg != want {
+		t.Fatalf("expected default config %+v, got %+v", want, *cfg)
+	}
+}
