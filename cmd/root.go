@@ -31,10 +31,15 @@ var rootCmd = &cobra.Command{
 		ctx := context.WithValue(cmd.Context(), "appConfig", cfg)
 		cmd.SetContext(ctx)
 
+		// Initialize logging first so plugin loading is logged as configured
+		if err := logging.InitLogging(cfg.LogLevel, cfg.LogSource); err != nil {
+			return err
+		}
+
 		// Initialize the Plugin system
 		plugin.InitPlugins(cfg.PluginPath)
 
-		return logging.InitLogging(cfg.LogLevel, cfg.LogSource)
+		return nil
 	},
 	TraverseChildren: true,
 }
