@@ -30,6 +30,8 @@ type AppConfig struct {
 	LogSource  bool
 	ConfigPath string
 	PluginPath string
+	// AllowUnknownFilters makes unknown filters pass values on unchanged instead of failing
+	AllowUnknownFilters bool
 }
 
 // LoadAppConfig loads configuration from multiple sources
@@ -40,6 +42,8 @@ func LoadAppConfig(v *viper.Viper) *AppConfig {
 		LogSource:  v.GetBool("log-source"),
 		ConfigPath: v.GetString("config-path"),
 		PluginPath: v.GetString("plugin-path"),
+
+		AllowUnknownFilters: v.GetBool("allow-unknown-filters"),
 	}
 }
 
@@ -59,6 +63,7 @@ func SetupViper(flags *pflag.FlagSet) *viper.Viper {
 	v.SetDefault("log-source", false)
 	v.SetDefault("config-path", "")
 	v.SetDefault("plugin-path", "./plugins")
+	v.SetDefault("allow-unknown-filters", false)
 
 	// Environment variables
 	v.SetEnvPrefix("GONFIG")

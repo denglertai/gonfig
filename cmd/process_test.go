@@ -472,3 +472,53 @@ func TestYamlMove(t *testing.T) {
 		})
 	}
 }
+
+func TestUnknownFilterKeepsFileUnchanged(t *testing.T) {
+	t.Setenv("PASSWORD", "s3cret")
+
+	content := "password: ${PASSWORD | not_a_filter}\n"
+	fileName := path.Join(t.TempDir(), "config.yaml")
+	assert.NoError(t, os.WriteFile(fileName, []byte(content), 0o644))
+
+	resetFlags(t)
+	rootCmd.SetArgs([]string{"config", "process", "-f", fileName, "-i"})
+	err := rootCmd.Execute()
+
+	assert.ErrorContains(t, err, `unknown filter "not_a_filter"`)
+
+	// The secret must not be written in place of the placeholder
+	result, err := os.ReadFile(fileName)
+	assert.NoError(t, err)
+	assert.Equal(t, content, string(result))
+}
+
+func TestUnknownFilterAllowed(t *testing.T) {
+	t.Setenv("VALUE", "value")
+
+	testCases := []struct {
+		desc string
+		args []string
+		env  string
+	}{
+		{desc: "flag", args: []string{"--allow-unknown-filters"}},
+		{desc: "env var", env: "true"},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			if tC.env != "" {
+				t.Setenv("GONFIG_ALLOW_UNKNOWN_FILTERS", tC.env)
+			}
+
+			fileName := path.Join(t.TempDir(), "config.yaml")
+			assert.NoError(t, os.WriteFile(fileName, []byte("key: ${VALUE | not_a_filter}\n"), 0o644))
+
+			resetFlags(t)
+			rootCmd.SetArgs(append([]string{"config", "process", "-f", fileName, "-i"}, tC.args...))
+			assert.NoError(t, rootCmd.Execute())
+
+			result, err := os.ReadFile(fileName)
+			assert.NoError(t, err)
+			assert.Equal(t, "key: value\n", string(result))
+		})
+	}
+}

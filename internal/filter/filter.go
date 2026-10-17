@@ -188,16 +188,30 @@ func ApplyFilters(value any, filters []Filter) (any, error) {
 	return value, nil
 }
 
+// allowUnknownFilters makes unknown filters pass values on unchanged instead of failing, see SetAllowUnknownFilters
+var allowUnknownFilters bool
+
+// SetAllowUnknownFilters sets whether unknown filters pass values on unchanged with a warning instead of failing.
+// This may write a secret that was meant to be hashed or encrypted by a filter that is unknown, e.g. because of a typo.
+func SetAllowUnknownFilters(allow bool) {
+	allowUnknownFilters = allow
+}
+
 // notFoundFilter is used for unknown filter names, e.g. typos or filters of plugins that failed to load
 type notFoundFilter struct {
 	filter string
 	DefaultFilterParamsHandler
 }
 
-// Process logs a warning and returns the value unchanged, so the rest of the chain is still applied
+// Process fails, since passing the value on unchanged could write a secret that was meant to be hashed or encrypted.
+// If unknown filters are allowed, it logs a warning and returns the value unchanged instead.
 func (f notFoundFilter) Process(value any) (any, error) {
-	logging.Warn("Filter not found, returning original value", "filter", f.filter)
-	return value, nil
+	if allowUnknownFilters {
+		logging.Warn("Unknown filter, passing the value on unchanged", "filter", f.filter)
+		return value, nil
+	}
+
+	return "", fmt.Errorf("unknown filter %q: check the filter name, or the log for plugins that failed to load", f.filter)
 }
 
 // filterMap is a map of filter names to filter constructors.

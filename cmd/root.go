@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/denglertai/gonfig/internal/config"
+	"github.com/denglertai/gonfig/internal/filter"
 	"github.com/denglertai/gonfig/internal/logging"
 	"github.com/denglertai/gonfig/internal/plugin"
 	"github.com/spf13/cobra"
@@ -48,6 +49,8 @@ It provides a flexible plugin system for extending functionality and a filtering
 		// Initialize the Plugin system
 		plugin.InitPlugins(cfg.PluginPath)
 
+		filter.SetAllowUnknownFilters(cfg.AllowUnknownFilters)
+
 		return nil
 	},
 	TraverseChildren: true,
@@ -67,6 +70,8 @@ func GetAppConfig(cmd *cobra.Command) *config.AppConfig {
 		LogSource:  false,
 		ConfigPath: "",
 		PluginPath: "./plugins",
+
+		AllowUnknownFilters: false,
 	}
 }
 
@@ -84,4 +89,5 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("log-source", "s", false, "Whether to include source location in log output or not")
 	rootCmd.PersistentFlags().String("config-path", "", "Path to the directory containing .gonfig config file (env var: GONFIG_CONFIG_PATH)")
 	rootCmd.PersistentFlags().String("plugin-path", "./plugins", "Path to plugin directory (env var: GONFIG_PLUGIN_PATH)")
+	rootCmd.PersistentFlags().Bool("allow-unknown-filters", false, "Pass values on unchanged instead of failing for unknown filters, which may write secrets unhashed (env var: GONFIG_ALLOW_UNKNOWN_FILTERS)")
 }
