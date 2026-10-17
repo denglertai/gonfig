@@ -134,6 +134,26 @@ merging 16,000 keys took 915 ms for YAML and 325 ms for JSON. The keys of the ta
 Inserting XML fragments took quadratic time as well, since etree shifts all following children when a child is removed,
 and the fragment's children were moved from the front: 64,000 elements took 7.4 s. They are now removed from the end, which reduced it to 85 ms.
 
+## Plugins
+
+`BenchmarkExecutablePlugin` in [internal/plugin](../../internal/plugin/) measures filters of [executable plugins](../../PLUGINS.md), which are separate processes:
+
+```console
+$ go test -run '^$' -bench ExecutablePlugin -benchmem ./internal/plugin
+```
+
+Measured with Go 1.27.2 under WSL2 on the same machine as the baseline, 3 runs each:
+
+| Benchmark | Time | Measures |
+| --- | ---: | --- |
+| `upper` | 0.26 µs | The built-in filter `upper`, for comparison |
+| `bench_upper` | 138 µs | The same filter in a plugin: a request and its response through the plugin's stdin and stdout |
+| `startup` | 2.9 ms | Starting a plugin written in Go, reading its handshake and stopping it |
+
+A filter of a plugin costs about 0.14 s per 1,000 values, which is negligible for typical config files with a few values processed by plugins.
+Most of it is the round trip between the processes: a line sent through `cat` and back takes 64 µs on the same system.
+The plugin is started once per run of gonfig, so its startup time is added once, whether its filters are used or not.
+
 ## Findings
 
 ### Optimized

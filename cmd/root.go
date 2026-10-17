@@ -103,6 +103,8 @@ func GetAppConfig(cmd *cobra.Command) *config.AppConfig {
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
 	err := rootCmd.Execute()
+	// Executable plugins are stopped before exiting, so they can finish and their logs are complete
+	plugin.ClosePlugins()
 	if err != nil {
 		os.Exit(1)
 	}

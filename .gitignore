@@ -31,3 +31,6 @@ melange.rsa
 packages/
 apk/
 melange-cache
+
+# Executable plugins built from the plugin examples
+plugins/**/gonfig-plugin-*

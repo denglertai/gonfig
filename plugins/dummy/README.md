@@ -5,8 +5,10 @@ See [PLUGINS.md](../../PLUGINS.md) for how plugins work.
 
 ## Build
 
-Plugins have to be built with the same Go version and build flags as the gonfig binary loading them.
 Run the following command within this directory:
 ```console
-go build -buildmode=plugin -o dummy.so .
+go build -o gonfig-plugin-dummy .
 ```
+
+gonfig finds the plugin when it runs from the root of the repository, since `./plugins` is the default plugin directory.
+The plugin is built against the gonfig sources of the repository, see the `replace` directive in [go.mod](./go.mod).

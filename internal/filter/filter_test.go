@@ -171,6 +171,22 @@ func TestPluginFiltersDoNotShareParams(t *testing.T) {
 	assert.Equal(t, "first", result)
 }
 
+// TestAddAndRemovePluginFilters checks that only added filters are returned, skipping invalid filters and taken
+// names, and that removed filters are unknown again
+func TestAddAndRemovePluginFilters(t *testing.T) {
+	added := AddPluginFilters(map[string]interface{}{
+		"test_added_filter": &paramFilter{},
+		"upper":             &paramFilter{},
+		"test_invalid":      "not a filter",
+	})
+	assert.Equal(t, []string{"test_added_filter"}, added)
+	assert.True(t, IsKnown("test_added_filter"))
+
+	RemovePluginFilters(added)
+	assert.False(t, IsKnown("test_added_filter"))
+	assert.True(t, IsKnown("upper"))
+}
+
 // TestStringManipulationFilters checks the encoding, replacing, URL and list filters, including their params and errors
 func TestStringManipulationFilters(t *testing.T) {
 	testCases := []struct {
