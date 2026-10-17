@@ -77,12 +77,14 @@ GONFIG_LOG_LEVEL=debug gonfig --log-level trace config process -f ./config.yaml
 
 ### config
 
-`gonfig config` is intended to interact with various kinds of config file types including `.json`, `.xml`, `.yaml` and `.properties` files.
+`gonfig config` is intended to interact with various kinds of config file types including `.json`, `.xml`, `.yaml` and `.properties` files, as well as plain text files (`-t plain`).
 
 By now the only subcommand included is `process`. This is being used to actually process the given config file.
 
 In general, process takes the given input file and creates a flat list of all given keys, nodes and attributes depending on the file type.
 Afterwards every entry in that list is being processed individually by applying the filters.
+
+Only the processed values are changed, the rest of the file is preserved as far as the format allows: comments and key order are kept for YAML, JSON and properties files, and YAML files may contain multiple documents.
 
 Usage:
 
@@ -100,11 +102,17 @@ Usage:
    This will take the given file as an input, read it, apply filters and write back to `/path/to/file.xml`.
    Because no file extension is given, the type will be inferred from the file's extension (xml).
 
-1. Process a file with a custom extension that does not allow inferring the file's type (`-t` / `--inline` flag)
+1. Process a file with a custom extension that does not allow inferring the file's type (`-t` / `--file-type` flag)
     ```console
     $ gonfig config process -f /path/to/file.abc -t xml
     ```
    This will take the given file as an input, read it, apply filters and print the result to stdout.
+
+1. Process a file and write the result to another file (`-o` / `--output` flag)
+    ```console
+    $ gonfig config process -f /path/to/template.yaml -o /path/to/config.yaml -w
+    ```
+   An already existing output file is only overwritten if `-w` / `--overwrite` is given.
 
 Testdata can be found within [cmd/testdata/](cmd/testdata/).
 
