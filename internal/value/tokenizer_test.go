@@ -230,6 +230,7 @@ func TestProcessValueEdgeCases(t *testing.T) {
 		value string
 		want  any
 	}{
+		{desc: "no placeholder", value: "plain value", want: "plain value"},
 		{desc: "unclosed placeholder", value: "a${EDGE_TEST", want: "a${EDGE_TEST"},
 		{desc: "unclosed placeholder after placeholder", value: "${EDGE_TEST}${", want: "x${"},
 		{desc: "unclosed params", value: "${EDGE_TEST|upper(}", want: "X"},
