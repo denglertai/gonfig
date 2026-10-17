@@ -40,7 +40,7 @@ Note: Use single quotes in the shell, otherwise the shell expands `${...}` itsel
 
 Every placeholder is resolved in the following steps:
 
-1. **Environment variable lookup:** The value of the environment variable is read. A variable that is not set results in an empty string, not in an error.
+1. **Environment variable lookup:** The value of the environment variable is read. A variable that is not set results in an empty string, unless [`fail-on-missing`](#missing-variables) is enabled.
 1. **File inclusion:** If the value starts with `@`, the rest is treated as a file path and the value is replaced by the file's content.
    If the file does not exist, the value is kept as is (including the `@`). If it exists but cannot be read, processing fails.
 1. **Filters:** The filters are applied from left to right, each one receiving the output of the previous one.
@@ -109,6 +109,8 @@ api.example.com
 | [`trim`](#trim--trimleft--trimright) | | Removes leading and trailing whitespace |
 | [`trimleft`](#trim--trimleft--trimright) | | Removes leading spaces |
 | [`trimright`](#trim--trimleft--trimright) | | Removes trailing spaces |
+| [`default`](#default--required) | `value` | Replaces an empty value, e.g. of a variable that is not set |
+| [`required`](#default--required) | | Fails if the value is empty |
 | [`to_int`](#to_int--to_float--to_bool) | | Converts the value to an integer |
 | [`to_float`](#to_int--to_float--to_bool) | | Converts the value to a floating point number |
 | [`to_bool`](#to_int--to_float--to_bool) | | Converts the value to a boolean |
@@ -144,6 +146,42 @@ PRODUCTION production
 ```console
 $ V='  abc  ' gonfig value '[${V | trim}] [${V | trimleft}] [${V | trimright}]'
 [abc] [abc  ] [  abc]
+```
+
+### default / required
+
+`default` replaces an empty value by its param, e.g. for a variable that is not set. Other values are kept.
+`required` fails if the value is empty, both for variables that are not set and for variables set to an empty value.
+
+```console
+$ gonfig value 'port=${DB_PORT | default(5432)}'
+port=5432
+$ DB_PORT=6543 gonfig value 'port=${DB_PORT | default(5432)}'
+port=6543
+$ DB_PASSWORD= gonfig value '${DB_PASSWORD | required}'
+Error: filter required: the value is empty or the environment variable is not set
+```
+
+A default containing a comma has to be [escaped](#filter-params), e.g. `default(a\,b)`.
+
+### Missing variables
+
+By default, a variable that is not set is replaced by an empty string, so a typo like `${DB_PASWORD}` goes unnoticed.
+The option `fail-on-missing` makes such placeholders fail instead. It may be set with the flag `--fail-on-missing`, the environment variable `GONFIG_FAIL_ON_MISSING` or in `.gonfig.yaml`, see [configuration](./README.md#configuration):
+
+```console
+$ gonfig value 'password=${DB_PASWORD}'
+password=
+$ gonfig --fail-on-missing value 'password=${DB_PASWORD}'
+Error: environment variable "DB_PASWORD" is not set
+```
+
+- **Only variables that are not set fail.** A variable set to an empty value, e.g. `DB_PASSWORD=`, is deliberate and allowed. Use `required` to reject empty values as well.
+- **Defaults satisfy the check.** A placeholder providing a default never fails for a missing variable: a `default` filter in the same chain, also within a [filter template](#templates), or the `default` of a [placeholder template](#templates).
+
+```console
+$ gonfig --fail-on-missing value 'port=${DB_PORT | default(5432)}'
+port=5432
 ```
 
 ### to_int / to_float / to_bool
@@ -659,7 +697,7 @@ db1,db2,db3
 
 ## Caveats
 
-- **Missing variables are empty:** A variable that is not set is replaced by an empty string without an error.
+- **Missing variables are empty:** A variable that is not set is replaced by an empty string without an error, unless [`fail-on-missing`](#missing-variables) is enabled.
 - **Types in config files:** Processed values are strings unless a filter like `to_int` converts them, see [types](#types).
 - **YAML flow collections:** Within `[...]` or `{...}` an unquoted `${...}` is invalid YAML. Quote it, e.g. `hosts: ["${HOST_A}", "${HOST_B}"]`.
 - **Plain text files:** Every `${...}` is treated as a placeholder, including shell variables that were meant to be expanded by the shell later.

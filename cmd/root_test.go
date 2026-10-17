@@ -40,6 +40,7 @@ func TestDefaultAppConfig(t *testing.T) {
 		PluginPath:          "./plugins",
 		AllowUnknownFilters: false,
 		LogValues:           false,
+		FailOnMissing:       false,
 	}
 
 	// Defaults as used by the CLI, with all flags at their default values
@@ -62,6 +63,7 @@ func TestDefaultAppConfig(t *testing.T) {
 		"plugin-path":           "./plugins",
 		"allow-unknown-filters": "false",
 		"log-values":            "false",
+		"fail-on-missing":       "false",
 	}
 	for name, want := range flagDefaults {
 		flag := rootCmd.PersistentFlags().Lookup(name)

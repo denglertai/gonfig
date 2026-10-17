@@ -279,3 +279,54 @@ func TestValueTemplateWithEmptyPlaceholder(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "a${}b", result)
 }
+
+// TestFailOnMissing checks which placeholders fail for missing variables when enabled, depending on the defaults they provide
+func TestFailOnMissing(t *testing.T) {
+	setTemplates(t, config.Templates{
+		Filters: map[string]config.FilterTemplate{
+			"fallback": {Filters: "trim | default(fallback)"},
+			"clean":    {Filters: "trim"},
+		},
+		Placeholders: map[string]config.PlaceholderTemplate{
+			"with_default":    {Env: "MISSING_TEST_VAR", Default: "template-default"},
+			"with_filter":     {Env: "MISSING_TEST_VAR", Filters: "@fallback"},
+			"without_default": {Env: "MISSING_TEST_VAR"},
+			"url":             {Value: "http://${MISSING_TEST_VAR}/"},
+		},
+	})
+	filter.SetFailOnMissing(true)
+	t.Cleanup(func() { filter.SetFailOnMissing(false) })
+	t.Setenv("EMPTY_TEST_VAR", "")
+
+	testCases := []struct {
+		desc    string
+		value   string
+		want    any
+		wantErr string
+	}{
+		{desc: "missing variable", value: "${MISSING_TEST_VAR}", wantErr: `environment variable "MISSING_TEST_VAR" is not set`},
+		{desc: "embedded missing variable", value: "a ${MISSING_TEST_VAR} b", wantErr: `environment variable "MISSING_TEST_VAR" is not set`},
+		{desc: "empty variable", value: "${EMPTY_TEST_VAR}", want: ""},
+		{desc: "default filter", value: "${MISSING_TEST_VAR | default(5432)}", want: "5432"},
+		{desc: "default filter later in the chain", value: "${MISSING_TEST_VAR | trim | default(5432) | to_int}", want: 5432},
+		{desc: "filter template with default", value: "${MISSING_TEST_VAR | @fallback}", want: "fallback"},
+		{desc: "filter template without default", value: "${MISSING_TEST_VAR | @clean}", wantErr: "is not set"},
+		{desc: "placeholder template with default", value: "${@with_default}", want: "template-default"},
+		{desc: "placeholder template with default filter", value: "${@with_filter}", want: "fallback"},
+		{desc: "placeholder template followed by default", value: "${@without_default | default(outer)}", want: "outer"},
+		{desc: "placeholder template without default", value: "${@without_default}", wantErr: "is not set"},
+		{desc: "value template with missing variable", value: "${@url}", wantErr: "is not set"},
+		{desc: "required", value: "${EMPTY_TEST_VAR | required}", wantErr: "filter required: the value is empty or the environment variable is not set"},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			result, err := ProcessValue(tC.value)
+			if tC.wantErr != "" {
+				assert.ErrorContains(t, err, tC.wantErr)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tC.want, result)
+		})
+	}
+}
