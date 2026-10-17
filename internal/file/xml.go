@@ -9,39 +9,43 @@ import (
 	"github.com/beevik/etree"
 )
 
-// XmlConfigEntry represents a single configuration entry for an attribute
+// XmlAttributeConfigEntry represents a single configuration entry for an attribute
 type XmlAttributeConfigEntry struct {
-	attribute *etree.Attr
-	value     string
-	edited    bool
-	pathBuilt bool
-	path      string
+	element *etree.Element
+	// key is the local name of the attribute
+	key string
+	// fullKey includes the namespace prefix of the attribute, if any
+	fullKey string
+}
+
+// newXmlAttributeConfigEntry creates a configuration entry for the attribute of the element
+func newXmlAttributeConfigEntry(element *etree.Element, attr etree.Attr) *XmlAttributeConfigEntry {
+	return &XmlAttributeConfigEntry{
+		element: element,
+		key:     attr.Key,
+		fullKey: attr.FullKey(),
+	}
 }
 
 // Key returns the key of the configuration entry
 func (x *XmlAttributeConfigEntry) Key() string {
-	return x.attribute.Key
+	return x.key
 }
 
 // Path returns the path of the configuration entry
 func (x *XmlAttributeConfigEntry) Path() string {
-	if !x.pathBuilt {
-		x.path = fmt.Sprintf("%s@%s", x.attribute.Element().GetPath(), x.attribute.Key)
-		x.pathBuilt = true
-	}
-
-	return x.path
+	return fmt.Sprintf("%s@%s", x.element.GetPath(), x.fullKey)
 }
 
 // GetValue returns the value of the configuration entry
 func (x *XmlAttributeConfigEntry) GetValue() string {
-	return x.attribute.Value
+	return x.element.SelectAttrValue(x.fullKey, "")
 }
 
 // SetValue sets the value of the configuration entry
 func (x *XmlAttributeConfigEntry) SetValue(value string) {
-	x.value = value
-	x.edited = true
+	// Replaces the value of the existing attribute, including its namespace prefix
+	x.element.CreateAttr(x.fullKey, value)
 }
 
 // XmlConfigEntry represents a single configuration entry for an element
@@ -110,9 +114,7 @@ func (x *XmlConfigFileHandler) Read(source io.Reader) error {
 	}
 
 	for _, attr := range root.Attr {
-		x.entries = append(x.entries, &XmlAttributeConfigEntry{
-			attribute: &attr,
-		})
+		x.entries = append(x.entries, newXmlAttributeConfigEntry(root, attr))
 	}
 
 	x.handleChildElements(root.ChildElements())
@@ -140,9 +142,7 @@ func (x *XmlConfigFileHandler) handleChildElements(elements []*etree.Element) {
 		})
 
 		for _, attr := range element.Attr {
-			x.entries = append(x.entries, &XmlAttributeConfigEntry{
-				attribute: &attr,
-			})
+			x.entries = append(x.entries, newXmlAttributeConfigEntry(element, attr))
 		}
 
 		x.handleChildElements(element.ChildElements())
@@ -162,13 +162,7 @@ func (x *XmlConfigFileHandler) Process() (iter.Seq[ConfigEntry], error) {
 
 // Write writes the configuration entries to the target
 func (x *XmlConfigFileHandler) Write(target io.Writer) error {
-	// Need to re-process all Attribute entries to ensure they are written to the document
 	for _, entry := range x.entries {
-		if attr, ok := entry.(*XmlAttributeConfigEntry); ok {
-			if attr.edited {
-				attr.attribute.Element().CreateAttr(attr.attribute.Key, attr.value)
-			}
-		}
 		if elem, ok := entry.(*XmlElementConfigEntry); ok {
 			val := elem.element.Text()
 			if elem.fromCData {

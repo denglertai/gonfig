@@ -193,3 +193,21 @@ func TestXmlCDataProcessedOnce(t *testing.T) {
 	assert.NoError(t, NewFileProcessor(file, general.Undefined, output).Process())
 	assert.Equal(t, `<r><a><![CDATA[${CDATA_INNER}]]></a></r>`, output.String())
 }
+
+func TestXmlNamespacedAttributes(t *testing.T) {
+	handler := NewXmlConfigFileHandler()
+	assert.NoError(t, handler.Read(strings.NewReader(`<r xmlns:x="urn:x"><a x:loc="old" plain="old"/></r>`)))
+
+	entries, err := handler.Process()
+	assert.NoError(t, err)
+	for entry := range entries {
+		if entry.GetValue() == "old" {
+			entry.SetValue("new")
+			assert.Equal(t, "new", entry.GetValue())
+		}
+	}
+
+	output := new(bytes.Buffer)
+	assert.NoError(t, handler.Write(output))
+	assert.Equal(t, `<r xmlns:x="urn:x"><a x:loc="new" plain="new"/></r>`, output.String())
+}
