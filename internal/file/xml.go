@@ -1,10 +1,10 @@
 package file
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"iter"
+	"slices"
 
 	"github.com/beevik/etree"
 )
@@ -48,11 +48,9 @@ func (x *XmlAttributeConfigEntry) SetValue(value string) {
 	x.element.CreateAttr(x.fullKey, value)
 }
 
-// XmlConfigEntry represents a single configuration entry for an element
+// XmlElementConfigEntry represents a single configuration entry for an element
 type XmlElementConfigEntry struct {
 	element   *etree.Element
-	pathBuilt bool
-	path      string
 	fromCData bool
 }
 
@@ -63,11 +61,6 @@ func (x *XmlElementConfigEntry) Key() string {
 
 // Path returns the path of the configuration entry
 func (x *XmlElementConfigEntry) Path() string {
-	if !x.pathBuilt {
-		x.path = x.element.GetPath()
-		x.pathBuilt = true
-	}
-
 	return x.element.GetPath()
 }
 
@@ -97,14 +90,9 @@ func NewXmlConfigFileHandler() *XmlConfigFileHandler {
 
 // Read reads the configuration file
 func (x *XmlConfigFileHandler) Read(source io.Reader) error {
-	buf := new(bytes.Buffer)
-	buf.ReadFrom(source)
-
 	// Enable PreserveCData to keep CDATA sections intact
 	x.document.ReadSettings.PreserveCData = true
-	err := x.document.ReadFromBytes(buf.Bytes())
-
-	if err != nil {
+	if _, err := x.document.ReadFrom(source); err != nil {
 		return err
 	}
 
@@ -151,25 +139,15 @@ func (x *XmlConfigFileHandler) handleChildElements(elements []*etree.Element) {
 
 // Process processes the configuration file and returns the configuration entries
 func (x *XmlConfigFileHandler) Process() (iter.Seq[ConfigEntry], error) {
-	return func(yield func(ConfigEntry) bool) {
-		for _, entry := range x.entries {
-			if !yield(entry) {
-				return
-			}
-		}
-	}, nil
+	return slices.Values(x.entries), nil
 }
 
 // Write writes the configuration entries to the target
 func (x *XmlConfigFileHandler) Write(target io.Writer) error {
+	// Setting the text replaces CDATA sections with plain text, so restore them
 	for _, entry := range x.entries {
-		if elem, ok := entry.(*XmlElementConfigEntry); ok {
-			val := elem.element.Text()
-			if elem.fromCData {
-				elem.element.SetCData(val)
-			} else {
-				elem.element.SetText(val)
-			}
+		if elem, ok := entry.(*XmlElementConfigEntry); ok && elem.fromCData {
+			elem.element.SetCData(elem.element.Text())
 		}
 	}
 	_, err := x.document.WriteTo(target)
