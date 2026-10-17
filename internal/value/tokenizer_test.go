@@ -239,8 +239,11 @@ func TestProcessValueEdgeCases(t *testing.T) {
 		{desc: "dollar before placeholder", value: "$${EDGE_TEST}", want: "$x"},
 		{desc: "escaped closing bracket", value: `${EDGE_TEST|replace(\},y)}`, want: "x"},
 		{desc: "placeholders without separator", value: "${EDGE_TEST|upper}${EDGE_TEST}", want: "Xx"},
-		{desc: "non-string result of last placeholder", value: "a ${EDGE_TEST_INT|to_int}", want: 5},
-		{desc: "non-string result followed by string", value: "${EDGE_TEST_INT|to_int} ${EDGE_TEST}", want: "${EDGE_TEST_INT|to_int} x"},
+		{desc: "non-string result of whole value", value: "${EDGE_TEST_INT|to_int}", want: 5},
+		{desc: "non-string result embedded at the end", value: "a ${EDGE_TEST_INT|to_int}", want: "a 5"},
+		{desc: "non-string result embedded at the start", value: "${EDGE_TEST_INT|to_int} ${EDGE_TEST}", want: "5 x"},
+		{desc: "non-string result surrounded by whitespace", value: " ${EDGE_TEST_INT|to_int} ", want: " 5 "},
+		{desc: "float result embedded", value: "v${EDGE_TEST_INT|to_float}", want: "v5"},
 	}
 	for _, tC := range testCases {
 		t.Run(tC.desc, func(t *testing.T) {

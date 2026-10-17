@@ -35,7 +35,7 @@ czNjciZ0
 | Comments preserved | ✅ | – | ✅ | ✅ written as `#` | ✅ | |
 | Key order preserved | ✅ | ✅ | ✅ | ✅ | ✅ | |
 | Formatting preserved | ✅ including multiple documents | ❌ indented with 2 spaces | ✅ | ❌ written as `key = value` | ✅ | |
-| Value types | type of the original scalar | type of the original value | text | text | text | |
+| [Typed values](./FILTERS.md#types) | ✅ with `to_int`, `to_float`, `to_bool` | ✅ with `to_int`, `to_float`, `to_bool` | ❌ text | ❌ text | ❌ text | |
 
 ## Installation
 
@@ -327,6 +327,8 @@ ${ENV_VAR | filter1 | filter2(param) | filter3}
 | `trimleft` | Removes leading spaces | `${VAL \| trimleft}` |
 | `trimright` | Removes trailing spaces | `${VAL \| trimright}` |
 | `to_int` | Converts the value to an integer, fails if it is not numeric | `${VAL \| to_int}` |
+| `to_float` | Converts the value to a finite floating point number | `${VAL \| to_float}` |
+| `to_bool` | Converts the value to a boolean, e.g. from `true` or `1` | `${VAL \| to_bool}` |
 | `multiply(m=factor)` | Multiplies an integer value by `m`, which defaults to `1` | `${VAL \| to_int \| multiply(m=2)}` |
 | `md5` | Hashes the value with MD5 (hex encoded) | `${VAL \| md5}` |
 | `bcrypt` | Hashes the value with bcrypt, fails for values longer than 72 bytes | `${VAL \| bcrypt}` |

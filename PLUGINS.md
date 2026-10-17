@@ -32,7 +32,8 @@ The keys of the map are the filter names used in placeholders, the values are th
 Every filter has to provide a `Process` method, and may provide an `AcceptParams` method to receive [params](./FILTERS.md#filter-params):
 
 ```go
-// Required: transforms the value, which is usually a string but may be of any type (e.g. after to_int)
+// Required: transforms the value, which is usually a string but may be of any type (e.g. after to_int).
+// Integers, floats and booleans returned for a whole value are written as such to YAML and JSON files.
 Process(value any) (any, error)
 
 // Optional: receives the params given in brackets, e.g. sha256(encoding=base64)

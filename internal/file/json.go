@@ -38,6 +38,8 @@ type JsonConfigEntry struct {
 	path   string
 	value  string
 	edited bool
+	// typed holds a number (json.Number) or boolean set by SetTypedValue, which is written instead of value
+	typed any
 }
 
 // Key returns the key of the configuration entry
@@ -59,6 +61,23 @@ func (j *JsonConfigEntry) GetValue() string {
 func (j *JsonConfigEntry) SetValue(value string) {
 	j.edited = j.edited || j.value != value
 	j.value = value
+	j.typed = nil
+}
+
+// SetTypedValue sets a number or boolean, which replaces the original value regardless of its type
+func (j *JsonConfigEntry) SetTypedValue(value any) bool {
+	tv, ok := newTypedValue(value)
+	if !ok {
+		return false
+	}
+
+	j.typed = json.Number(tv.text)
+	if tv.kind == typedBool {
+		j.typed = tv.text == "true"
+	}
+	j.value = tv.text
+	j.edited = true
+	return true
 }
 
 // getConvertedValue converts the value to the type of the original value
@@ -193,6 +212,11 @@ func (j *JsonConfigFileHandler) Write(target io.Writer) error {
 	for _, entry := range j.entries {
 		jce := entry.(*JsonConfigEntry)
 		if !jce.edited {
+			continue
+		}
+
+		if jce.typed != nil {
+			jce.node.value = jce.typed
 			continue
 		}
 

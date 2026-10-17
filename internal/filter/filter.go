@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"os"
 	"reflect"
 	"regexp"
@@ -123,6 +124,42 @@ func toInt(value any) (int, error) {
 		return strconv.Atoi(v)
 	default:
 		return 0, fmt.Errorf("cannot convert %v (%T) to int", value, value)
+	}
+}
+
+// toFloat converts a filter input to a finite float64, parsing string values
+func toFloat(value any) (float64, error) {
+	var f float64
+	switch v := value.(type) {
+	case float64:
+		f = v
+	case int:
+		f = float64(v)
+	case string:
+		var err error
+		if f, err = strconv.ParseFloat(v, 64); err != nil {
+			return 0, err
+		}
+	default:
+		return 0, fmt.Errorf("cannot convert %v (%T) to float", value, value)
+	}
+
+	// Config files cannot represent infinite numbers and NaN consistently
+	if math.IsInf(f, 0) || math.IsNaN(f) {
+		return 0, fmt.Errorf("cannot convert %v to a finite float", value)
+	}
+	return f, nil
+}
+
+// toBool converts a filter input to a bool, parsing string values like "true", "false", "1" and "0"
+func toBool(value any) (bool, error) {
+	switch v := value.(type) {
+	case bool:
+		return v, nil
+	case string:
+		return strconv.ParseBool(v)
+	default:
+		return false, fmt.Errorf("cannot convert %v (%T) to bool", value, value)
 	}
 }
 
@@ -285,6 +322,22 @@ func init() {
 		return &FuncFilter{
 			fn: func(value any, _ map[string]string) (any, error) {
 				return toInt(value)
+			},
+		}
+	}
+
+	filterMap["to_float"] = func(token string) Filter {
+		return &FuncFilter{
+			fn: func(value any, _ map[string]string) (any, error) {
+				return toFloat(value)
+			},
+		}
+	}
+
+	filterMap["to_bool"] = func(token string) Filter {
+		return &FuncFilter{
+			fn: func(value any, _ map[string]string) (any, error) {
+				return toBool(value)
 			},
 		}
 	}

@@ -90,7 +90,7 @@
     },
     "test": {
       "bla_blub": "yoyoyo",
-      "int": "123",
+      "int": 123,
       "float": "123.123",
       "bool": "true",
       "string": "string",
@@ -98,7 +98,7 @@
     },
     "list": {
       "list": [
-        "123",
+        123,
         "123.123",
         "true",
         "string",
@@ -148,7 +148,7 @@
     },
     "test": {
       "bla_blub": "yoyoyo",
-      "int": "123",
+      "int": 123,
       "float": "123.123",
       "bool": "true",
       "string": "string",
@@ -156,7 +156,7 @@
     },
     "list": {
       "list": [
-        "123",
+        123,
         "123.123",
         "true",
         "string",
@@ -366,7 +366,7 @@ inty.mc.int.int = 123
     },
     "test": {
       "bla_blub": "yoyoyo",
-      "int": "123",
+      "int": 123,
       "float": "123.123",
       "bool": "true",
       "string": "string",
@@ -374,7 +374,7 @@ inty.mc.int.int = 123
     },
     "list": {
       "list": [
-        "123",
+        123,
         "123.123",
         "true",
         "string",
@@ -424,7 +424,7 @@ inty.mc.int.int = 123
     },
     "test": {
       "bla_blub": "yoyoyo",
-      "int": "123",
+      "int": 123,
       "float": "123.123",
       "bool": "true",
       "string": "string",
@@ -432,7 +432,7 @@ inty.mc.int.int = 123
     },
     "list": {
       "list": [
-        "123",
+        123,
         "123.123",
         "true",
         "string",
@@ -642,7 +642,7 @@ inty.mc.int.int = 123
     },
     "test": {
       "bla_blub": "yoyoyo",
-      "int": "123",
+      "int": 123,
       "float": "123.123",
       "bool": "true",
       "string": "string",
@@ -650,7 +650,7 @@ inty.mc.int.int = 123
     },
     "list": {
       "list": [
-        "123",
+        123,
         "123.123",
         "true",
         "string",
@@ -700,7 +700,7 @@ inty.mc.int.int = 123
     },
     "test": {
       "bla_blub": "yoyoyo",
-      "int": "123",
+      "int": 123,
       "float": "123.123",
       "bool": "true",
       "string": "string",
@@ -708,7 +708,7 @@ inty.mc.int.int = 123
     },
     "list": {
       "list": [
-        "123",
+        123,
         "123.123",
         "true",
         "string",
@@ -892,7 +892,7 @@ inty.mc.int.int = 123
     },
     "test": {
       "bla_blub": "yoyoyo",
-      "int": "123",
+      "int": 123,
       "float": "123.123",
       "bool": "true",
       "string": "string",
@@ -900,7 +900,7 @@ inty.mc.int.int = 123
     },
     "list": {
       "list": [
-        "123",
+        123,
         "123.123",
         "true",
         "string",

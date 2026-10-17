@@ -38,6 +38,27 @@ func (y *YamlConfigEntry) SetValue(value string) {
 	y.node.Value = value
 }
 
+// yamlTags are the YAML tags of the kinds of typed values
+var yamlTags = map[typedKind]string{
+	typedInt:   "!!int",
+	typedFloat: "!!float",
+	typedBool:  "!!bool",
+}
+
+// SetTypedValue sets a number or boolean as a plain scalar with the matching tag, even if the placeholder was quoted.
+// Keys of mappings keep their text, so they are not set.
+func (y *YamlConfigEntry) SetTypedValue(value any) bool {
+	tv, ok := newTypedValue(value)
+	if !ok || y.isKey {
+		return false
+	}
+
+	y.node.Value = tv.text
+	y.node.Tag = yamlTags[tv.kind]
+	y.node.Style = 0
+	return true
+}
+
 // IsKey returns whether the configuration entry represents the key of a mapping rather than a value
 func (y *YamlConfigEntry) IsKey() bool {
 	return y.isKey
