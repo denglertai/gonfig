@@ -244,6 +244,20 @@ func TestFragments(t *testing.T) {
 			want:     "<server><resources><x/>1<y>2</y><z/>3</resources><keep/></server>",
 		},
 		{
+			desc:     "xml fragment embedded into text after a child element",
+			fileType: general.XML,
+			content:  "<server><resources><old/>text ${FRAGMENT | fragment}</resources></server>",
+			fragment: "",
+			wantErr:  "has to make up the whole value",
+		},
+		{
+			desc:     "xml fragment in a later text node replaces the whole content",
+			fileType: general.XML,
+			content:  "<server><resources><old/>${FRAGMENT | fragment}<other/></resources><keep/></server>",
+			fragment: "<new/>",
+			want:     "<server><resources><new/></resources><keep/></server>",
+		},
+		{
 			desc:     "xml element content removed for an empty fragment",
 			fileType: general.XML,
 			content:  "<server><resources>${FRAGMENT | fragment}</resources></server>",
