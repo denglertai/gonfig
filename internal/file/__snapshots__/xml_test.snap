@@ -59,7 +59,8 @@
             <providers>
                 <pattern>
                     <omitEmptyFields>true</omitEmptyFields>
-                    <pattern><![CDATA[
+                    <pattern>
+                        <![CDATA[
                         {
                           "timestamp": "%date{ISO8601}",
                           "logger": "%logger{0}",
@@ -71,7 +72,8 @@
                           "message": "%message",
                           "traceId": "%mdc{traceId}"
                         }
-                        ]]></pattern>
+                        ]]>
+                    </pattern>
                 </pattern>
             </providers>
         </encoder>
