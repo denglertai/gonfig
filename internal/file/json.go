@@ -184,6 +184,7 @@ func (j *JsonConfigFileHandler) handleChildren(container *gabs.Container, path s
 		currentPath := appendToPath(path, fmt.Sprint(i))
 		currentHierarchy := append(slices.Clone(hierarchy), fmt.Sprint(i))
 		if err := j.handleChildren(child, currentPath, currentHierarchy); err != nil {
+			return err
 		}
 	}
 
