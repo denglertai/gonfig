@@ -94,15 +94,17 @@ func runPlugin(path string) error {
 	return nil
 }
 
-// loadPlugin loads a single Go plugin and registers the filters it provides
+// loadPlugin loads a single Go plugin and registers the filters it provides.
+// It uses the deprecated PluginFilter, since loading the deprecated Go plugins is what it exists for.
+//
+//nolint:staticcheck
 func loadPlugin(path string) error {
 	p, err := plugin.Open(path)
 	if err != nil {
 		return err
 	}
 
-	// Loading the deprecated Go plugins is what this function exists for
-	pf, err := lookUpSymbol[pkgplugin.PluginFilter](p, "Filter") //nolint:staticcheck
+	pf, err := lookUpSymbol[pkgplugin.PluginFilter](p, "Filter")
 	if err != nil {
 		return err
 	}
