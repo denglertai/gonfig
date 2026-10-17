@@ -10,6 +10,7 @@ import (
 
 	"github.com/denglertai/gonfig/internal/filter"
 	"github.com/denglertai/gonfig/internal/general"
+	"github.com/denglertai/gonfig/internal/logging"
 	"github.com/gkampitakis/go-snaps/snaps"
 	"github.com/stretchr/testify/assert"
 )
@@ -665,4 +666,65 @@ func TestFailOnMissingKeepsFileUnchanged(t *testing.T) {
 	result, err := os.ReadFile(fileName)
 	assert.NoError(t, err)
 	assert.Equal(t, "password: \"\"\nport: \"5432\"\n", string(result))
+}
+
+// captureStderr returns everything written to stderr while run is executed, including logs
+func captureStderr(t *testing.T, run func()) string {
+	t.Helper()
+
+	reader, writer, err := os.Pipe()
+	assert.NoError(t, err)
+
+	stderr := os.Stderr
+	os.Stderr = writer
+	t.Cleanup(func() {
+		os.Stderr = stderr
+		// Logging was initialized with the pipe, so initialize it with the real stderr again
+		assert.NoError(t, logging.InitLogging("info", false))
+	})
+
+	run()
+
+	assert.NoError(t, writer.Close())
+	output, err := io.ReadAll(reader)
+	assert.NoError(t, err)
+	return string(output)
+}
+
+// TestSuccessfulRunsAreSilent checks that processing a file writes nothing to stderr at the default log level
+func TestSuccessfulRunsAreSilent(t *testing.T) {
+	// Options like log-values log warnings, so neither the environment nor a config file of the machine may enable them
+	t.Setenv("HOME", t.TempDir())
+	t.Chdir(t.TempDir())
+	for _, key := range []string{"GONFIG_LOG_LEVEL", "GONFIG_LOG_SOURCE", "GONFIG_CONFIG_PATH", "GONFIG_PLUGIN_PATH", "GONFIG_ALLOW_UNKNOWN_FILTERS", "GONFIG_LOG_VALUES", "GONFIG_FAIL_ON_MISSING"} {
+		t.Setenv(key, "")
+	}
+	t.Setenv("SILENT_TEST_VALUE", "value")
+
+	dir := t.TempDir()
+	input := path.Join(dir, "config.yaml")
+	assert.NoError(t, os.WriteFile(input, []byte("key: ${SILENT_TEST_VALUE}\n"), 0o644))
+
+	for _, args := range [][]string{
+		{"config", "process", "-f", input},
+		{"config", "process", "-f", input, "-o", path.Join(dir, "output.yaml")},
+		{"config", "process", "-f", input, "-i"},
+		{"value", "${SILENT_TEST_VALUE}"},
+	} {
+		stderr := captureStderr(t, func() {
+			resetFlags(t)
+			rootCmd.SetArgs(args)
+			assert.NoError(t, rootCmd.Execute())
+		})
+		assert.Empty(t, stderr, args)
+	}
+
+	// The details are still available at debug level
+	stderr := captureStderr(t, func() {
+		resetFlags(t)
+		rootCmd.SetArgs([]string{"-l", "debug", "config", "process", "-f", input})
+		assert.NoError(t, rootCmd.Execute())
+	})
+	assert.Contains(t, stderr, `"msg":"Running command"`)
+	assert.Contains(t, stderr, `"msg":"Processing file"`)
 }
