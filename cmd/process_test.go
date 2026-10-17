@@ -93,6 +93,7 @@ func TestStdout(t *testing.T) {
 				args = append(args, "-t", string(tC.fileType))
 			}
 
+			resetFlags(t)
 			rootCmd.SetArgs(args)
 			err = rootCmd.Execute()
 			assert.NoError(t, err)
@@ -200,6 +201,7 @@ func TestFile(t *testing.T) {
 				args = append(args, "-t", string(tC.fileType))
 			}
 
+			resetFlags(t)
 			rootCmd.SetArgs(args)
 			err = rootCmd.Execute()
 			assert.NoError(t, err)
@@ -278,6 +280,7 @@ func TestPassingExtension(t *testing.T) {
 			// Take the path of the file and pass it as an argument to the command and see if it works
 			args := []string{"config", "process", "-f", fileName, "-i", "-l", "trace", "-s", "-t", string(tC.fileType)}
 
+			resetFlags(t)
 			rootCmd.SetArgs(args)
 			err = rootCmd.Execute()
 			assert.NoError(t, err)
@@ -382,6 +385,7 @@ func TestFileOverwrite(t *testing.T) {
 				args = append(args, "-t", string(tC.fileType))
 			}
 
+			resetFlags(t)
 			rootCmd.SetArgs(args)
 			err = rootCmd.Execute()
 			assert.NoError(t, err)
@@ -451,6 +455,7 @@ func TestYamlMove(t *testing.T) {
 				args = append(args, "-t", string(tC.fileType))
 			}
 
+			resetFlags(t)
 			rootCmd.SetArgs(args)
 			err = rootCmd.Execute()
 			assert.NoError(t, err)

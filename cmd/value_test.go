@@ -57,6 +57,7 @@ func TestValue(t *testing.T) {
 				outC <- buf.String()
 			}()
 
+			resetFlags(t)
 			rootCmd.SetArgs([]string{"value", tc.input})
 			err := rootCmd.Execute()
 			assert.NoError(t, err)

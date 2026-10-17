@@ -13,10 +13,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var output string
-var inline bool
-var overwriteExistingFile bool
-
 // processCmd represents the process command
 var processCmd = &cobra.Command{
 	Use:              "process",
@@ -24,7 +20,25 @@ var processCmd = &cobra.Command{
 	Long:             `Processes a file and outputs the result to the dersired output. Defaults to stdout`,
 	TraverseChildren: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		configSettings := getConfigSettings(args)
+		configSettings, err := getConfigSettings(cmd)
+		if err != nil {
+			return err
+		}
+
+		output, err := cmd.Flags().GetString("output")
+		if err != nil {
+			return err
+		}
+
+		inline, err := cmd.Flags().GetBool("inline")
+		if err != nil {
+			return err
+		}
+
+		overwriteExistingFile, err := cmd.Flags().GetBool("overwrite")
+		if err != nil {
+			return err
+		}
 
 		logging.Info("RunE", "command", cmd.Name(), "args", args, "configSettings", configSettings)
 
@@ -39,7 +53,7 @@ var processCmd = &cobra.Command{
 		var o = new(bytes.Buffer)
 		logging.Info("Processing file", "file", configSettings.File, "type", configSettings.FileType)
 		processor := file.NewFileProcessor(configSettings.File, configSettings.FileType, o)
-		err := processor.Process()
+		err = processor.Process()
 		if err != nil {
 			return err
 		}
@@ -74,11 +88,11 @@ var processCmd = &cobra.Command{
 func init() {
 	configCmd.AddCommand(processCmd)
 
-	processCmd.Flags().StringVarP(&output, "output", "o", "-", "Controls where to put the results (defaults to stdout)")
+	processCmd.Flags().StringP("output", "o", "-", "Controls where to put the results (defaults to stdout)")
 
-	processCmd.Flags().BoolVarP(&inline, "inline", "i", false, "Controls if the output should get written to the source file directly (defaults to false)")
+	processCmd.Flags().BoolP("inline", "i", false, "Controls if the output should get written to the source file directly (defaults to false)")
 
-	processCmd.Flags().BoolVarP(&overwriteExistingFile, "overwrite", "w", false, "Controls if the output should overwrite the source file (defaults to false). This implies -i (--inline). If the source file does not exist, it will be created.")
+	processCmd.Flags().BoolP("overwrite", "w", false, "Controls if the output should overwrite the source file (defaults to false). This implies -i (--inline). If the source file does not exist, it will be created.")
 }
 
 type ErrFileExists error
