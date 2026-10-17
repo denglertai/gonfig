@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/denglertai/gonfig/internal/general"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
@@ -42,9 +43,16 @@ func LoadAppConfig(v *viper.Viper) *AppConfig {
 	}
 }
 
-// SetupViper configures Viper with defaults and paths
-func SetupViper() *viper.Viper {
+// SetupViper configures Viper with defaults and paths.
+// The given flags (may be nil) are bound before the config file is located,
+// so that flags such as --config-path take effect.
+func SetupViper(flags *pflag.FlagSet) *viper.Viper {
 	v := viper.New()
+
+	// Bind CLI flags so they override env vars & config files
+	if flags != nil {
+		_ = v.BindPFlags(flags)
+	}
 
 	// Set defaults
 	v.SetDefault("log-level", "info")
