@@ -31,7 +31,7 @@ Traps found while working on this codebase. Check the relevant section before ch
 
 ## XML (github.com/beevik/etree)
 
-- Only an element's **leading text** is processed (`Text()`); placeholders after child elements are not (#220). The root element's own text is not processed (#212).
+- Each **text node** (`etree.CharData`) of an element is an entry, including the root element's text, text after child elements and CDATA sections, which keep their CDATA flag when their value is set. Text nodes consisting of whitespace only have no entries. Don't use `Element.Text()`/`SetText()` for values: they only cover the leading text and replace or merge text nodes, which used to lose text around CDATA sections.
 - `RemoveChild`/`AddChild` shift and re-index all following children, so moving many children from the front is quadratic. Remove from the end.
 
 ## JSON

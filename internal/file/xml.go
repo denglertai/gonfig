@@ -7,6 +7,7 @@ import (
 	"iter"
 	"regexp"
 	"slices"
+	"strings"
 
 	"github.com/beevik/etree"
 	"github.com/denglertai/gonfig/internal/filter"
@@ -51,39 +52,41 @@ func (x *XmlAttributeConfigEntry) SetValue(value string) {
 	x.element.CreateAttr(x.fullKey, value)
 }
 
-// XmlElementConfigEntry represents a single configuration entry for an element
-type XmlElementConfigEntry struct {
-	element   *etree.Element
-	fromCData bool
+// XmlTextConfigEntry represents a text node of an element, which is either plain text or a CDATA section.
+// An element containing child elements may have several text nodes, e.g. before and after a child element.
+type XmlTextConfigEntry struct {
+	text *etree.CharData
+	// element contains the text node
+	element *etree.Element
 	// handler collects the entries of inserted fragments
 	handler *XmlConfigFileHandler
 }
 
-// Key returns the key of the configuration entry
-func (x *XmlElementConfigEntry) Key() string {
+// Key returns the key of the configuration entry, which is the tag of the element containing the text
+func (x *XmlTextConfigEntry) Key() string {
 	return x.element.Tag
 }
 
-// Path returns the path of the configuration entry
-func (x *XmlElementConfigEntry) Path() string {
+// Path returns the path of the configuration entry, which is the path of the element containing the text
+func (x *XmlTextConfigEntry) Path() string {
 	return x.element.GetPath()
 }
 
 // GetValue returns the value of the configuration entry
-func (x *XmlElementConfigEntry) GetValue() string {
-	return x.element.Text()
+func (x *XmlTextConfigEntry) GetValue() string {
+	return x.text.Data
 }
 
-// SetValue sets the value of the configuration entry
-func (x *XmlElementConfigEntry) SetValue(value string) {
-	x.element.SetText(value)
+// SetValue sets the value of the configuration entry. A CDATA section stays a CDATA section.
+func (x *XmlTextConfigEntry) SetValue(value string) {
+	x.text.Data = value
 }
 
-// SetFragment replaces the content of the element by the fragment, which may consist of several elements and text.
-// An empty fragment removes the content.
+// SetFragment replaces the whole content of the element containing the text by the fragment, which may consist of
+// several elements and text. An empty fragment removes the content.
 // It returns entries for all inserted elements, including nested ones, and their attributes for placeholder processing.
 // It returns an error if f.IsList is set or f.Text cannot be parsed as XML content.
-func (x *XmlElementConfigEntry) SetFragment(f filter.Fragment) ([]ConfigEntry, error) {
+func (x *XmlTextConfigEntry) SetFragment(f filter.Fragment) ([]ConfigEntry, error) {
 	// XML has no lists, so a JSON array would only become text
 	if f.IsList {
 		return nil, errors.New("lists can only be inserted into YAML and JSON files")
@@ -106,9 +109,9 @@ func (x *XmlElementConfigEntry) SetFragment(f filter.Fragment) ([]ConfigEntry, e
 	for _, child := range children {
 		x.element.AddChild(child)
 	}
-	x.fromCData = false
 
-	return x.handler.collectEntries(func() { x.handler.handleChildElements(x.element.ChildElements()) }), nil
+	// The attributes of the element already have entries, so only the new content is collected
+	return x.handler.collectEntries(func() { x.handler.handleContent(x.element) }), nil
 }
 
 // xmlDeclarationRe matches an XML declaration at the start of a fragment, e.g. of a fragment file
@@ -143,7 +146,7 @@ func NewXmlConfigFileHandler() *XmlConfigFileHandler {
 
 // Read reads the configuration file
 func (x *XmlConfigFileHandler) Read(source io.Reader) error {
-	// Enable PreserveCData to keep CDATA sections intact
+	// Keep CDATA sections as text nodes of their own, so they are written back as CDATA
 	x.document.ReadSettings.PreserveCData = true
 	if _, err := x.document.ReadFrom(source); err != nil {
 		return err
@@ -154,11 +157,7 @@ func (x *XmlConfigFileHandler) Read(source io.Reader) error {
 		return fmt.Errorf("no root element in file found")
 	}
 
-	for _, attr := range root.Attr {
-		x.entries = append(x.entries, newXmlAttributeConfigEntry(root, attr))
-	}
-
-	x.handleChildElements(root.ChildElements())
+	x.handleElement(root)
 
 	return nil
 }
@@ -170,31 +169,26 @@ func (x *XmlConfigFileHandler) collectEntries(insert func()) []ConfigEntry {
 	return slices.Clone(x.entries[before:])
 }
 
-// handleChildElements recursively processes the child elements and their attributes
-func (x *XmlConfigFileHandler) handleChildElements(elements []*etree.Element) {
-	for _, element := range elements {
-		fromCData := false
-		for _, child := range element.Child {
-			if cdata, ok := child.(*etree.CharData); ok && cdata.IsCData() {
-				// Expose the CDATA content as the element's text; it is processed
-				// together with all other entries and written back as CDATA
-				element.SetText(cdata.Data)
-				fromCData = true
-				break
+// handleElement collects the entries of the attributes and the content of the element
+func (x *XmlConfigFileHandler) handleElement(element *etree.Element) {
+	for _, attr := range element.Attr {
+		x.entries = append(x.entries, newXmlAttributeConfigEntry(element, attr))
+	}
+	x.handleContent(element)
+}
+
+// handleContent collects the entries of the text nodes and child elements of the element in document order.
+// Text nodes consisting of whitespace only, e.g. the indentation between elements, cannot contain placeholders.
+func (x *XmlConfigFileHandler) handleContent(element *etree.Element) {
+	for _, child := range element.Child {
+		switch token := child.(type) {
+		case *etree.CharData:
+			if strings.TrimSpace(token.Data) != "" {
+				x.entries = append(x.entries, &XmlTextConfigEntry{text: token, element: element, handler: x})
 			}
+		case *etree.Element:
+			x.handleElement(token)
 		}
-
-		x.entries = append(x.entries, &XmlElementConfigEntry{
-			element:   element,
-			fromCData: fromCData,
-			handler:   x,
-		})
-
-		for _, attr := range element.Attr {
-			x.entries = append(x.entries, newXmlAttributeConfigEntry(element, attr))
-		}
-
-		x.handleChildElements(element.ChildElements())
 	}
 }
 
@@ -205,12 +199,6 @@ func (x *XmlConfigFileHandler) Process() (iter.Seq[ConfigEntry], error) {
 
 // Write writes the configuration entries to the target
 func (x *XmlConfigFileHandler) Write(target io.Writer) error {
-	// Setting the text replaces CDATA sections with plain text, so restore them
-	for _, entry := range x.entries {
-		if elem, ok := entry.(*XmlElementConfigEntry); ok && elem.fromCData {
-			elem.element.SetCData(elem.element.Text())
-		}
-	}
 	_, err := x.document.WriteTo(target)
 	return err
 }

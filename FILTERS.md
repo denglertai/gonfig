@@ -460,8 +460,7 @@ logging:
       path: /var/log/app.log
 ```
 
-In XML files, a fragment replaces the whole content of the element containing the placeholder. It may consist of several elements and text.
-Like any placeholder in XML, it is only found at the start of the element's content, before any child elements:
+In XML files, a fragment replaces the whole content of the element containing the placeholder, including other text and child elements. It may consist of several elements and text:
 
 `server.xml`:
 ```xml
