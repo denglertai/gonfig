@@ -1,6 +1,7 @@
 package file
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"iter"
@@ -48,6 +49,8 @@ type FileProcessor struct {
 	FileType general.FileType
 	// Output represents the output writer
 	Output io.Writer
+	// report collects the problems of all entries while checking the file, see Check
+	report *CheckReport
 }
 
 // NewFileProcessor creates a new file processor
@@ -78,32 +81,13 @@ func NewFileProcessor(fileName string, fileType general.FileType, output io.Writ
 // as far as the file type's library allows, e.g. comments and key order.
 // If any value fails to process, nothing is written.
 func (fp *FileProcessor) Process() error {
-	fileGroup := slog.Group("file", "name", fp.FileName, "type", fp.FileType)
-
-	handler, err := fp.getFileProcessor()
+	handler, entries, err := fp.read()
 	if err != nil {
 		return err
-	}
-
-	file, err := os.Open(fp.FileName)
-	if err != nil {
-		return err
-	}
-	// The file is only read, so an error closing it does not affect the result
-	defer func() { _ = file.Close() }()
-
-	err = handler.Read(file)
-	if err != nil {
-		return fmt.Errorf("failed to read %s: %w", fp.FileName, err)
-	}
-
-	entries, err := handler.Process()
-	if err != nil {
-		return fmt.Errorf("failed to process %s: %w", fp.FileName, err)
 	}
 
 	for entry := range entries {
-		if err := fp.processEntry(entry, true, fileGroup); err != nil {
+		if err := fp.processEntry(entry, true, fp.fileGroup()); err != nil {
 			return err
 		}
 	}
@@ -113,6 +97,41 @@ func (fp *FileProcessor) Process() error {
 	}
 
 	return nil
+}
+
+// read reads and parses the file with the handler of its file type and returns the handler and its entries
+func (fp *FileProcessor) read() (ConfigFileHandler, iter.Seq[ConfigEntry], error) {
+	handler, err := fp.getFileProcessor()
+	if err != nil {
+		return nil, nil, err
+	}
+	return fp.readWith(handler)
+}
+
+// readWith reads and parses the file with the given handler and returns the handler and its entries
+func (fp *FileProcessor) readWith(handler ConfigFileHandler) (ConfigFileHandler, iter.Seq[ConfigEntry], error) {
+	file, err := os.Open(fp.FileName)
+	if err != nil {
+		return nil, nil, err
+	}
+	// The file is only read, so an error closing it does not affect the result
+	defer func() { _ = file.Close() }()
+
+	if err := handler.Read(file); err != nil {
+		return nil, nil, fmt.Errorf("failed to read %s: %w", fp.FileName, err)
+	}
+
+	entries, err := handler.Process()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to process %s: %w", fp.FileName, err)
+	}
+
+	return handler, entries, nil
+}
+
+// fileGroup returns the attributes describing the file in log records
+func (fp *FileProcessor) fileGroup() slog.Attr {
+	return slog.Group("file", "name", fp.FileName, "type", fp.FileType)
 }
 
 // processEntry replaces the placeholders of the entry. If fragments are allowed, an entry may be replaced by
@@ -125,6 +144,14 @@ func (fp *FileProcessor) processEntry(entry ConfigEntry, allowFragments bool, fi
 		return nil
 	}
 
+	if fp.report != nil {
+		return fp.checkEntry(entry, current, allowFragments)
+	}
+	return fp.applyEntry(entry, current, allowFragments, fileGroup)
+}
+
+// applyEntry replaces the placeholders of the entry's current value and sets the result
+func (fp *FileProcessor) applyEntry(entry ConfigEntry, current string, allowFragments bool, fileGroup slog.Attr) error {
 	logging.Debug("Processing entry", "entry", entryPath{entry}, fileGroup)
 
 	newVal, err := value.ProcessValue(current)
@@ -157,18 +184,24 @@ func (fp *FileProcessor) processEntry(entry ConfigEntry, allowFragments bool, fi
 	return nil
 }
 
+// Errors of fragments, which are wrapped with the entry and file, so a check can report the reason only
+var (
+	errNestedFragment       = errors.New("fragments cannot contain further fragments")
+	errFragmentNotSupported = errors.New("fragments are not supported here, only for YAML and JSON values and keys and the content of XML elements")
+)
+
 // insertFragment inserts the fragment in place of the entry and processes the entries of the fragment.
 // It returns an error when allowFragments is false or the entry does not support fragments.
 // Placeholders in inserted entries are processed with further fragments disabled.
 // Errors of the insertion and of processing placeholders are returned. Processing then stops, so nothing is written.
 func (fp *FileProcessor) insertFragment(entry ConfigEntry, fragment filter.Fragment, allowFragments bool, fileGroup slog.Attr) error {
 	if !allowFragments {
-		return fmt.Errorf("failed to process the value of %s in %s: fragments cannot contain further fragments", entry.Path(), fp.FileName)
+		return fmt.Errorf("failed to process the value of %s in %s: %w", entry.Path(), fp.FileName, errNestedFragment)
 	}
 
 	fragmentEntry, ok := entry.(FragmentConfigEntry)
 	if !ok {
-		return fmt.Errorf("failed to process the value of %s in %s: fragments are not supported here, only for YAML and JSON values and keys and the content of XML elements", entry.Path(), fp.FileName)
+		return fmt.Errorf("failed to process the value of %s in %s: %w", entry.Path(), fp.FileName, errFragmentNotSupported)
 	}
 
 	inserted, err := fragmentEntry.SetFragment(fragment)

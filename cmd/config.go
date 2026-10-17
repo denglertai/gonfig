@@ -20,16 +20,10 @@ The format is inferred from the file extension unless set via --file-type.`,
 }
 
 // getConfigSettings reads the config settings from the flags of the command
-func getConfigSettings(cmd *cobra.Command) (*config.Settings, error) {
-	fileName, err := cmd.Flags().GetString("file")
-	if err != nil {
-		return nil, err
-	}
-
-	fileType, err := cmd.Flags().GetString("file-type")
-	if err != nil {
-		return nil, err
-	}
+func getConfigSettings(cmd *cobra.Command) *config.Settings {
+	// Both flags are persistent flags of the config command, so reading them cannot fail
+	fileName, _ := cmd.Flags().GetString("file")
+	fileType, _ := cmd.Flags().GetString("file-type")
 
 	configSettings := config.NewSettings()
 	configSettings.File = fileName
@@ -38,7 +32,7 @@ func getConfigSettings(cmd *cobra.Command) (*config.Settings, error) {
 
 	logging.Debug("Config settings", "settings", configSettings)
 
-	return configSettings, nil
+	return configSettings
 }
 
 // init registers the config command and its persistent flags, of which --file is required

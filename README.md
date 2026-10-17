@@ -230,7 +230,7 @@ $ gonfig config process -f config.template.yaml -o config.yaml -w
 
 `gonfig config` is intended to interact with various kinds of config file types including `.json`, `.xml`, `.yaml` and `.properties` files, as well as plain text files (`-t plain`).
 
-By now the only subcommand included is `process`. This is being used to actually process the given config file.
+It has two subcommands: `process` processes the given config file and is described below, while [`check`](#check) reports missing variables and errors without writing anything.
 
 In general, process takes the given input file and creates a flat list of all given keys, nodes and attributes depending on the file type.
 Afterwards every entry in that list is being processed individually by applying the filters.
@@ -294,6 +294,41 @@ $ BLA_BLUB=hello INT=5 BOOL=true STRING=test_string FLOAT=123.45 SPECIAL_CHARACT
    </customer>
 </customers>
 ```
+
+### check
+
+`gonfig config check` processes a file like `config process`, but writes nothing and reports every entry containing placeholders with the environment variables and templates it uses.
+Values are not printed, only whether a variable is set, empty or missing, unless [`log-values`](#logging-notes) is enabled for debugging.
+This is useful in CI or before a deployment, e.g. to find typos in variable names.
+
+`check.yaml`:
+```yaml
+database:
+  host: ${DB_HOST | default(localhost)}
+  user: ${DB_USER}
+  password: ${DB_PASWORD}
+  port: ${DB_PORT | to_int}
+```
+
+```console
+$ DB_USER=app DB_PORT=eighty gonfig config check -f check.yaml
+check.yaml: 4 entries with placeholders
+  database.host
+    DB_HOST                  missing, default used
+  database.user
+    DB_USER                  set
+  database.password
+    DB_PASWORD               missing
+  database.port
+    DB_PORT                  set
+    error: filter to_int: the value is not an integer
+1 missing variable, 1 error
+Error: check failed: 1 missing variable, 1 error
+```
+
+The check fails with exit code `1` if processing the file would fail, or if a variable is not set and the placeholder provides no [default](./FILTERS.md#default--required), independent of `fail-on-missing`.
+Variables set to an empty value are reported, but don't fail the check.
+Use `-o json` for a report in JSON, which includes the number of missing variables and errors.
 
 ### value
 
@@ -380,7 +415,7 @@ Order of precedence (highest to lowest):
 | Include source location | `--log-source`, `-s` | `GONFIG_LOG_SOURCE` | `false` | Includes source location in log output |
 | Config directory | `--config-path` | `GONFIG_CONFIG_PATH` | empty | Directory that contains `.gonfig.yaml` |
 | Plugin directory | `--plugin-path` | `GONFIG_PLUGIN_PATH` | `./plugins` | Directory scanned recursively for plugin `.so` files |
-| Log values | `--log-values` | `GONFIG_LOG_VALUES` | `false` | Includes processed values in debug logs and error messages of filters. Values may contain secrets, so only use it for debugging; gonfig warns on startup while it is enabled |
+| Log values | `--log-values` | `GONFIG_LOG_VALUES` | `false` | Includes processed values in debug logs, error messages of filters and the parser messages of invalid fragments. Values may contain secrets, so only use it for debugging; gonfig warns on startup while it is enabled |
 | Fail on missing variables | `--fail-on-missing` | `GONFIG_FAIL_ON_MISSING` | `false` | Fails for [environment variables that are not set](./FILTERS.md#missing-variables) instead of using empty strings, unless the placeholder provides a default |
 | Allow unknown filters | `--allow-unknown-filters` | `GONFIG_ALLOW_UNKNOWN_FILTERS` | `false` | Passes values on unchanged with a warning instead of failing for [unknown filters](./FILTERS.md#order-of-operations). This may write secrets that were meant to be hashed or encrypted |
 
@@ -457,6 +492,7 @@ Successful runs write nothing to stderr at the default level `info`, so gonfig c
 
 Processed values are not logged by default, even at `trace` level, since they may contain secrets. Debug logs show the entry and the type of its result instead, e.g. `"entry":"database.password","type":"string"`.
 Error messages of filters don't contain values either, e.g. `filter to_int: the value is not an integer`, together with the entry that failed.
+Invalid fragments only report their format and, if known, the location, e.g. `invalid YAML fragment on line 3`, since the messages of the parsers may quote parts of the fragment.
 To include the values for debugging, enable `log-values` with `--log-values`, `GONFIG_LOG_VALUES=true` or in `.gonfig.yaml`. gonfig then logs a warning on startup, so the option is not left enabled by accident.
 
 ## Plugins

@@ -67,6 +67,27 @@ func FailOnMissing() bool {
 	return failOnMissing
 }
 
+// VariableLookup describes how a placeholder read an environment variable, e.g. for checking a file
+type VariableLookup struct {
+	// Name is the name of the environment variable
+	Name string
+	// Set is false for variables that are not set
+	Set bool
+	// Empty is true for variables set to an empty value
+	Empty bool
+	// HasDefault marks placeholders providing a default for a variable that is not set
+	HasDefault bool
+}
+
+// lookupRecorder receives every lookup of an environment variable, see SetLookupRecorder
+var lookupRecorder func(VariableLookup)
+
+// SetLookupRecorder sets a function receiving every lookup of an environment variable by a placeholder,
+// including lookups within templates, or nil to stop recording
+func SetLookupRecorder(recorder func(VariableLookup)) {
+	lookupRecorder = recorder
+}
+
 // EnvVarFilter is a filter that replaces the value with the value of an environment variable
 type EnvVarFilter struct {
 	envVar string
@@ -80,6 +101,10 @@ func (f *EnvVarFilter) Process(_ any) (any, error) {
 	logging.Debug("Processing EnvVarFilter", "envVar", f.envVar)
 
 	value, found := os.LookupEnv(f.envVar)
+	if lookupRecorder != nil {
+		lookupRecorder(VariableLookup{Name: f.envVar, Set: found, Empty: found && value == "", HasDefault: f.hasDefault})
+	}
+
 	if !found {
 		if failOnMissing && !f.hasDefault {
 			return "", fmt.Errorf("environment variable %q is not set", f.envVar)

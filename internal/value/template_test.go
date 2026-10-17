@@ -330,3 +330,10 @@ func TestFailOnMissing(t *testing.T) {
 		})
 	}
 }
+
+// TestTemplateReferences checks that placeholder and filter templates referenced by a value are listed once in order
+func TestTemplateReferences(t *testing.T) {
+	assert.Equal(t, []string{"@db_url", "@secret", "@clean"}, TemplateReferences("${@db_url}?p=${PASSWORD | @secret | upper | @clean} ${@db_url}"))
+	assert.Empty(t, TemplateReferences("${PLAIN | trim} text"))
+	assert.Empty(t, TemplateReferences("no placeholders"))
+}

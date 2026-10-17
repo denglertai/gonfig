@@ -184,6 +184,8 @@ $ gonfig --fail-on-missing value 'port=${DB_PORT | default(5432)}'
 port=5432
 ```
 
+To find missing variables before processing a file, use [`gonfig config check`](./README.md#check), which reports all placeholders and their variables without writing anything.
+
 ### to_int / to_float / to_bool
 
 Convert the value to an integer, a floating point number or a boolean, and fail if it cannot be converted.
@@ -636,7 +638,7 @@ b:
 - **Placeholders within fragments** are processed as well, e.g. a fragment may contain `${DB_PASSWORD | @secret}`. Fragments cannot contain further fragments.
 - **Empty fragments** replace a value by null, remove a key or remove the content of an XML element.
 - **Formatting:** YAML fragments are written in block style. Quotes are only kept where they are needed to keep a string a string.
-- **Errors:** Invalid fragments, fragments in properties or plain text files and fragments in XML attributes fail processing, so no output is written.
+- **Errors:** Invalid fragments, fragments in properties or plain text files and fragments in XML attributes fail processing, so no output is written. The error of an invalid fragment names the format and, if known, the line, e.g. `invalid YAML fragment on line 3`. The parser's message may quote parts of the fragment, so it is only included with `log-values`, see [configuration](./README.md#configuration).
 - **Templates:** Fragment files can be provided by [placeholder templates](#templates), e.g. with `default: "@/etc/app/logging.yaml"` and `${@logging | fragment}`.
 
 ## Recipes
