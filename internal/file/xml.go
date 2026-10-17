@@ -1,6 +1,7 @@
 package file
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"iter"
@@ -8,6 +9,7 @@ import (
 	"slices"
 
 	"github.com/beevik/etree"
+	"github.com/denglertai/gonfig/internal/filter"
 )
 
 // XmlAttributeConfigEntry represents a single configuration entry for an attribute
@@ -79,8 +81,13 @@ func (x *XmlElementConfigEntry) SetValue(value string) {
 
 // SetFragment replaces the content of the element by the fragment, which may consist of several elements and text.
 // An empty fragment removes the content.
-func (x *XmlElementConfigEntry) SetFragment(text string) ([]ConfigEntry, error) {
-	fragment, err := parseXmlFragment(text)
+func (x *XmlElementConfigEntry) SetFragment(f filter.Fragment) ([]ConfigEntry, error) {
+	// XML has no lists, so a JSON array would only become text
+	if f.IsList {
+		return nil, errors.New("lists can only be inserted into YAML and JSON files")
+	}
+
+	fragment, err := parseXmlFragment(f.Text)
 	if err != nil {
 		return nil, err
 	}

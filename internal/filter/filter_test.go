@@ -199,7 +199,10 @@ func TestStringManipulationFilters(t *testing.T) {
 		{desc: "regex missing replacement", filter: "regex", params: map[string]string{"0": `a`}, input: "abc", wantErr: true},
 		{desc: "split default delimiter", filter: "split", input: "a,b,c", expected: []string{"a", "b", "c"}},
 		{desc: "split custom delimiter", filter: "split", params: map[string]string{"0": "; "}, input: "a; b", expected: []string{"a", "b"}},
-		{desc: "split empty", filter: "split", input: "", expected: []string{""}},
+		{desc: "split empty", filter: "split", input: "", expected: []string{}},
+		{desc: "split with empty delimiter uses comma", filter: "split", params: map[string]string{"0": "", "1": ""}, input: "a,b", expected: []string{"a", "b"}},
+		{desc: "join with empty delimiter uses comma", filter: "join", params: map[string]string{"0": "", "1": ""}, input: []string{"a", "b"}, expected: "a,b"},
+		{desc: "join empty list", filter: "join", input: []string{}, expected: ""},
 		{desc: "join default delimiter", filter: "join", input: []string{"a", "b"}, expected: "a,b"},
 		{desc: "join custom delimiter", filter: "join", params: map[string]string{"delimiter": " "}, input: []string{"a", "b"}, expected: "a b"},
 		{desc: "join single value", filter: "join", input: "a", expected: "a"},
@@ -296,4 +299,14 @@ func TestFragmentFilter(t *testing.T) {
 	result, err = NewFilter("fragment").Process(5)
 	assert.NoError(t, err)
 	assert.Equal(t, Fragment{Text: "5"}, result)
+}
+
+func TestFragmentFilterWithLists(t *testing.T) {
+	result, err := NewFilter("fragment").Process([]string{"alpha", "beta", `with "quotes", commas`})
+	assert.NoError(t, err)
+	assert.Equal(t, Fragment{Text: `["alpha","beta","with \"quotes\", commas"]`, IsList: true}, result)
+
+	result, err = NewFilter("fragment").Process([]string{})
+	assert.NoError(t, err)
+	assert.Equal(t, Fragment{Text: "[]", IsList: true}, result)
 }

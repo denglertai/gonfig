@@ -119,7 +119,7 @@ api.example.com
 | [`base64_decode`](#base64--base64_decode) | | Decodes a base64 value |
 | [`url_encode`](#url_encode--url_decode) | `mode` | Escapes the value for use within URLs |
 | [`url_decode`](#url_encode--url_decode) | `mode` | Reverses `url_encode` |
-| [`fragment`](#fragments) | | Inserts the value as a structure, e.g. a YAML mapping or XML elements |
+| [`fragment`](#fragments) | | Inserts the value as a structure, e.g. a YAML mapping, XML elements or a [list](#lists-as-fragments) |
 | [`replace`](#replace) | `old`, `new` | Replaces text |
 | [`regex`](#regex) | `pattern`, `replacement` | Replaces text using a regular expression |
 | [`split`](#split--join) | `delimiter` | Splits the value into a [list](#lists) |
@@ -263,7 +263,8 @@ f[y]
 ### split / join
 
 `split` turns the value into a [list](#lists) and `join` turns a list into a single value again.
-The delimiter defaults to `,` for both.
+The delimiter defaults to `,` for both. Since `,` separates params, `split(,)` passes two empty params, which use the default `,` as well.
+An empty value becomes an empty list.
 
 ```console
 $ HOSTS='db1 , db2,db3' gonfig value '${HOSTS | split | trim | join(\, )}'
@@ -282,7 +283,8 @@ $ LIST='a, b ,c' gonfig value '${LIST | split | trim | upper | join(;)}'
 A;B;C
 ```
 
-Always `join` a list before the placeholder ends. A list that is not joined is written in Go's list format, e.g. `[a b c]`.
+Always `join` a list before the placeholder ends, or insert it as a list into YAML and JSON files with [`fragment`](#lists-as-fragments).
+A list that is neither joined nor inserted as a fragment is written in Go's list format, e.g. `[a b c]`.
 
 ## Types
 
@@ -472,6 +474,121 @@ The fragment is merged deeply:
 - **Comments and key order** of the file are kept, and new keys are appended in the order of the fragment.
 
 In JSON files, the key has to have the value `null`, e.g. `"${DB_OVERRIDES | fragment}": null`. XML files support fragments only as the content of elements.
+
+### Lists as fragments
+
+A list created by `split` becomes a list in YAML and JSON files when it is inserted as a fragment:
+
+`list.yaml`:
+```yaml
+a: "val"
+b: "${ENVVAR | split(,) | fragment}"
+```
+
+```console
+$ ENVVAR=alpha,beta,gamma gonfig config process -f list.yaml
+a: "val"
+b:
+  - alpha
+  - beta
+  - gamma
+```
+
+`list.json`:
+```json
+{"a": "val", "b": "${ENVVAR | split | fragment}"}
+```
+
+```console
+$ ENVVAR=alpha,beta gonfig config process -f list.json
+{
+  "a": "val",
+  "b": [
+    "alpha",
+    "beta"
+  ]
+}
+```
+
+An empty value becomes an empty list:
+
+```console
+$ ENVVAR= gonfig config process -f list.yaml
+a: "val"
+b: []
+```
+
+This does not work in the following cases:
+
+- **Whitespace is kept.** Values like `alpha, beta` keep the space before `beta`. Add `trim`, which is applied to each element of the list:
+
+  `trimmed.yaml`:
+  ```yaml
+  b: ${ENVVAR | split | trim | fragment}
+  ```
+
+  ```console
+  $ ENVVAR='alpha, beta ,gamma' gonfig config process -f trimmed.yaml
+  b:
+    - alpha
+    - beta
+    - gamma
+  ```
+
+- **Elements are always strings.** `split` creates a list of strings, so numbers are quoted, and `to_int` cannot convert a list:
+
+  `numbers.yaml`:
+  ```yaml
+  strings: ${ENVVAR | split | fragment}
+  ```
+
+  `to_int.yaml`:
+  ```yaml
+  numbers: ${ENVVAR | split | to_int | fragment}
+  ```
+
+  ```console
+  $ ENVVAR=1,2,3 gonfig config process -f numbers.yaml
+  strings:
+    - "1"
+    - "2"
+    - "3"
+  $ ENVVAR=1,2,3 gonfig config process -f to_int.yaml
+  Error: failed to process the value of numbers in to_int.yaml: cannot convert [1 2 3] ([]string) to int
+  ```
+
+- **Elements cannot contain the delimiter.** `split` has no escaping, so a value like `a\,b` is split at the comma anyway.
+
+For typed elements or elements containing commas, provide the list as a JSON array and insert it without `split`:
+
+`array.yaml`:
+```yaml
+b: ${ENVVAR | fragment}
+```
+
+```console
+$ ENVVAR='["a,b", "c", 1, true]' gonfig config process -f array.yaml
+b:
+  - a,b
+  - c
+  - 1
+  - true
+```
+
+- **XML files have no lists**, so inserting a list fails:
+
+  `list.xml`:
+  ```xml
+  <r><b>${ENVVAR | split | fragment}</b></r>
+  ```
+
+  ```console
+  $ ENVVAR=alpha,beta gonfig config process -f list.xml
+  Error: failed to insert the fragment of /r/b in list.xml: lists can only be inserted into YAML and JSON files
+  ```
+
+- **Lists cannot be embedded into text**, like any fragment, e.g. `b: "hosts: ${ENVVAR | split | fragment}"` fails.
+- **Without `fragment`**, a list is written as text in Go's list format, e.g. `b: '[alpha beta]'`.
 
 ### Rules
 

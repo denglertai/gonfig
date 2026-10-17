@@ -140,6 +140,27 @@ data: ${FRAGMENT | fragment}
 <datasource name="readonly"><password>${FRAGMENT_SECRET}</password></datasource>`,
 		},
 		{
+			name:     "yaml list from split",
+			fileType: general.YAML,
+			content: `a: "val"
+b: "${FRAGMENT | split(,) | fragment}"
+trimmed: ${FRAGMENT | split | trim | fragment}
+`,
+			fragment: "alpha, beta ,gamma",
+		},
+		{
+			name:     "json list from split",
+			fileType: general.JSON,
+			content:  `{"hosts": "${FRAGMENT | split | trim | fragment}"}`,
+			fragment: "db-1, db-2, db-3",
+		},
+		{
+			name:     "error for a list in an xml file",
+			fileType: general.XML,
+			content:  "<server><hosts>${FRAGMENT | split | fragment}</hosts></server>\n",
+			fragment: "db-1,db-2",
+		},
+		{
 			name:     "error for a nested fragment",
 			fileType: general.YAML,
 			content:  "outer: ${FRAGMENT | fragment}\n",

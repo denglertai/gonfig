@@ -162,7 +162,7 @@ func (fp *FileProcessor) insertFragment(entry ConfigEntry, fragment filter.Fragm
 		return fmt.Errorf("failed to process the value of %s in %s: fragments are not supported here, only for YAML and JSON values and keys and the content of XML elements", entry.Path(), fp.FileName)
 	}
 
-	inserted, err := fragmentEntry.SetFragment(fragment.Text)
+	inserted, err := fragmentEntry.SetFragment(fragment)
 	if err != nil {
 		return fmt.Errorf("failed to insert the fragment of %s in %s: %w", entry.Path(), fp.FileName, err)
 	}

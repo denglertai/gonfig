@@ -292,7 +292,7 @@ $ BLA_BLUB=hello INT=5 BOOL=true STRING=test_string FLOAT=123.45 SPECIAL_CHARACT
          <zip>01760</zip>
       </address>
    </customer>
-</customers
+</customers>
 ```
 
 ### value
@@ -341,7 +341,7 @@ ${ENV_VAR | filter1 | filter2(param) | filter3}
 | `base64_decode` | Decodes a base64 value, fails on invalid input | `${VAL \| base64_decode}` |
 | `url_encode(mode)` | Escapes the value for URL query parameters, or path segments with mode `path` | `${VAL \| url_encode}` |
 | `url_decode(mode)` | Reverses `url_encode` | `${VAL \| url_decode}` |
-| `fragment` | Inserts the value as a structure, e.g. a YAML mapping or XML elements, see [fragments](./FILTERS.md#fragments) | `${VAL \| fragment}` |
+| `fragment` | Inserts the value as a structure, e.g. a YAML mapping, XML elements or a list created by `split`, see [fragments](./FILTERS.md#fragments) | `${VAL \| split \| fragment}` |
 | `replace(old,new)` | Replaces every occurrence of `old` by `new` | `${VAL \| replace(foo,bar)}` |
 | `regex(pattern,replacement)` | Replaces every match of the [regular expression](https://pkg.go.dev/regexp/syntax) `pattern`. Capture groups are referenced by `\1` | `${EMAIL \| regex(^\(\w+\)@.+,\1)}` |
 | `split(delimiter)` | Splits the value into a [list](./FILTERS.md#lists), the delimiter defaults to `,` | `${VAL \| split(;) \| join}` |

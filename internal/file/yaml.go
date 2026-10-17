@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 
+	"github.com/denglertai/gonfig/internal/filter"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -70,8 +71,8 @@ func (y *YamlConfigEntry) SetTypedValue(value any) bool {
 
 // SetFragment replaces a value by the fragment, or merges the fragment into the mapping containing a key.
 // An empty fragment replaces a value by null, or removes a key.
-func (y *YamlConfigEntry) SetFragment(text string) ([]ConfigEntry, error) {
-	fragment, err := parseYamlFragment(text)
+func (y *YamlConfigEntry) SetFragment(f filter.Fragment) ([]ConfigEntry, error) {
+	fragment, err := parseYamlFragment(f.Text)
 	if err != nil {
 		return nil, err
 	}

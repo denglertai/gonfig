@@ -70,6 +70,27 @@ func TestFragments(t *testing.T) {
 			fragment: "password: ${FRAGMENT_SECRET | base64}\nport: ${FRAGMENT_PORT | to_int}\n${FRAGMENT_PORT}: key\n",
 			want:     "db:\n  password: czNjcmV0\n  port: 8080\n  \"8080\": key\n",
 		},
+		{
+			desc:     "yaml list from split",
+			fileType: general.YAML,
+			content:  "a: \"val\"\nb: \"${FRAGMENT | split(,) | fragment}\"\n",
+			fragment: "alpha,beta,gamma",
+			want:     "a: \"val\"\nb:\n  - alpha\n  - beta\n  - gamma\n",
+		},
+		{
+			desc:     "yaml empty list from split",
+			fileType: general.YAML,
+			content:  "b: ${FRAGMENT | split | fragment}\n",
+			fragment: "",
+			want:     "b: []\n",
+		},
+		{
+			desc:     "yaml list elements are strings",
+			fileType: general.YAML,
+			content:  "b: ${FRAGMENT | split | trim | fragment}\n",
+			fragment: "1, true ,null",
+			want:     "b:\n  - \"1\"\n  - \"true\"\n  - \"null\"\n",
+		},
 		// YAML keys
 		{
 			desc:     "yaml key deep merged into the mapping",
@@ -156,6 +177,13 @@ func TestFragments(t *testing.T) {
 			fragment: `1 2`,
 			wantErr:  "unexpected data after the top-level JSON value",
 		},
+		{
+			desc:     "json list from split",
+			fileType: general.JSON,
+			content:  `{"b": "${FRAGMENT | split | fragment}"}`,
+			fragment: `alpha,"quoted"`,
+			want:     "{\n  \"b\": [\n    \"alpha\",\n    \"\\\"quoted\\\"\"\n  ]\n}",
+		},
 		// JSON keys
 		{
 			desc:     "json key deep merged into the object",
@@ -227,6 +255,13 @@ func TestFragments(t *testing.T) {
 			content:  "<server><resources>${FRAGMENT | fragment}</resources></server>",
 			fragment: "<a>",
 			wantErr:  "invalid XML fragment",
+		},
+		{
+			desc:     "xml list from split",
+			fileType: general.XML,
+			content:  "<r><b>${FRAGMENT | split | fragment}</b></r>",
+			fragment: "alpha,beta",
+			wantErr:  "lists can only be inserted into YAML and JSON files",
 		},
 		{
 			desc:     "xml attribute",

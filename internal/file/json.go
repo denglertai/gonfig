@@ -10,6 +10,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/denglertai/gonfig/internal/filter"
 )
 
 // jsonKind represents the kind of a JSON node
@@ -97,8 +99,8 @@ func (j *JsonConfigEntry) SetTypedValue(value any) bool {
 
 // SetFragment replaces a value by the fragment, or merges the fragment into the object containing a key.
 // An empty fragment replaces a value by null, or removes a key.
-func (j *JsonConfigEntry) SetFragment(text string) ([]ConfigEntry, error) {
-	fragment, err := parseJsonFragment(text)
+func (j *JsonConfigEntry) SetFragment(f filter.Fragment) ([]ConfigEntry, error) {
+	fragment, err := parseJsonFragment(f.Text)
 	if err != nil {
 		return nil, err
 	}
