@@ -51,6 +51,9 @@ Traps found while working on this codebase. Check the relevant section before ch
 
 ## Tests and tooling
 
+- The tests of `cmd`, `internal/config` and `internal/file` call `testutil.IsolateFromEnvironment` in `TestMain`: all `GONFIG_*` variables are removed and `HOME` and `GONFIG_CONFIG_PATH` point to an empty directory. New options therefore need no changes to the tests' isolation, but new test packages reading config need the same `TestMain`. Tests checking the default config search clear `GONFIG_CONFIG_PATH` themselves.
+- Run `scripts/test_polluted.sh` after adding options or tests that depend on config: it runs all tests with every option enabled through the environment, a home config file and a config path, which caught several tests relying on a clean environment.
+
 - Go coverage is per package; `cmd` tests don't count for `internal/*`.
 - The JSON writer of `encoding/json` escapes `<` and `>` as `<`/`>`; that's valid JSON, not a bug.
 - `gonfig value` prints without a trailing newline.

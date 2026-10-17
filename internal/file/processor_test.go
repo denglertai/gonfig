@@ -3,6 +3,7 @@ package file
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -12,11 +13,21 @@ import (
 
 	"github.com/denglertai/gonfig/internal/general"
 	"github.com/denglertai/gonfig/internal/logging"
+	"github.com/denglertai/gonfig/internal/testutil"
 	"github.com/stretchr/testify/assert"
 )
 
+// TestMain runs the tests isolated from the GONFIG_* environment variables and config files of the machine
 func TestMain(m *testing.M) {
-	os.Exit(m.Run())
+	restore, err := testutil.IsolateFromEnvironment()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	code := m.Run()
+	restore()
+	os.Exit(code)
 }
 
 func TestFileProcessor_Process(t *testing.T) {

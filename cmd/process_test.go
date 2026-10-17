@@ -110,6 +110,7 @@ func TestStdout(t *testing.T) {
 	}
 }
 
+// TestFile processes the test data of each file type into a separate output file with -o and -w and compares it with the snapshots
 func TestFile(t *testing.T) {
 	wd, err := os.Getwd()
 	assert.NoError(t, err)
@@ -186,7 +187,7 @@ func TestFile(t *testing.T) {
 			t.Setenv("STRING", "string")
 			t.Setenv("SPECIAL_CHARACTERS", "%^&*()_+")
 
-			tmp := os.TempDir()
+			tmp := t.TempDir()
 			file, err := os.CreateTemp(tmp, "gonfig-test-*")
 			assert.NoError(t, err)
 			fileName := file.Name()
@@ -263,7 +264,7 @@ func TestPassingExtension(t *testing.T) {
 
 	for _, tC := range testCases {
 		t.Run(tC.desc, func(t *testing.T) {
-			tmp := os.TempDir()
+			tmp := t.TempDir()
 			file, err := os.CreateTemp(tmp, "gonfig-test-*")
 			assert.NoError(t, err)
 			fileName := file.Name()
@@ -300,6 +301,7 @@ func TestPassingExtension(t *testing.T) {
 	}
 }
 
+// TestFileOverwrite processes a copy of the test data of each file type in place with -i and compares it with the snapshots
 func TestFileOverwrite(t *testing.T) {
 	wd, err := os.Getwd()
 	assert.NoError(t, err)
@@ -361,7 +363,7 @@ func TestFileOverwrite(t *testing.T) {
 			t.Setenv("STRING", "string")
 			t.Setenv("SPECIAL_CHARACTERS", "%^&*()_+")
 
-			tmp := os.TempDir()
+			tmp := t.TempDir()
 			file, err := os.CreateTemp(tmp, fmt.Sprintf("gonfig-test-*%s", path.Ext(tC.file)))
 			assert.NoError(t, err)
 			fileName := file.Name()
@@ -405,6 +407,7 @@ func TestFileOverwrite(t *testing.T) {
 	}
 }
 
+// TestYamlMove processes a copy of the YAML test data with placeholders in keys in place with -i and compares it with the snapshots
 func TestYamlMove(t *testing.T) {
 	wd, err := os.Getwd()
 	assert.NoError(t, err)
@@ -431,7 +434,7 @@ func TestYamlMove(t *testing.T) {
 			t.Setenv("PASSWORD", "adjkgadjgjagdjdag")
 			t.Setenv("USERNAME", "Random User with spaces")
 
-			tmp := os.TempDir()
+			tmp := t.TempDir()
 			file, err := os.CreateTemp(tmp, fmt.Sprintf("gonfig-test-*%s", path.Ext(tC.file)))
 			assert.NoError(t, err)
 			fileName := file.Name()
