@@ -86,7 +86,9 @@ func validateParams(name string, declared []string, params map[string]string, so
 	positional := 0
 	check := func(key string) error {
 		position, err := strconv.Atoi(key)
-		if err != nil {
+		// Only keys of the form created for positional params are positions, so names like "-1=x", "+0=x" or "00=x"
+		// are unknown names instead of indexing out of range or being ignored, since filters read positions as "0", "1", ...
+		if err != nil || position < 0 || strconv.Itoa(position) != key {
 			if !slices.Contains(declared, key) {
 				if len(declared) == 0 {
 					return fmt.Errorf("filter %s accepts no params, but got %q", name, key)

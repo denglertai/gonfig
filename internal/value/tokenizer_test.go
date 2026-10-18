@@ -309,8 +309,9 @@ func TestProcessValueUnterminated(t *testing.T) {
 	}
 }
 
+// FuzzProcessValue checks that any value is processed without panicking, seeded with inputs that panicked before
 func FuzzProcessValue(f *testing.F) {
-	for _, value := range []string{"${A}", "a${A", "${A}${", "${A|replace(}", `${A|regex(\(x\),y)}`, "${${A}}", "${\\"} {
+	for _, value := range []string{"${A}", "a${A", "${A}${", "${A|replace(}", `${A|regex(\(x\),y)}`, "${${A}}", "${\\", "${A|split(-1=a)}"} {
 		f.Add(value)
 	}
 	f.Fuzz(func(t *testing.T, value string) {

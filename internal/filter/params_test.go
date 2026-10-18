@@ -55,6 +55,22 @@ func TestValidateParams(t *testing.T) {
 			name: "by position and by name", filter: "replace", params: map[string]string{"0": "a", "old": "b"},
 			wantErr: "filter replace got the param old twice, by position and by name",
 		},
+		{
+			name: "negative position as name", filter: "split", params: map[string]string{"-1": "a"},
+			wantErr: `filter split has no param "-1", it accepts delimiter`,
+		},
+		{
+			name: "position with sign as name", filter: "multiply", params: map[string]string{"+0": "3"},
+			wantErr: `filter multiply has no param "+0", it accepts m`,
+		},
+		{
+			name: "position with leading zero as name", filter: "replace", params: map[string]string{"00": "a", "1": "b"},
+			wantErr: `filter replace has no param "00", it accepts old, new`,
+		},
+		{
+			name: "negative position without declared params", filter: "upper", params: map[string]string{"-1": "a"},
+			wantErr: `filter upper accepts no params, but got "-1"`,
+		},
 	}
 
 	for _, tt := range tests {
