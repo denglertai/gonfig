@@ -75,6 +75,26 @@ entrypoint:
   command: /usr/bin/gonfig
 ```
 
+Using the container image `ghcr.io/denglertai/gonfig` for `linux/amd64` and `linux/arm64`, e.g. to copy the binary into an image in a multi-stage build:
+```dockerfile
+FROM ghcr.io/denglertai/gonfig:0.0.29 AS gonfig
+
+FROM eclipse-temurin:21-jre
+COPY --from=gonfig /usr/bin/gonfig /usr/bin/gonfig
+```
+
+The image is tagged with the version without a leading `v`, and `latest` for the newest release.
+The binary is linked against glibc, so it runs in images based on e.g. Debian, Ubuntu, Wolfi or distroless `base`, but not in Alpine or `scratch` images.
+
+The image contains no config file and sets no `GONFIG_*` variables, so the built-in defaults apply. To change them, set the [environment variables](#options) in your own image or deployment, or mount a [config file](#config-file) as `/etc/gonfig/.gonfig.yaml`.
+
+The images are signed with [cosign](https://github.com/sigstore/cosign) by the release workflow. Verify the signature with:
+```console
+$ cosign verify ghcr.io/denglertai/gonfig:0.0.29 \
+    --certificate-identity-regexp '^https://github\.com/denglertai/gonfig/\.github/workflows/release\.yml@refs/tags/' \
+    --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
 ## Quick start
 
 1. [Install](#installation) gonfig.
