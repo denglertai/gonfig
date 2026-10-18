@@ -14,6 +14,7 @@ import (
 	"github.com/denglertai/gonfig/internal/logging"
 	"github.com/denglertai/gonfig/internal/plugin"
 	"github.com/denglertai/gonfig/internal/value"
+	"github.com/denglertai/gonfig/internal/version"
 	pkglogging "github.com/denglertai/gonfig/pkg/logging"
 	"github.com/spf13/cobra"
 )
@@ -112,6 +113,10 @@ func Execute() {
 
 // init defines the global flags, which are resolved together with environment variables and the config file
 func init() {
+	// Cobra handles --version / -v before PersistentPreRunE, so printing the version neither reads the config nor starts plugins
+	rootCmd.Version = version.Get().String()
+	rootCmd.SetVersionTemplate("{{.Name}} version {{.Version}}\n")
+
 	rootCmd.PersistentFlags().StringP("log-level", "l", "info", "Log level (trace, debug, info, warn, error, fatal)")
 	rootCmd.PersistentFlags().BoolP("log-source", "s", false, "Whether to include source location in log output or not")
 	rootCmd.PersistentFlags().String("config-path", "", "Path to the directory containing .gonfig config file (env var: GONFIG_CONFIG_PATH)")

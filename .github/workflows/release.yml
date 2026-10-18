@@ -117,8 +117,12 @@ jobs:
             export CC=clang
             export CXX=clang++
           fi
+          # Same version information as the GoReleaser builds, see ldflags in .goreleaser.yaml
+          pkg=github.com/denglertai/gonfig/internal/version
+          commit_date=$(TZ=UTC0 git show -s --format=%cd --date=format-local:%Y-%m-%dT%H:%M:%SZ HEAD)
+          ldflags="-s -w -X $pkg.version=${GITHUB_REF_NAME#v} -X $pkg.commit=${GITHUB_SHA} -X $pkg.date=${commit_date}"
           CGO_ENABLED=1 GOOS=darwin GOARCH=${{ matrix.goarch }} \
-            go build -trimpath -ldflags "-s -w" -o dist/darwin-${{ matrix.goarch }}/gonfig .
+            go build -trimpath -ldflags "$ldflags" -o dist/darwin-${{ matrix.goarch }}/gonfig .
           cp LICENSE dist/darwin-${{ matrix.goarch }}/LICENSE
           tar -C dist/darwin-${{ matrix.goarch }} -czf dist/gonfig_Darwin_${{ matrix.archive_arch }}.tar.gz gonfig LICENSE
       - name: Upload Darwin archive artifact
