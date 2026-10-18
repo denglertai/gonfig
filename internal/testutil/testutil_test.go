@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"os"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -46,8 +47,23 @@ func TestIsolateFromEnvironment(t *testing.T) {
 
 // TestIsolateFromEnvironmentError checks that an error creating the directory is returned
 func TestIsolateFromEnvironmentError(t *testing.T) {
-	t.Setenv("TMPDIR", "/nonexistent/gonfig-test")
+	// os.TempDir reads TMPDIR, and TMP and TEMP on Windows
+	for _, key := range []string{"TMPDIR", "TMP", "TEMP"} {
+		t.Setenv(key, "/nonexistent/gonfig-test")
+	}
 
 	_, err := IsolateFromEnvironment()
 	assert.Error(t, err)
+}
+
+// TestSetHome checks that the home directory is set on every system, which viper reads from USERPROFILE on Windows
+func TestSetHome(t *testing.T) {
+	dir := t.TempDir()
+	SetHome(t, dir)
+
+	assert.Equal(t, dir, os.Getenv("HOME"))
+	if runtime.GOOS == "windows" {
+		assert.Equal(t, dir, os.Getenv("USERPROFILE"))
+		assert.Empty(t, os.Getenv("HOMEDRIVE")+os.Getenv("HOMEPATH"))
+	}
 }

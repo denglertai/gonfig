@@ -9,9 +9,19 @@ on:
     branches:
       - main
 
+# The jobs only read the repository; Codecov is authenticated with its own token
+permissions:
+  contents: read
+
 jobs:
   test:
-    runs-on: ubuntu-latest
+    name: test (${{ matrix.os }})
+    # Releases are built for Linux, macOS and Windows, so platform specific problems like paths are found before
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
 
     steps:
     - name: Checkout code
@@ -26,12 +36,32 @@ jobs:
       run: go mod download
 
     - name: Run tests
+      # PowerShell, the default shell on Windows, splits arguments like -coverprofile=coverage.txt at the dot
+      shell: bash
       run: go test ./... -coverprofile=coverage.txt
 
     - name: Upload coverage reports to Codecov
+      # Codecov merges the reports of all systems, so platform specific code is covered as well
       uses: codecov/codecov-action@v7
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
+        flags: ${{ runner.os }}
+
+  race:
+    # Package level state, e.g. the registered filters, and executable plugins talking over pipes are prone to data races
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+
+    - name: Set up Go
+      uses: actions/setup-go@v7
+      with:
+        go-version: '1.27.2'
+
+    - name: Run tests with the race detector
+      run: go test -race ./...
 
   lint:
     runs-on: ubuntu-latest

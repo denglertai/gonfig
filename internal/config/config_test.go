@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/denglertai/gonfig/internal/testutil"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -134,7 +135,7 @@ func TestLoadAppConfig_AllowUnknownFilters(t *testing.T) {
 func isolateConfig(t *testing.T) {
 	t.Helper()
 
-	t.Setenv("HOME", t.TempDir())
+	testutil.SetHome(t, t.TempDir())
 	t.Chdir(t.TempDir())
 	// TestMain removes all other GONFIG_* variables, but points the config path to an empty directory,
 	// which this test clears to check the default search paths. Viper ignores empty environment variables.

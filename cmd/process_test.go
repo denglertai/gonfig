@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"strings"
 	"testing"
 
 	"github.com/denglertai/gonfig/internal/filter"
@@ -503,6 +504,7 @@ func TestInvalidConfigFile(t *testing.T) {
 	}
 }
 
+// TestFragmentFromTemplate checks that a placeholder template can read a fragment from a file referenced by its default
 func TestFragmentFromTemplate(t *testing.T) {
 	t.Setenv("FRAGMENT_LOGGING", "")
 	t.Setenv("FRAGMENT_LEVEL", "debug")
@@ -513,7 +515,9 @@ func TestFragmentFromTemplate(t *testing.T) {
 
 	// The template reads the fragment from a file by default
 	configDir := t.TempDir()
-	config := "templates:\n  placeholders:\n    logging:\n      env: FRAGMENT_LOGGING\n      default: \"@" + fragmentFile + "\"\n"
+	// Single quotes keep the backslashes of Windows paths, which start escape sequences within double quotes.
+	// Within single quotes, apostrophes are doubled, e.g. for a user directory like C:\Users\O'Brien.
+	config := "templates:\n  placeholders:\n    logging:\n      env: FRAGMENT_LOGGING\n      default: '@" + strings.ReplaceAll(fragmentFile, "'", "''") + "'\n"
 	assert.NoError(t, os.WriteFile(path.Join(configDir, ".gonfig.yaml"), []byte(config), 0o644))
 
 	fileName := path.Join(dir, "config.yaml")
