@@ -2,5 +2,14 @@
     "$schema": "https://docs.renovatebot.com/renovate-schema.json",
     "extends": [
        "config:recommended"
+    ],
+    "packageRules": [
+       {
+          "description": "Plugins in this repository build against the local gonfig sources via a replace directive, so the required version is only a placeholder",
+          "matchManagers": ["gomod"],
+          "matchFileNames": ["plugins/**"],
+          "matchPackageNames": ["github.com/denglertai/gonfig"],
+          "enabled": false
+       }
     ]
  }
