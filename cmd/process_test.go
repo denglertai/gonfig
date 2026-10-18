@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"path"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -656,4 +658,84 @@ func readFile(t *testing.T, name string) string {
 	content, err := os.ReadFile(name)
 	assert.NoError(t, err)
 	return string(content)
+}
+
+// fileMode returns the permissions of the file
+func fileMode(t *testing.T, name string) os.FileMode {
+	t.Helper()
+
+	info, err := os.Stat(name)
+	assert.NoError(t, err)
+	return info.Mode().Perm()
+}
+
+// TestOutputFileMode checks that new output files get the mode of the input file or of --mode,
+// and that existing output files keep their mode unless --mode is given
+func TestOutputFileMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows only knows read-only files")
+	}
+	t.Setenv("MODE_TEST_VALUE", "value")
+
+	dir := t.TempDir()
+	input := path.Join(dir, "template.yaml")
+	assert.NoError(t, os.WriteFile(input, []byte("key: ${MODE_TEST_VALUE}\n"), 0o600))
+	assert.NoError(t, os.Chmod(input, 0o640))
+	output := path.Join(dir, "config.yaml")
+
+	run := func(args ...string) error {
+		resetFlags(t)
+		rootCmd.SetArgs(append([]string{"config", "process", "-f", input}, args...))
+		return rootCmd.Execute()
+	}
+
+	assert.NoError(t, run("-o", output))
+	assert.Equal(t, os.FileMode(0o640), fileMode(t, output), "new files get the mode of the input file")
+	assert.Equal(t, "key: value\n", readFile(t, output))
+
+	assert.NoError(t, os.Chmod(output, 0o604))
+	assert.NoError(t, run("-o", output, "-w"))
+	assert.Equal(t, os.FileMode(0o604), fileMode(t, output), "existing files keep their mode")
+
+	assert.NoError(t, run("-o", output, "-w", "--mode", "600"))
+	assert.Equal(t, os.FileMode(0o600), fileMode(t, output), "--mode applies to existing files")
+
+	assert.NoError(t, run("-o", path.Join(dir, "other.yaml"), "--mode", "0644"))
+	assert.Equal(t, os.FileMode(0o644), fileMode(t, path.Join(dir, "other.yaml")), "--mode applies to new files")
+
+	assert.NoError(t, run("-i"))
+	assert.Equal(t, os.FileMode(0o640), fileMode(t, input), "-i keeps the mode of the input file")
+	assert.Equal(t, "key: value\n", readFile(t, input))
+
+	assert.NoError(t, run("-i", "--mode", "0600"))
+	assert.Equal(t, os.FileMode(0o600), fileMode(t, input), "--mode applies to -i")
+}
+
+// TestInvalidOutputFileMode checks that an invalid --mode fails before anything is written
+func TestInvalidOutputFileMode(t *testing.T) {
+	dir := t.TempDir()
+	input := path.Join(dir, "template.yaml")
+	assert.NoError(t, os.WriteFile(input, []byte("key: value\n"), 0o644))
+	output := path.Join(dir, "config.yaml")
+
+	for _, mode := range []string{"999", "0o600", "rw-r--r--", "1777", "-1"} {
+		resetFlags(t)
+		rootCmd.SetArgs([]string{"config", "process", "-f", input, "-o", output, "--mode", mode})
+		assert.EqualError(t, rootCmd.Execute(), fmt.Sprintf("invalid file mode %q for --mode, use octal permissions like 0600 or 0644", mode), mode)
+		assert.NoFileExists(t, output, mode)
+	}
+}
+
+// TestOutputFileExists checks that an existing output file is only overwritten with -w and kept unchanged otherwise
+func TestOutputFileExists(t *testing.T) {
+	dir := t.TempDir()
+	input := path.Join(dir, "template.yaml")
+	assert.NoError(t, os.WriteFile(input, []byte("key: value\n"), 0o644))
+	output := path.Join(dir, "config.yaml")
+	assert.NoError(t, os.WriteFile(output, []byte("existing\n"), 0o644))
+
+	resetFlags(t)
+	rootCmd.SetArgs([]string{"config", "process", "-f", input, "-o", output})
+	assert.EqualError(t, rootCmd.Execute(), fmt.Sprintf("file %s already exists; Use -w / --overwrite if this is intended", output))
+	assert.Equal(t, "existing\n", readFile(t, output))
 }
