@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -62,6 +63,19 @@ static: value
 1 missing variable, 1 error
 `)
 	assert.NotContains(t, output, "eighty", "values must never be printed")
+}
+
+// TestCheckCommandMissingFileReference checks that a variable referring to a missing file, e.g. a secret that is not mounted,
+// is reported as an error instead of being written as the path
+func TestCheckCommandMissingFileReference(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "db_password")
+	t.Setenv("CHECK_CMD_PASSWORD", "@"+missing)
+
+	output, err := runCheck(t, "password: ${CHECK_CMD_PASSWORD | trim}\n")
+
+	assert.EqualError(t, err, "check failed: 0 missing variables, 1 error")
+	assert.Contains(t, output, "    CHECK_CMD_PASSWORD       set\n    error: failed to read the file referenced with @: ")
+	assert.Contains(t, output, missing)
 }
 
 // TestCheckCommandSucceeds checks that a file without problems passes the check
