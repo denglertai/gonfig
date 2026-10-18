@@ -221,11 +221,34 @@ func TestWriteNonRegularFile(t *testing.T) {
 		read <- string(content)
 	}()
 
+	require.NoError(t, os.Chmod(pipe, 0o620))
 	require.NoError(t, Write(pipe, []byte("through the pipe"), Options{Mode: 0o600}))
 	assert.Equal(t, "through the pipe", <-read)
 	info, err := os.Lstat(pipe)
 	require.NoError(t, err)
 	assert.Equal(t, fs.ModeNamedPipe, info.Mode().Type())
+	assert.Equal(t, fs.FileMode(0o620), info.Mode().Perm(), "files that are not regular keep their mode")
+}
+
+// TestWriteDanglingSymlink checks that a link to a file that does not exist yet is kept and the file it points to is created
+func TestWriteDanglingSymlink(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "data", "app.yaml")
+	require.NoError(t, os.Mkdir(filepath.Dir(target), 0o700))
+	link := filepath.Join(dir, "app.yaml")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symbolic links are not supported: %v", err)
+	}
+
+	require.NoError(t, Write(link, []byte("new\n"), Options{Mode: 0o640}))
+
+	info, err := os.Lstat(link)
+	require.NoError(t, err)
+	assert.Equal(t, fs.ModeSymlink, info.Mode().Type(), "the link has to be kept")
+	content, err := os.ReadFile(target)
+	require.NoError(t, err)
+	assert.Equal(t, "new\n", string(content))
+	assertMode(t, target, 0o640)
 }
 
 // TestWriteFailureKeepsFile checks that a failure while writing the temporary file, e.g. because the disk is full,

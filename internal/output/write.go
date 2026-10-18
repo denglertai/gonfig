@@ -44,6 +44,7 @@ func (e errInPlace) Error() string {
 // which then replaces the file by a rename, so the file contains either the old or the complete new data,
 // e.g. if writing fails because the disk is full or the process is killed.
 // Symbolic links are resolved, so the file they point to is replaced and the link is kept.
+// The file of a link pointing to a file that does not exist yet is created in place.
 // If the temporary file cannot be created, its owner cannot be set to the owner of the existing file,
 // or the rename fails, the file is written in place instead, which works for bind mounted files as well.
 // Files that are not regular and paths of special files like /dev/stdout are always written in place.
@@ -60,6 +61,9 @@ func Write(path string, data []byte, opts Options) error {
 	target := path
 	if resolved, err := filepath.EvalSymlinks(path); err == nil {
 		target = resolved
+	} else if info, err := os.Lstat(path); err == nil && info.Mode()&fs.ModeSymlink != 0 {
+		// The link points to a file that does not exist yet, which writing in place creates, keeping the link
+		return writeInPlace(path, data, nil, opts)
 	}
 
 	existing, err := os.Stat(target)
@@ -67,7 +71,7 @@ func Write(path string, data []byte, opts Options) error {
 		return err
 	}
 	if existing != nil && !existing.Mode().IsRegular() {
-		return writeInPlace(target, data, nil, opts)
+		return writeInPlace(target, data, existing, opts)
 	}
 
 	mode := opts.Mode
