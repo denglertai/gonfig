@@ -42,7 +42,9 @@ Every placeholder is resolved in the following steps:
 
 1. **Environment variable lookup:** The value of the environment variable is read. A variable that is not set results in an empty string, unless [`fail-on-missing`](#missing-variables) is enabled.
 1. **File inclusion:** If the value starts with `@`, the rest is treated as a file path and the value is replaced by the file's content.
-   If the file does not exist, the value is kept as is (including the `@`). If it exists but cannot be read, processing fails.
+   Paths that are absolute or start with `./` or `../`, e.g. `@/run/secrets/db_password`, have to refer to a readable file, otherwise processing fails, e.g. if a secret is not mounted.
+   On Windows, this includes paths like `C:\secrets\db`, `\\server\share\db` and `\secrets\db`, and `.\` and `..\` as well.
+   Other values starting with `@`, e.g. `@x9!kQ` or `@secret`, are only read from a file if it exists, and kept as they are (including the `@`) otherwise.
 1. **Filters:** The filters are applied from left to right, each one receiving the output of the previous one.
 1. **Replacement:** The placeholder is replaced by the result.
 
@@ -653,6 +655,15 @@ $ printf 's3cret\n' > /run/secrets/db_password
 $ DB_PASSWORD=@/run/secrets/db_password gonfig value 'password=${DB_PASSWORD | trim}'
 password=s3cret
 ```
+
+If the file does not exist, e.g. because the secret is not mounted, processing fails instead of writing the path:
+
+```console
+$ DB_PASSWORD=@/run/secrets/missing gonfig value 'password=${DB_PASSWORD | trim}'
+Error: failed to read the file referenced with @: open /run/secrets/missing: no such file or directory
+```
+
+Use an absolute path or one starting with `./` or `../` (or `.\` or `..\` on Windows) to ensure processing fails for missing files.
 
 ### Generate password hashes
 

@@ -11,6 +11,7 @@ import (
 	"math"
 	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -127,28 +128,49 @@ func NewEnvVarFilter(envVar string, hasDefault bool) *EnvVarFilter {
 type FileInterceptorFilter struct {
 }
 
-// Process reads the file content if the value is a file reference
+// Process reads the file content if the value is a file reference, i.e. starts with "@".
+// References to explicit paths, see isExplicitPath, fail if the file cannot be read, e.g. because a secret is not mounted.
+// Other values starting with "@", e.g. passwords like "@x9!kQ", are kept as they are unless such a file exists.
 func (f *FileInterceptorFilter) Process(value any) (any, error) {
 	s, ok := value.(string)
-
-	if ok && strings.HasPrefix(s, "@") {
-		path := s[1:]
-		logging.Debug("Processing FileInterceptorFilter", "path", path)
-		if _, err := os.Stat(path); err != nil {
-			// if the file does not exist, return an empty string and continue
-			return value, nil
-		}
-
-		file, err := os.ReadFile(path)
-		if err != nil {
-			// if the file exists but cannot be read, return and empty string and the error as is
-			return "", err
-		}
-
-		return string(file), nil
+	if !ok || !strings.HasPrefix(s, "@") {
+		return value, nil
 	}
 
-	return value, nil
+	path := s[1:]
+	logging.Debug("Processing FileInterceptorFilter", "path", path)
+
+	if !isExplicitPath(path) {
+		if _, err := os.Stat(path); err != nil {
+			// Not a file, so the value is kept including the "@"
+			return value, nil
+		}
+	}
+
+	// The error of os.ReadFile names the path, which identifies the file but not its content
+	file, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("failed to read the file referenced with @: %w", err)
+	}
+
+	return string(file), nil
+}
+
+// isExplicitPath returns whether the path is absolute or relative to the current or parent directory,
+// e.g. "/run/secrets/db_password" or "./secret", so a value starting with "@" is clearly meant as a file reference.
+// On Windows, this includes paths with a drive letter or UNC paths like "C:\secrets\db" and rooted paths like
+// "\secrets\db" or "/run/secrets/db", which filepath.IsAbs does not treat as absolute, as they are relative to the current drive.
+// Drive relative paths like "C:db" are not included, since they are unusual and look like values, e.g. "a:b".
+func isExplicitPath(path string) bool {
+	if filepath.IsAbs(path) || strings.HasPrefix(path, "/") || strings.HasPrefix(path, string(filepath.Separator)) {
+		return true
+	}
+	for _, prefix := range []string{"./", "../"} {
+		if strings.HasPrefix(path, prefix) || strings.HasPrefix(path, filepath.FromSlash(prefix)) {
+			return true
+		}
+	}
+	return false
 }
 
 // NewFileInterceptorFilter creates a new FileInterceptorFilter
