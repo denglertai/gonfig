@@ -75,6 +75,7 @@ make install-zig
 `dockers_v2` in `.goreleaser.yaml` builds a multi-arch image from the Linux binaries with [release.Dockerfile](release.Dockerfile) and pushes it to ghcr.io as part of `goreleaser release`.
 The Dockerfile only copies the prebuilt binaries, so it cannot be built with `docker build` from the sources, and arm64 needs no QEMU.
 `docker_signs` signs the image keyless with cosign, using the OIDC identity of the release workflow (`id-token: write`).
+Buildx attestations are disabled (`sbom: false`, `--provenance=false`), since ghcr.io lists them as images of the platform `unknown/unknown`. Instead, the release workflow scans each platform image with syft after GoReleaser and attaches the SBOM with `cosign attest --type spdxjson` to the platform image and to the image index.
 
 The base image `cgr.dev/chainguard/glibc-dynamic` is pinned by digest and updated by Renovate. It provides glibc, which the cgo binaries need.
 

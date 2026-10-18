@@ -95,6 +95,14 @@ $ cosign verify ghcr.io/denglertai/gonfig:0.1.0 \
     --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
+The SBOM of each platform image, listing the packages of the base image and the Go modules of gonfig, is attached as a signed [SPDX](https://spdx.dev/) attestation, for releases after v0.1.0.
+It is attached to the image of each platform, e.g. for scanners, and to the multi-platform image, which tags refer to. Verify the attestations with:
+```console
+$ cosign verify-attestation --type spdxjson ghcr.io/denglertai/gonfig:latest \
+    --certificate-identity-regexp '^https://github\.com/denglertai/gonfig/\.github/workflows/release\.yml@refs/tags/' \
+    --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
 ## Quick start
 
 1. [Install](#installation) gonfig.
