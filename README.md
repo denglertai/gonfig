@@ -77,20 +77,20 @@ entrypoint:
 
 Using the container image `ghcr.io/denglertai/gonfig` for `linux/amd64` and `linux/arm64`, e.g. to copy the binary into an image in a multi-stage build:
 ```dockerfile
-FROM ghcr.io/denglertai/gonfig:0.0.29 AS gonfig
+FROM ghcr.io/denglertai/gonfig:0.1.0 AS gonfig
 
 FROM eclipse-temurin:21-jre
 COPY --from=gonfig /usr/bin/gonfig /usr/bin/gonfig
 ```
 
-The image is tagged with the version both with and without a leading `v`, e.g. `v0.0.29` and `0.0.29`, and `latest` for the newest release that is not a prerelease.
+The image is tagged with the version both with and without a leading `v`, e.g. `v0.1.0` and `0.1.0`, and `latest` for the newest release that is not a prerelease.
 The binary is linked against glibc, so it runs in images based on e.g. Debian, Ubuntu, Wolfi or distroless `base`, but not in Alpine or `scratch` images.
 
 The image contains no config file and sets no `GONFIG_*` variables, so the built-in defaults apply. To change them, set the [environment variables](#options) in your own image or deployment, or mount a [config file](#config-file) as `/etc/gonfig/.gonfig.yaml`.
 
 The images are signed with [cosign](https://github.com/sigstore/cosign) by the release workflow. Verify the signature with:
 ```console
-$ cosign verify ghcr.io/denglertai/gonfig:0.0.29 \
+$ cosign verify ghcr.io/denglertai/gonfig:0.1.0 \
     --certificate-identity-regexp '^https://github\.com/denglertai/gonfig/\.github/workflows/release\.yml@refs/tags/' \
     --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
@@ -246,7 +246,7 @@ $ gonfig config process -f config.template.yaml -o config.yaml -w
 
 `gonfig` may just be used as any other CLI by simply invoking it.
 
-`gonfig --version` (or `-v`) prints the version, e.g. `gonfig version 0.0.29 (commit 0274352, 2026-10-18T08:05:01Z)` for a release, followed by the commit and its date if they are known.
+`gonfig --version` (or `-v`) prints the version, e.g. `gonfig version 0.1.0 (commit 0274352, 2026-10-18T08:05:01Z)` for a release, followed by the commit and its date if they are known.
 Binaries installed with `go install` print the version only, and the commit is marked with `-dirty` for binaries built from modified sources.
 
 ### config
