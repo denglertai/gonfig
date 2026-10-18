@@ -86,6 +86,24 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # The SBOM of each platform image is attached as a signed attestation, keyless like the image signatures.
+      # It is attached to the platform image for scanners and to the index, which cosign verify-attestation resolves tags to.
+      - name: Attest the SBOMs of the container image
+        env:
+          IMAGE: ghcr.io/denglertai/gonfig
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          index=$(docker buildx imagetools inspect "$IMAGE:$TAG" --format '{{json .Manifest}}')
+          index_digest=$(jq -r '.digest' <<<"$index")
+          jq -r '.manifests[] | select(.platform.os != "unknown") | "\(.platform.os)-\(.platform.architecture) \(.digest)"' <<<"$index" |
+            while read -r platform digest; do
+              sbom="${RUNNER_TEMP}/sbom-${platform}.spdx.json"
+              syft scan "registry:$IMAGE@$digest" --quiet --output "spdx-json=$sbom"
+              for subject in "$digest" "$index_digest"; do
+                cosign attest --yes --type spdxjson --predicate "$sbom" "$IMAGE@$subject"
+              done
+            done
 
   build-macos:
     needs: goreleaser
