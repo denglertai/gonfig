@@ -47,8 +47,17 @@ jobs:
         path: ./apk
         token: '${{ secrets.APK_REPO_TOKEN }}'
 
+    # The commit and its date are printed by gonfig --version, see vars in melange.yaml
+    - name: Write melange vars
+      run: |
+        {
+          echo "commit: \"${GITHUB_SHA}\""
+          echo "commit-date: \"$(TZ=UTC0 git show -s --format=%cd --date=format-local:%Y-%m-%dT%H:%M:%SZ HEAD)\""
+        } > ${{ runner.temp }}/melange-vars.yaml
+        cat ${{ runner.temp }}/melange-vars.yaml
+
     - name: Run melange
-      run: melange build melange.yaml --out-dir ./apk --arch=x86_64 --signing-key ${{ runner.temp }}/melange.rsa
+      run: melange build melange.yaml --out-dir ./apk --arch=x86_64 --signing-key ${{ runner.temp }}/melange.rsa --vars-file ${{ runner.temp }}/melange-vars.yaml
     
     - name: Commit changes
       run: |

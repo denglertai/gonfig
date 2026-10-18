@@ -17,8 +17,12 @@ builds:
       - amd64
     flags:
       - -trimpath
-    ldflags:
+    # The version is printed by gonfig --version, see internal/version. The commit date keeps builds reproducible.
+    ldflags: &ldflags
       - -s -w
+      - -X github.com/denglertai/gonfig/internal/version.version={{ .Version }}
+      - -X github.com/denglertai/gonfig/internal/version.commit={{ .FullCommit }}
+      - -X github.com/denglertai/gonfig/internal/version.date={{ .CommitDate }}
 
   # Linux ARM64
   - id: linux-arm64
@@ -33,8 +37,7 @@ builds:
       - arm64
     flags:
       - -trimpath
-    ldflags:
-      - -s -w
+    ldflags: *ldflags
 
   # Windows AMD64
   - id: windows-amd64
@@ -49,8 +52,7 @@ builds:
     flags:
       - -trimpath
       - -buildmode=exe
-    ldflags:
-      - -s -w
+    ldflags: *ldflags
 
 archives:
   - format: tar.gz

@@ -1,13 +1,17 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/denglertai/gonfig/internal/config"
 	"github.com/denglertai/gonfig/internal/file"
 	"github.com/denglertai/gonfig/internal/filter"
+	"github.com/denglertai/gonfig/internal/version"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 )
@@ -98,4 +102,27 @@ func TestLogValuesFlagIsApplied(t *testing.T) {
 	rootCmd.SetArgs([]string{"value", "x"})
 	assert.NoError(t, rootCmd.Execute())
 	assert.True(t, file.LogValues())
+}
+
+// TestVersionFlag checks that --version and -v print the version without loading the config, so a broken config file does not prevent it
+func TestVersionFlag(t *testing.T) {
+	dir := t.TempDir()
+	assert.NoError(t, os.WriteFile(filepath.Join(dir, ".gonfig.yaml"), []byte("log-level: [\n"), 0o600))
+	t.Setenv("GONFIG_CONFIG_PATH", dir)
+
+	for _, flag := range []string{"--version", "-v"} {
+		resetFlags(t)
+		out := new(bytes.Buffer)
+		rootCmd.SetOut(out)
+		t.Cleanup(func() { rootCmd.SetOut(nil) })
+
+		rootCmd.SetArgs([]string{flag})
+		assert.NoError(t, rootCmd.Execute(), flag)
+		assert.Equal(t, "gonfig version "+version.Get().String()+"\n", out.String(), flag)
+	}
+
+	// Other commands still fail for the broken config file
+	resetFlags(t)
+	rootCmd.SetArgs([]string{"value", "x"})
+	assert.ErrorContains(t, rootCmd.Execute(), "failed to read config file")
 }

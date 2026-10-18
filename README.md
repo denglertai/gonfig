@@ -226,6 +226,9 @@ $ gonfig config process -f config.template.yaml -o config.yaml -w
 
 `gonfig` may just be used as any other CLI by simply invoking it.
 
+`gonfig --version` (or `-v`) prints the version, e.g. `gonfig version 0.0.29 (commit 0274352, 2026-10-18T08:05:01Z)` for a release, followed by the commit and its date if they are known.
+Binaries installed with `go install` print the version only, and the commit is marked with `-dirty` for binaries built from modified sources.
+
 ### config
 
 `gonfig config` is intended to interact with various kinds of config file types including `.json`, `.xml`, `.yaml` and `.properties` files, as well as plain text files (`-t plain`).

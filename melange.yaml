@@ -25,6 +25,11 @@ environment:
     - git
     - syft
 
+# Printed by gonfig --version. The release workflow sets them with --vars-file, as the build runs without VCS information.
+vars:
+  commit: ""
+  commit-date: ""
+
 pipeline:
   - uses: go/build
     environment:
@@ -33,3 +38,7 @@ pipeline:
     with:
       packages: .
       output: gonfig
+      ldflags: >-
+        -X github.com/denglertai/gonfig/internal/version.version=${{package.version}}
+        -X github.com/denglertai/gonfig/internal/version.commit=${{vars.commit}}
+        -X github.com/denglertai/gonfig/internal/version.date=${{vars.commit-date}}
