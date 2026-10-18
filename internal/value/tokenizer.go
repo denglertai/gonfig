@@ -12,6 +12,7 @@ import (
 
 // Values are processed in two stages:
 //  1. findPlaceholders finds the placeholders "${...}" within a value, everything else is kept as is.
+//     A placeholder without a closing bracket is an error.
 //  2. filterParser splits the content of a placeholder, e.g. "ENV_VAR | filter1 | filter2(param)",
 //     into the name of the environment variable, the filter names, their params and the separators between them.
 //
@@ -47,7 +48,10 @@ func ProcessValue(value string) (any, error) {
 		return value, nil
 	}
 
-	placeholders := findPlaceholders(value)
+	placeholders, err := findPlaceholders(value)
+	if err != nil {
+		return nil, err
+	}
 	if len(placeholders) == 0 {
 		return value, nil
 	}
@@ -114,8 +118,9 @@ func (p placeholder) content() string {
 
 // findPlaceholders returns the placeholders within the value in the order they appear.
 // A placeholder ends at the first closing bracket that is not escaped by a backslash, so placeholders
-// cannot be nested. A placeholder without a closing bracket is not a placeholder and kept as is.
-func findPlaceholders(value string) []placeholder {
+// cannot be nested. A placeholder without a closing bracket is an error, e.g. a typo like "${VAR | upper",
+// since it would otherwise be written to the output as is. The placeholders before it are returned as well.
+func findPlaceholders(value string) ([]placeholder, error) {
 	var placeholders []placeholder
 
 	for offset := 0; offset < len(value); {
@@ -127,7 +132,7 @@ func findPlaceholders(value string) []placeholder {
 		start := offset + i
 		end := closingBracket(value, start+2)
 		if end == -1 {
-			break
+			return placeholders, fmt.Errorf("unterminated placeholder %q, the closing } is missing", excerpt(value[start:]))
 		}
 
 		placeholders = append(placeholders, placeholder{
@@ -138,7 +143,20 @@ func findPlaceholders(value string) []placeholder {
 		offset = end
 	}
 
-	return placeholders
+	return placeholders, nil
+}
+
+// maxExcerptLength is the number of characters of an unterminated placeholder quoted in errors,
+// since the rest of the value may be long, e.g. a whole fragment
+const maxExcerptLength = 40
+
+// excerpt returns the beginning of the text, shortened to maxExcerptLength characters followed by "..."
+func excerpt(text string) string {
+	runes := []rune(text)
+	if len(runes) <= maxExcerptLength {
+		return text
+	}
+	return string(runes[:maxExcerptLength]) + "..."
 }
 
 // closingBracket returns the offset after the first unescaped "}" at or after from, or -1 if there is none

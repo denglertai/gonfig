@@ -222,6 +222,7 @@ func TestProcessValueWithInvalidFilterParams(t *testing.T) {
 	}
 }
 
+// TestProcessValueEdgeCases checks unusual but valid values, e.g. empty placeholders or brackets after placeholders
 func TestProcessValueEdgeCases(t *testing.T) {
 	t.Setenv("EDGE_TEST", "x")
 	t.Setenv("EDGE_TEST_INT", "5")
@@ -234,8 +235,6 @@ func TestProcessValueEdgeCases(t *testing.T) {
 		{desc: "no placeholder", value: "plain value", want: "plain value"},
 		{desc: "leading separator", value: "${|EDGE_TEST}", want: "x"},
 		{desc: "repeated separators", value: "${EDGE_TEST || upper | | lower}", want: "x"},
-		{desc: "unclosed placeholder", value: "a${EDGE_TEST", want: "a${EDGE_TEST"},
-		{desc: "unclosed placeholder after placeholder", value: "${EDGE_TEST}${", want: "x${"},
 		{desc: "unclosed params", value: "${EDGE_TEST|upper(}", want: "X"},
 		{desc: "empty placeholder", value: "${}", want: "${}"},
 		{desc: "closing bracket after placeholder", value: "${EDGE_TEST}}", want: "x}"},
@@ -257,14 +256,37 @@ func TestProcessValueEdgeCases(t *testing.T) {
 	}
 }
 
+// TestFindPlaceholders checks the placeholders found within a value, of which escaped closing brackets are part
 func TestFindPlaceholders(t *testing.T) {
-	placeholders := findPlaceholders(`a ${A} b ${B|replace(\},x)} ${C`)
+	placeholders, err := findPlaceholders(`a ${A} b ${B|replace(\},x)}`)
 
+	assert.NoError(t, err)
 	assert.Equal(t, []placeholder{
 		{token: "${A}", start: 2, end: 6},
 		{token: `${B|replace(\},x)}`, start: 9, end: 27},
 	}, placeholders)
 	assert.Equal(t, `B|replace(\},x)`, placeholders[1].content())
+}
+
+// TestFindPlaceholdersUnterminated checks that a placeholder without a closing bracket is an error,
+// which returns the placeholders before it and quotes only the beginning of a long rest of the value
+func TestFindPlaceholdersUnterminated(t *testing.T) {
+	placeholders, err := findPlaceholders("a ${A} b ${B | upper")
+	assert.EqualError(t, err, `unterminated placeholder "${B | upper", the closing } is missing`)
+	assert.Equal(t, []placeholder{{token: "${A}", start: 2, end: 6}}, placeholders)
+
+	_, err = findPlaceholders("${A | upper and then a long text äöü that goes on and on")
+	assert.EqualError(t, err, `unterminated placeholder "${A | upper and then a long text äöü tha...", the closing } is missing`)
+}
+
+// TestProcessValueUnterminated checks that values with unterminated placeholders fail, including an escaped closing bracket
+func TestProcessValueUnterminated(t *testing.T) {
+	t.Setenv("EDGE_TEST", "x")
+
+	for _, value := range []string{"a${EDGE_TEST", "${EDGE_TEST | upper", "${EDGE_TEST}${", "${", `${EDGE_TEST\}`, "${EDGE_TEST | upper\n"} {
+		_, err := ProcessValue(value)
+		assert.ErrorContains(t, err, "unterminated placeholder", value)
+	}
 }
 
 func FuzzProcessValue(f *testing.F) {
