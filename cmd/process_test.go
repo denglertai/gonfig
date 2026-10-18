@@ -706,6 +706,9 @@ func TestOutputFileMode(t *testing.T) {
 	assert.NoError(t, run("-i"))
 	assert.Equal(t, os.FileMode(0o640), fileMode(t, input), "-i keeps the mode of the input file")
 	assert.Equal(t, "key: value\n", readFile(t, input))
+
+	assert.NoError(t, run("-i", "--mode", "0600"))
+	assert.Equal(t, os.FileMode(0o600), fileMode(t, input), "--mode applies to -i")
 }
 
 // TestInvalidOutputFileMode checks that an invalid --mode fails before anything is written

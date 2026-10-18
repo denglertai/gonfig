@@ -103,7 +103,7 @@ func TestWriteFallsBackToWritingInPlace(t *testing.T) {
 		inject func(t *testing.T)
 	}{
 		{
-			name: "rename fails, e.g. for a bind mounted file",
+			name: "rename fails, e.g. for a bind-mounted file",
 			inject: func(t *testing.T) {
 				rename = func(_, _ string) error { return syscall.EBUSY }
 				t.Cleanup(func() { rename = os.Rename })

@@ -300,7 +300,7 @@ Output files are replaced atomically where possible: the result is written to a 
 If writing the temporary file fails, e.g. because the disk is full, the output file is kept as it was, which matters most for `-i`, where it is the template as well.
 Symbolic links are kept and the file they point to is replaced, e.g. for files mounted from a Kubernetes ConfigMap.
 On Linux and macOS, the owner and group of the file are kept as well.
-If the file cannot be replaced, e.g. because its directory is not writable or it is bind mounted into a container, it is written in place instead; an error during this fallback may leave partial output.
+If the file cannot be replaced, e.g. because its directory is not writable or it is bind-mounted into a container, it is written in place instead; an error during this fallback may leave partial output.
 
 Testdata can be found within [cmd/testdata/](cmd/testdata/).
 

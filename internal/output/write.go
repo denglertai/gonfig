@@ -19,7 +19,7 @@ type Options struct {
 	ForceMode bool
 }
 
-// rename, setOwner and writeTemp are variables, so tests can simulate failures, e.g. of a rename onto a bind mounted file,
+// rename, setOwner and writeTemp are variables, so tests can simulate failures, e.g. of a rename onto a bind-mounted file,
 // of keeping the owner of a file, which requires root, or of writing to a full disk
 var (
 	rename    = os.Rename
@@ -46,7 +46,7 @@ func (e errInPlace) Error() string {
 // Symbolic links are resolved, so the file they point to is replaced and the link is kept.
 // The file of a link pointing to a file that does not exist yet is created in place.
 // If the temporary file cannot be created, its owner cannot be set to the owner of the existing file,
-// or the rename fails, the file is written in place instead, which works for bind mounted files as well.
+// or the rename fails, the file is written in place instead, which works for bind-mounted files as well.
 // Files that are not regular and paths of special files like /dev/stdout are always written in place.
 //
 // New files get opts.Mode. Existing files keep their mode, unless opts.ForceMode is set.
