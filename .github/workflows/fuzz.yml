@@ -1,0 +1,64 @@
+name: Fuzz
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  # Longer runs find inputs that short runs on pull requests miss
+  schedule:
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: fuzz (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: ./internal/value
+            target: FuzzProcessValue
+          - package: ./internal/file
+            target: FuzzYAML
+          - package: ./internal/file
+            target: FuzzJSON
+          - package: ./internal/file
+            target: FuzzXML
+          - package: ./internal/file
+            target: FuzzProperties
+          - package: ./internal/file
+            target: FuzzPlain
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+      with:
+        # The job uploads artifacts, which must not contain the token of the checkout
+        persist-credentials: false
+
+    - name: Set up Go
+      uses: actions/setup-go@v7
+      with:
+        go-version: '1.27.2'
+
+    - name: Fuzz
+      env:
+        PACKAGE: ${{ matrix.package }}
+        TARGET: ${{ matrix.target }}
+        FUZZTIME: ${{ github.event_name == 'schedule' && '10m' || '60s' }}
+      run: go test "$PACKAGE" -run '^$' -fuzz "^${TARGET}\$" -fuzztime "$FUZZTIME"
+
+    # A failing input is written to testdata/fuzz of the package. Adding it there reproduces the failure with go test.
+    - name: Upload failing input
+      if: failure()
+      uses: actions/upload-artifact@v7
+      with:
+        name: fuzz-${{ matrix.target }}
+        path: ${{ matrix.package }}/testdata/fuzz

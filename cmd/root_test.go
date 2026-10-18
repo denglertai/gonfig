@@ -11,6 +11,7 @@ import (
 	"github.com/denglertai/gonfig/internal/config"
 	"github.com/denglertai/gonfig/internal/file"
 	"github.com/denglertai/gonfig/internal/filter"
+	"github.com/denglertai/gonfig/internal/testutil"
 	"github.com/denglertai/gonfig/internal/version"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -30,7 +31,7 @@ func TestLogLevelFlagIsApplied(t *testing.T) {
 
 // TestDefaultAppConfig ensures that the defaults of the CLI flags, the config defaults and the fallback of GetAppConfig match
 func TestDefaultAppConfig(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testutil.SetHome(t, t.TempDir())
 	t.Chdir(t.TempDir())
 	// TestMain removes all other GONFIG_* variables, but points the config path to an empty directory,
 	// which this test clears to check the default search paths. Viper ignores empty environment variables.
