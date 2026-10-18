@@ -6,15 +6,19 @@ on:
     tags:        
       - '**'           # Push events to every tag including hierarchical tags like v1.0/beta
 
+# Jobs only get the permissions they need, see the permissions of each job
 permissions:
-  contents: write
-  # Push the container image to ghcr.io
-  packages: write
-  # Sign the container image keyless with cosign
-  id-token: write
+  contents: read
 
 jobs:
   goreleaser:
+    permissions:
+      # Create the release and upload its assets
+      contents: write
+      # Push the container image to ghcr.io
+      packages: write
+      # Sign the container image keyless with cosign
+      id-token: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -125,6 +129,9 @@ jobs:
 
   upload-macos-assets:
     needs: build-macos
+    permissions:
+      # Upload the Darwin archives to the release
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
