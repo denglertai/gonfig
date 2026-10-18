@@ -8,12 +8,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -52,6 +54,88 @@ type DefaultFilterParamsHandler struct {
 // AcceptParams accepts the provided parameters
 func (f *DefaultFilterParamsHandler) AcceptParams(params map[string]string) {
 	f.params = params
+}
+
+// ParamsDeclarer is implemented by filters declaring the params they accept, so ValidateParams can reject others,
+// e.g. typos in param names. Filters not implementing it, e.g. of plugins, accept any params.
+type ParamsDeclarer interface {
+	// DeclaredParams returns the names of the params in the order of their positions
+	DeclaredParams() []string
+}
+
+// ValidateParams returns an error if the params of a usage of the filter with the name do not match the params it declares:
+// params with unknown names, more positional params than declared and params given both by position and by name.
+// Empty positional params beyond the declared ones are allowed, since a comma separates two empty params, e.g. split(,).
+func ValidateParams(name string, f Filter, params map[string]string) error {
+	declarer, ok := f.(ParamsDeclarer)
+	if !ok || len(params) == 0 {
+		return nil
+	}
+
+	// Most params are valid, so they are checked without sorting their keys, which would allocate for every usage.
+	// Only if they are invalid, they are checked again in sorted order, so the error is the same for every run.
+	declared := declarer.DeclaredParams()
+	if err := validateParams(name, declared, params, nil); err != nil {
+		return validateParams(name, declared, params, slices.Sorted(maps.Keys(params)))
+	}
+	return nil
+}
+
+// validateParams validates the params in the order of sortedKeys, or of the map if it is nil, see ValidateParams
+func validateParams(name string, declared []string, params map[string]string, sortedKeys []string) error {
+	positional := 0
+	check := func(key string) error {
+		position, err := strconv.Atoi(key)
+		// Only keys of the form created for positional params are positions, so names like "-1=x", "+0=x" or "00=x"
+		// are unknown names instead of indexing out of range or being ignored, since filters read positions as "0", "1", ...
+		// Positions are the indexes of the params, so they are lower than their number. Higher keys are names as well,
+		// e.g. "9223372036854775807=x", whose position+1 would overflow and pass validation.
+		if err != nil || position < 0 || position >= len(params) || strconv.Itoa(position) != key {
+			if !slices.Contains(declared, key) {
+				if len(declared) == 0 {
+					return fmt.Errorf("filter %s accepts no params, but got %q", name, key)
+				}
+				return fmt.Errorf("filter %s has no param %q, it accepts %s", name, key, strings.Join(declared, ", "))
+			}
+			return nil
+		}
+
+		if position >= len(declared) {
+			if params[key] != "" {
+				positional = max(positional, position+1)
+			}
+			return nil
+		}
+		if _, byName := params[declared[position]]; byName {
+			return fmt.Errorf("filter %s got the param %s twice, by position and by name", name, declared[position])
+		}
+		return nil
+	}
+
+	if sortedKeys == nil {
+		for key := range params {
+			if err := check(key); err != nil {
+				return err
+			}
+		}
+	} else {
+		for _, key := range sortedKeys {
+			if err := check(key); err != nil {
+				return err
+			}
+		}
+	}
+
+	switch {
+	case positional == 0:
+		return nil
+	case len(declared) == 0:
+		return fmt.Errorf("filter %s accepts no params, but got %d", name, positional)
+	case len(declared) == 1:
+		return fmt.Errorf("filter %s accepts 1 param (%s), but got %d", name, declared[0], positional)
+	default:
+		return fmt.Errorf("filter %s accepts %d params (%s), but got %d", name, len(declared), strings.Join(declared, ", "), positional)
+	}
 }
 
 // failOnMissing makes environment variables that are not set fail processing, see SetFailOnMissing
@@ -453,13 +537,31 @@ func NewFilter(token string) Filter {
 // FuncFilter is a filter that uses a function to process the value
 type FuncFilter struct {
 	fn func(any, map[string]string) (any, error)
+	// paramNames are the names of the params the filter accepts in the order of their positions, see ParamsDeclarer
+	paramNames []string
 	DefaultFilterParamsHandler
+}
+
+// DeclaredParams returns the names of the params the filter accepts
+func (f *FuncFilter) DeclaredParams() []string {
+	return f.paramNames
 }
 
 // Process executes the filter's function
 func (f *FuncFilter) Process(value any) (any, error) {
 	return f.fn(value, f.params)
 }
+
+// The params declared by the built-in filters, see ParamsDeclarer.
+// They are shared by all instances of a filter, so creating a filter for every usage does not allocate them.
+var (
+	defaultParams  = []string{"value"}
+	multiplyParams = []string{"m"}
+	urlParams      = []string{"mode"}
+	replaceParams  = []string{"old", "new"}
+	regexParams    = []string{"pattern", "replacement"}
+	listParams     = []string{"delimiter"}
+)
 
 // init initializes the filter map
 func init() {
@@ -501,6 +603,7 @@ func init() {
 
 	filterMap["default"] = func(token string) Filter {
 		return &FuncFilter{
+			paramNames: defaultParams,
 			fn: func(value any, params map[string]string) (any, error) {
 				// Like the default of placeholder templates, it replaces empty values, e.g. of variables that are not set
 				if s, ok := value.(string); ok && s == "" {
@@ -549,8 +652,10 @@ func init() {
 
 	filterMap["multiply"] = func(token string) Filter {
 		return &FuncFilter{
+			paramNames: multiplyParams,
 			fn: func(value any, params map[string]string) (any, error) {
-				multiplier, found := params["m"]
+				// The multiplier may be given by position as well, e.g. multiply(2), like the params of other filters
+				multiplier, found := param(params, "m", 0)
 				if !found {
 					multiplier = "1"
 				}
@@ -622,6 +727,7 @@ func init() {
 
 	filterMap["url_encode"] = func(token string) Filter {
 		return &FuncFilter{
+			paramNames: urlParams,
 			fn: stringFunc(func(s string, params map[string]string) (string, error) {
 				mode, _ := param(params, "mode", 0)
 				switch mode {
@@ -638,6 +744,7 @@ func init() {
 
 	filterMap["url_decode"] = func(token string) Filter {
 		return &FuncFilter{
+			paramNames: urlParams,
 			fn: stringFunc(func(s string, params map[string]string) (string, error) {
 				mode, _ := param(params, "mode", 0)
 				var decoded string
@@ -673,6 +780,7 @@ func init() {
 
 	filterMap["replace"] = func(token string) Filter {
 		return &FuncFilter{
+			paramNames: replaceParams,
 			fn: stringFunc(func(s string, params map[string]string) (string, error) {
 				oldStr, err := requiredParam(token, params, "old", 0)
 				if err != nil {
@@ -689,6 +797,7 @@ func init() {
 
 	filterMap["regex"] = func(token string) Filter {
 		return &FuncFilter{
+			paramNames: regexParams,
 			fn: stringFunc(func(s string, params map[string]string) (string, error) {
 				pattern, err := requiredParam(token, params, "pattern", 0)
 				if err != nil {
@@ -713,6 +822,7 @@ func init() {
 
 	filterMap["split"] = func(token string) Filter {
 		return &FuncFilter{
+			paramNames: listParams,
 			fn: func(value any, params map[string]string) (any, error) {
 				// An empty delimiter, e.g. of split(,) whose comma separates two empty params, uses the default as well
 				delimiter, _ := param(params, "delimiter", 0)
@@ -730,6 +840,7 @@ func init() {
 
 	filterMap["join"] = func(token string) Filter {
 		return &FuncFilter{
+			paramNames: listParams,
 			fn: func(value any, params map[string]string) (any, error) {
 				// An empty delimiter, e.g. of join(,) whose comma separates two empty params, uses the default as well
 				delimiter, _ := param(params, "delimiter", 0)

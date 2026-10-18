@@ -208,8 +208,14 @@ func validateChain(steps []chainStep, templates config.Templates) ([]string, []e
 			} else {
 				errs = append(errs, fmt.Errorf("unknown filter template %q", ref))
 			}
-		case !filter.IsKnown(step.name) && !filter.UnknownFiltersAllowed():
-			errs = append(errs, fmt.Errorf("unknown filter %q", step.name))
+		case !filter.IsKnown(step.name):
+			if !filter.UnknownFiltersAllowed() {
+				errs = append(errs, fmt.Errorf("unknown filter %q", step.name))
+			}
+		default:
+			if err := filter.ValidateParams(step.name, filter.NewFilter(step.name), step.params); err != nil {
+				errs = append(errs, err)
+			}
 		}
 	}
 

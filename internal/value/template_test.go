@@ -182,6 +182,16 @@ func TestSetTemplatesValidation(t *testing.T) {
 			wantErr:   `placeholder template "url": unterminated placeholder "${X | upper", the closing } is missing in value`,
 		},
 		{
+			desc:      "unknown param in filter template",
+			templates: config.Templates{Filters: map[string]config.FilterTemplate{"secret": {Filters: "trim(both) | base64"}}},
+			wantErr:   `filter template "secret": filter trim accepts no params, but got 1`,
+		},
+		{
+			desc:      "unknown param in value",
+			templates: config.Templates{Placeholders: map[string]config.PlaceholderTemplate{"url": {Value: "${X | default(vaule=x)}"}}},
+			wantErr:   `placeholder template "url": filter default has no param "vaule", it accepts value in value`,
+		},
+		{
 			desc:      "unknown filter in value",
 			templates: config.Templates{Placeholders: map[string]config.PlaceholderTemplate{"url": {Value: "${X | uper}"}}},
 			wantErr:   `placeholder template "url": unknown filter "uper" in value`,
