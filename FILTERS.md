@@ -663,7 +663,7 @@ $ DB_PASSWORD=@/run/secrets/missing gonfig value 'password=${DB_PASSWORD | trim}
 Error: failed to read the file referenced with @: open /run/secrets/missing: no such file or directory
 ```
 
-Use an absolute path or one starting with `./`, since only these fail for missing files.
+Use an absolute path or one starting with `./` or `../` (or `.\` or `..\` on Windows) to ensure processing fails for missing files.
 
 ### Generate password hashes
 
