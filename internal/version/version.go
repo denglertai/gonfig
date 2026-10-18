@@ -51,19 +51,17 @@ func resolve(version, commit, date string, buildInfo *debug.BuildInfo) Info {
 			info.Version = buildInfo.Main.Version
 		}
 
-		// The VCS settings are only available for go build within a git repository, not for go install
-		for _, setting := range buildInfo.Settings {
-			switch setting.Key {
-			case "vcs.revision":
-				if info.Commit == "" {
+		// The VCS settings are only available for go build within a git repository, not for go install.
+		// Commit, date and modified describe the same commit, so they are only taken from the build info together,
+		// if -ldflags set neither the commit nor the date. Otherwise a commit could be printed with the date of another one.
+		if commit == "" && date == "" {
+			for _, setting := range buildInfo.Settings {
+				switch setting.Key {
+				case "vcs.revision":
 					info.Commit = setting.Value
-				}
-			case "vcs.time":
-				if info.Date == "" {
+				case "vcs.time":
 					info.Date = setting.Value
-				}
-			case "vcs.modified":
-				if commit == "" {
+				case "vcs.modified":
 					info.Modified = setting.Value == "true"
 				}
 			}
