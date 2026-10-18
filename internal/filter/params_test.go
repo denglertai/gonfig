@@ -71,6 +71,17 @@ func TestValidateParams(t *testing.T) {
 			name: "negative position without declared params", filter: "upper", params: map[string]string{"-1": "a"},
 			wantErr: `filter upper accepts no params, but got "-1"`,
 		},
+		{
+			name: "largest integer as name", filter: "split", params: map[string]string{"9223372036854775807": "x"},
+			wantErr: `filter split has no param "9223372036854775807", it accepts delimiter`,
+		},
+		{
+			name: "position beyond the number of params as name", filter: "split", params: map[string]string{"5": "x"},
+			wantErr: `filter split has no param "5", it accepts delimiter`,
+		},
+		{
+			name: "position after a named param", filter: "replace", params: map[string]string{"old": "a", "1": "b"},
+		},
 	}
 
 	for _, tt := range tests {

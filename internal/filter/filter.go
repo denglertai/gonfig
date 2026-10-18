@@ -88,7 +88,9 @@ func validateParams(name string, declared []string, params map[string]string, so
 		position, err := strconv.Atoi(key)
 		// Only keys of the form created for positional params are positions, so names like "-1=x", "+0=x" or "00=x"
 		// are unknown names instead of indexing out of range or being ignored, since filters read positions as "0", "1", ...
-		if err != nil || position < 0 || strconv.Itoa(position) != key {
+		// Positions are the indexes of the params, so they are lower than their number. Higher keys are names as well,
+		// e.g. "9223372036854775807=x", whose position+1 would overflow and pass validation.
+		if err != nil || position < 0 || position >= len(params) || strconv.Itoa(position) != key {
 			if !slices.Contains(declared, key) {
 				if len(declared) == 0 {
 					return fmt.Errorf("filter %s accepts no params, but got %q", name, key)
