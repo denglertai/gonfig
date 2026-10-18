@@ -68,6 +68,17 @@ make install-zig
 - Linux: amd64, arm64
 - macOS: amd64, arm64
 - Windows: amd64
+- Container image `ghcr.io/denglertai/gonfig`: linux/amd64, linux/arm64
+
+## Container Image
+
+`dockers_v2` in `.goreleaser.yaml` builds a multi-arch image from the Linux binaries with [release.Dockerfile](release.Dockerfile) and pushes it to ghcr.io as part of `goreleaser release`.
+The Dockerfile only copies the prebuilt binaries, so it cannot be built with `docker build` from the sources, and arm64 needs no QEMU.
+`docker_signs` signs the image keyless with cosign, using the OIDC identity of the release workflow (`id-token: write`).
+
+The base image `cgr.dev/chainguard/glibc-dynamic` is pinned by digest and updated by Renovate. It provides glibc, which the cgo binaries need.
+
+`goreleaser release --snapshot --clean` builds the image locally without pushing or signing; it requires Docker with Buildx.
 
 ## Troubleshooting
 
