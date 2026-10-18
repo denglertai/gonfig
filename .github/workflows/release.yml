@@ -17,8 +17,10 @@ jobs:
       contents: write
       # Push the container image to ghcr.io
       packages: write
-      # Sign the container image keyless with cosign
+      # Sign the container image and create attestations keyless with cosign and actions/attest
       id-token: write
+      # Store the build provenance in the attestations of the repository
+      attestations: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -89,6 +91,7 @@ jobs:
       # The SBOM of each platform image is attached as a signed attestation, keyless like the image signatures.
       # It is attached to the platform image for scanners and to the index, which cosign verify-attestation resolves tags to.
       - name: Attest the SBOMs of the container image
+        id: image
         env:
           IMAGE: ghcr.io/denglertai/gonfig
           TAG: ${{ github.ref_name }}
@@ -96,6 +99,7 @@ jobs:
           set -euo pipefail
           index=$(docker buildx imagetools inspect "$IMAGE:$TAG" --format '{{json .Manifest}}')
           index_digest=$(jq -r '.digest' <<<"$index")
+          echo "index-digest=$index_digest" >> "$GITHUB_OUTPUT"
           jq -r '.manifests[] | select(.platform.os != "unknown") | "\(.platform.os)-\(.platform.architecture) \(.digest)"' <<<"$index" |
             while read -r platform digest; do
               sbom="${RUNNER_TEMP}/sbom-${platform}.spdx.json"
@@ -104,9 +108,29 @@ jobs:
                 cosign attest --yes --type spdxjson --predicate "$sbom" "$IMAGE@$subject"
               done
             done
+      # SLSA build provenance, which gh attestation verify checks. The provenance of the image is stored in the registry as well.
+      - name: Attest the build provenance of the container image
+        uses: actions/attest@v4
+        with:
+          subject-name: ghcr.io/denglertai/gonfig
+          subject-digest: ${{ steps.image.outputs.index-digest }}
+          push-to-registry: true
+          # Storage records are only available for repositories owned by organizations
+          create-storage-record: false
+      - name: Attest the build provenance of the release archives
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            dist/gonfig_*.tar.gz
+            dist/gonfig_*.zip
 
   build-macos:
     needs: goreleaser
+    permissions:
+      contents: read
+      # Create the build provenance of the archive keyless
+      id-token: write
+      attestations: write
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -143,6 +167,10 @@ jobs:
             go build -trimpath -ldflags "$ldflags" -o dist/darwin-${{ matrix.goarch }}/gonfig .
           cp LICENSE dist/darwin-${{ matrix.goarch }}/LICENSE
           tar -C dist/darwin-${{ matrix.goarch }} -czf dist/gonfig_Darwin_${{ matrix.archive_arch }}.tar.gz gonfig LICENSE
+      - name: Attest the build provenance of the Darwin archive
+        uses: actions/attest@v4
+        with:
+          subject-path: dist/gonfig_Darwin_${{ matrix.archive_arch }}.tar.gz
       - name: Upload Darwin archive artifact
         uses: actions/upload-artifact@v7
         with:
