@@ -95,6 +95,7 @@ func TestProcessValueWithoutTemplates(t *testing.T) {
 	assert.EqualError(t, err, `unknown placeholder template "db_url"`)
 }
 
+// TestSetTemplatesValidation checks the errors of invalid filter and placeholder templates
 func TestSetTemplatesValidation(t *testing.T) {
 	testCases := []struct {
 		desc      string
@@ -174,6 +175,11 @@ func TestSetTemplatesValidation(t *testing.T) {
 			desc:      "unknown placeholder template in value",
 			templates: config.Templates{Placeholders: map[string]config.PlaceholderTemplate{"url": {Value: "${@missing}"}}},
 			wantErr:   `placeholder template "url": unknown placeholder template "missing" in value`,
+		},
+		{
+			desc:      "unterminated placeholder in value",
+			templates: config.Templates{Placeholders: map[string]config.PlaceholderTemplate{"url": {Value: "jdbc:${X | upper"}}},
+			wantErr:   `placeholder template "url": unterminated placeholder "${X | upper", the closing } is missing in value`,
 		},
 		{
 			desc:      "unknown filter in value",

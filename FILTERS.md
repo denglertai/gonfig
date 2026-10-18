@@ -36,6 +36,13 @@ postgres://app:s3cret@db:5432/app
 
 Note: Use single quotes in the shell, otherwise the shell expands `${...}` itself before gonfig sees it.
 
+A placeholder ends at the first `}` that is not escaped. A `${` without a closing `}` is an error, e.g. for a typo, so it is not written to the output as is:
+
+```console
+$ V=abc gonfig value '${V | upper'
+Error: unterminated placeholder "${V | upper", the closing } is missing
+```
+
 ## Order of operations
 
 Every placeholder is resolved in the following steps:

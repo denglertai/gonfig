@@ -91,7 +91,9 @@ func (f valueTemplateFilter) Process(_ any) (any, error) {
 // in the order of their first occurrence. References within templates are not included.
 func TemplateReferences(value string) []string {
 	var refs []string
-	for _, p := range findPlaceholders(value) {
+	// An unterminated placeholder fails processing, which reports it, so the references before it are enough
+	placeholders, _ := findPlaceholders(value)
+	for _, p := range placeholders {
 		for _, step := range scanChain(p.content(), true) {
 			if _, isTemplate := templateName(step.name); isTemplate && !slices.Contains(refs, step.name) {
 				refs = append(refs, step.name)
@@ -155,7 +157,11 @@ func validateTemplates(templates config.Templates) error {
 		}
 
 		// The placeholders within the value may refer to other placeholder templates and use filter templates
-		for _, p := range findPlaceholders(template.Value) {
+		placeholders, err := findPlaceholders(template.Value)
+		if err != nil {
+			fail("placeholder", name, "%v in value", err)
+		}
+		for _, p := range placeholders {
 			steps := scanChain(p.content(), true)
 			if len(steps) == 0 {
 				continue
