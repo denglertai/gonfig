@@ -52,14 +52,18 @@ func resolve(version, commit, date string, buildInfo *debug.BuildInfo) Info {
 		}
 
 		// The VCS settings are only available for go build within a git repository, not for go install
-		if info.Commit == "" {
-			for _, setting := range buildInfo.Settings {
-				switch setting.Key {
-				case "vcs.revision":
+		for _, setting := range buildInfo.Settings {
+			switch setting.Key {
+			case "vcs.revision":
+				if info.Commit == "" {
 					info.Commit = setting.Value
-				case "vcs.time":
+				}
+			case "vcs.time":
+				if info.Date == "" {
 					info.Date = setting.Value
-				case "vcs.modified":
+				}
+			case "vcs.modified":
+				if commit == "" {
 					info.Modified = setting.Value == "true"
 				}
 			}

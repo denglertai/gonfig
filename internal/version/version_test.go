@@ -48,6 +48,20 @@ func TestResolve(t *testing.T) {
 			wantString: "0.0.29 (commit 0274352, 2026-10-18T08:05:01Z)",
 		},
 		{
+			name:       "ldflags commit with build info date",
+			commit:     hash,
+			buildInfo:  buildInfo("(devel)", "ffffffffffff", "2026-01-01T00:00:00Z", "true"),
+			want:       Info{Version: "dev", Commit: hash, Date: "2026-01-01T00:00:00Z"},
+			wantString: "dev (commit 0274352, 2026-01-01T00:00:00Z)",
+		},
+		{
+			name:       "ldflags date with build info commit",
+			date:       "2026-10-18T08:05:01Z",
+			buildInfo:  buildInfo("(devel)", hash, "2026-01-01T00:00:00Z", "true"),
+			want:       Info{Version: "dev", Commit: hash, Date: "2026-10-18T08:05:01Z", Modified: true},
+			wantString: "dev (commit 0274352-dirty, 2026-10-18T08:05:01Z)",
+		},
+		{
 			name:       "melange build with the version only",
 			version:    "0.0.29",
 			buildInfo:  buildInfo("(devel)", "", "", ""),
