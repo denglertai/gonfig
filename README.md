@@ -288,6 +288,20 @@ Usage:
     ```
    An already existing output file is only overwritten if `-w` / `--overwrite` is given.
 
+1. Set the file mode of the output file (`--mode` flag)
+    ```console
+    $ gonfig config process -f /path/to/template.yaml -o /path/to/config.yaml --mode 0600
+    ```
+   Rendered files often contain secrets, so their mode is not left to the umask:
+   a new output file gets the mode of the input file, so restricting the template restricts the output, and an existing output file keeps its mode.
+   `--mode` sets the mode in both cases, also for `-i`.
+
+Output files are replaced atomically: the result is written to a temporary file next to the output file, which then replaces it.
+If writing fails, e.g. because the disk is full, the output file is kept as it was, which matters most for `-i`, where it is the template as well.
+Symbolic links are kept and the file they point to is replaced, e.g. for files mounted from a Kubernetes ConfigMap.
+On Linux and macOS, the owner and group of the file are kept as well.
+If the file cannot be replaced, e.g. because its directory is not writable or it is bind mounted into a container, it is written in place instead.
+
 Testdata can be found within [cmd/testdata/](cmd/testdata/).
 
 For example processing [cmd/testdata/xml/customers_param.xml](cmd/testdata/xml/customers_param.xml) will print the following result

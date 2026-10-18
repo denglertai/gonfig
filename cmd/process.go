@@ -6,9 +6,12 @@ package cmd
 import (
 	"bytes"
 	"fmt"
+	"io/fs"
 	"os"
+	"strconv"
 
 	"github.com/denglertai/gonfig/internal/file"
+	"github.com/denglertai/gonfig/internal/output"
 	"github.com/denglertai/gonfig/pkg/logging"
 	"github.com/spf13/cobra"
 )
@@ -23,7 +26,7 @@ to the desired output. Defaults to stdout`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		configSettings := getConfigSettings(cmd)
 
-		output, err := cmd.Flags().GetString("output")
+		outputFile, err := cmd.Flags().GetString("output")
 		if err != nil {
 			return err
 		}
@@ -38,13 +41,20 @@ to the desired output. Defaults to stdout`,
 			return err
 		}
 
+		// The flag is defined by init, so reading it cannot fail
+		modeFlag, _ := cmd.Flags().GetString("mode")
+		mode, err := parseMode(modeFlag)
+		if err != nil {
+			return err
+		}
+
 		// Successful runs are silent by default, so their details are only logged at debug level
 		logging.Debug("Running command", "command", cmd.Name(), "args", args, "configSettings", configSettings)
 
 		// In case we want to write the output to the source file directly
 		if inline {
 			logging.Debug("Inline processing enabled")
-			output = configSettings.File
+			outputFile = configSettings.File
 			overwriteExistingFile = true
 		}
 
@@ -57,17 +67,24 @@ to the desired output. Defaults to stdout`,
 			return err
 		}
 
-		if output != "-" {
+		if outputFile != "-" {
 			// If the file exists and we don't want to overwrite it, return an error
-			if _, err := os.Stat(output); err == nil && !overwriteExistingFile {
-				return ErrFileExists(fmt.Errorf("file %s already exists; Use -w / --overwrite if this is intended", output))
+			if _, err := os.Stat(outputFile); err == nil && !overwriteExistingFile {
+				return ErrFileExists(fmt.Errorf("file %s already exists; Use -w / --overwrite if this is intended", outputFile))
 			}
 
-			// Write the output to the file
-			logging.Debug("Writing output", "file", output)
+			// New files get the mode of the input file unless --mode is given, so restricting a template restricts its output
+			opts := output.Options{Mode: mode, ForceMode: modeFlag != ""}
+			if !opts.ForceMode {
+				// The input file has just been read, so this only fails if it was removed meanwhile, using a safe mode then
+				opts.Mode = 0o600
+				if input, err := os.Stat(configSettings.File); err == nil {
+					opts.Mode = input.Mode().Perm()
+				}
+			}
 
-			// Unlike a deferred Close, WriteFile also reports errors on closing the file
-			return os.WriteFile(output, o.Bytes(), 0o666)
+			logging.Debug("Writing output", "file", outputFile, "mode", opts.Mode, "forceMode", opts.ForceMode)
+			return output.Write(outputFile, o.Bytes(), opts)
 		}
 
 		// Dump the content to stdout
@@ -76,6 +93,7 @@ to the desired output. Defaults to stdout`,
 	},
 }
 
+// init registers the process command and its flags
 func init() {
 	configCmd.AddCommand(processCmd)
 
@@ -84,6 +102,20 @@ func init() {
 	processCmd.Flags().BoolP("inline", "i", false, "Controls if the output should get written to the source file directly (defaults to false)")
 
 	processCmd.Flags().BoolP("overwrite", "w", false, "Controls if an already existing output file may be overwritten (defaults to false). Not needed for -i (--inline)")
+
+	processCmd.Flags().String("mode", "", "File mode of the output file in octal, e.g. 0600 (defaults to the mode of an existing output file, or of the input file for new ones)")
 }
 
 type ErrFileExists error
+
+// parseMode parses the octal file mode of --mode, e.g. "0600" or "600". An empty value returns 0.
+func parseMode(value string) (fs.FileMode, error) {
+	if value == "" {
+		return 0, nil
+	}
+	mode, err := strconv.ParseUint(value, 8, 32)
+	if err != nil || mode > 0o777 {
+		return 0, fmt.Errorf("invalid file mode %q for --mode, use octal permissions like 0600 or 0644", value)
+	}
+	return fs.FileMode(mode), nil
+}
