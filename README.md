@@ -83,7 +83,7 @@ FROM eclipse-temurin:21-jre
 COPY --from=gonfig /usr/bin/gonfig /usr/bin/gonfig
 ```
 
-The image is tagged with the version without a leading `v`, and `latest` for the newest release.
+The image is tagged with the version both with and without a leading `v`, e.g. `v0.0.29` and `0.0.29`, and `latest` for the newest release.
 The binary is linked against glibc, so it runs in images based on e.g. Debian, Ubuntu, Wolfi or distroless `base`, but not in Alpine or `scratch` images.
 
 The image contains no config file and sets no `GONFIG_*` variables, so the built-in defaults apply. To change them, set the [environment variables](#options) in your own image or deployment, or mount a [config file](#config-file) as `/etc/gonfig/.gonfig.yaml`.

@@ -105,8 +105,10 @@ dockers_v2:
     dockerfile: release.Dockerfile
     images:
       - ghcr.io/denglertai/gonfig
+    # Both forms of the version, e.g. 0.0.29 like the apk and v0.0.29 like the git tag
     tags:
       - "{{ .Version }}"
+      - "{{ .Tag }}"
       - "{{ if not .Prerelease }}latest{{ end }}"
     platforms:
       - linux/amd64
