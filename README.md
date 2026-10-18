@@ -104,6 +104,13 @@ $ cosign verify-attestation --type spdxjson ghcr.io/denglertai/gonfig:VERSION \
     --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
+The image, the release archives and the apk have a signed [SLSA build provenance](https://slsa.dev/spec/v1.0/provenance), for releases after v0.1.0, recording the workflow and commit they were built from.
+Verify it with the [GitHub CLI](https://cli.github.com/), replacing `VERSION` with the version of the release as above:
+```console
+$ gh attestation verify oci://ghcr.io/denglertai/gonfig:VERSION --repo denglertai/gonfig
+$ gh attestation verify gonfig_Linux_x86_64.tar.gz --repo denglertai/gonfig
+```
+
 ## Quick start
 
 1. [Install](#installation) gonfig.

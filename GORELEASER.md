@@ -76,6 +76,7 @@ make install-zig
 The Dockerfile only copies the prebuilt binaries, so it cannot be built with `docker build` from the sources, and arm64 needs no QEMU.
 `docker_signs` signs the image keyless with cosign, using the OIDC identity of the release workflow (`id-token: write`).
 Buildx attestations are disabled (`sbom: false`, `--provenance=false`), since ghcr.io lists them as images of the platform `unknown/unknown`. Instead, the release workflow scans each platform image with syft after GoReleaser and attaches the SBOM with `cosign attest --type spdxjson` to the platform image and to the image index.
+`actions/attest` creates the SLSA build provenance of the image index, which is pushed to the registry as well, and of the archives, in the job building them. `melange.yml` creates the provenance of the apk. Storage records are disabled, since they are only available for repositories owned by organizations.
 
 The base image `cgr.dev/chainguard/glibc-dynamic` is pinned by digest and updated by Renovate. It provides glibc, which the cgo binaries need.
 
