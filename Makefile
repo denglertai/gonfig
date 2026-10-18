@@ -34,7 +34,7 @@ prepare-release-branch: check-main-up-to-date check-clean check-version-format
 		echo "Remote branch '$$branch_name' already exists on origin."; \
 		exit 1; \
 	fi; \
-	expected="$${VERSION#v}"; \
+	expected="$(patsubst v%,%,$(VERSION))"; \
 	current="$$(awk '/^  version:/ {print $$2; exit}' melange.yaml)"; \
 	if [ -z "$$current" ]; then \
 		echo "Could not read package version from melange.yaml"; \
@@ -129,7 +129,7 @@ check-melange-version:
 		echo "VERSION is required. Example: make release-draft VERSION=v1.2.3"; \
 		exit 1; \
 	fi
-	@expected="$${VERSION#v}"; \
+	@expected="$(patsubst v%,%,$(VERSION))"; \
 	melange_version="$$(awk '/^  version:/ {print $$2; exit}' melange.yaml)"; \
 	if [ -z "$$melange_version" ]; then \
 		echo "Could not read package version from melange.yaml"; \
