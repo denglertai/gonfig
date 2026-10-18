@@ -222,6 +222,26 @@ func TestProcessValueWithInvalidFilterParams(t *testing.T) {
 	}
 }
 
+// TestProcessValueWithUnknownParams checks that params a filter does not declare fail processing,
+// while the documented empty params of split(,) use the default delimiter
+func TestProcessValueWithUnknownParams(t *testing.T) {
+	t.Setenv("PARAMS_TEST", "a,b")
+
+	for value, wantErr := range map[string]string{
+		"${PARAMS_TEST | upper(foo=bar)}":          `filter upper accepts no params, but got "foo"`,
+		"${PARAMS_TEST | bcrypt(cost=4)}":          `filter bcrypt accepts no params, but got "cost"`,
+		"${PARAMS_TEST | replace(a,b,c)}":          "filter replace accepts 2 params (old, new), but got 3",
+		"${PARAMS_TEST | trim | replace(a,old=b)}": "filter replace got the param old twice, by position and by name",
+	} {
+		_, err := ProcessValue(value)
+		assert.EqualError(t, err, wantErr, value)
+	}
+
+	result, err := ProcessValue("${PARAMS_TEST | split(,) | join(;)}")
+	assert.NoError(t, err)
+	assert.Equal(t, "a;b", result)
+}
+
 // TestProcessValueEdgeCases checks unusual but valid values, e.g. empty placeholders or brackets after placeholders
 func TestProcessValueEdgeCases(t *testing.T) {
 	t.Setenv("EDGE_TEST", "x")

@@ -102,6 +102,19 @@ $ V='a,b' gonfig value '${V | replace(\,,;)}'
 a;b
 ```
 
+Params a filter does not accept are an error, e.g. a typo in a param name or params of a filter without any, so they are not silently ignored.
+The params of each filter are listed in the [table below](#built-in-filters):
+
+```console
+$ V=foo gonfig value '${V | replace(old=foo,nwe=bar)}'
+Error: filter replace has no param "nwe", it accepts old, new
+$ V=foo gonfig value '${V | trim(both)}'
+Error: filter trim accepts no params, but got 1
+```
+
+Empty positional params beyond the accepted ones are allowed, e.g. `split(,)`, see [split / join](#split--join).
+Filters of [plugins](./PLUGINS.md) receive any params and may check them themselves.
+
 This matters most for regular expressions, whose groups and quantifiers use brackets:
 
 ```console
@@ -218,13 +231,14 @@ Error: filter to_int: the value is not an integer
 
 ### multiply
 
-Multiplies an integer by the named param `m`, which defaults to `1`.
+Multiplies an integer by the param `m`, which defaults to `1` and may be given by name or by position.
 The value has to be an integer or a numeric string, so it is usually combined with `to_int`.
-`m` has to be given by name: `multiply(2)` is ignored and multiplies by `1`.
 
 ```console
 $ WORKERS=4 gonfig value '${WORKERS | to_int | multiply(m=2)}'
 8
+$ WORKERS=4 gonfig value '${WORKERS | to_int | multiply(3)}'
+12
 ```
 
 ### md5

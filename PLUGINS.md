@@ -120,6 +120,7 @@ AcceptParams(params map[string]string)
 - **Copies per usage:** Every value is processed by its own shallow copy of the filter, which receives the params of its usage, so params of one usage do not affect another one.
   Filters storing params have to be registered as pointers. Maps, slices and pointers within a filter are still shared between copies.
 - **Positional params:** Params given by position are passed with their position as key, e.g. `sha256(base64)` passes `{"0": "base64"}`.
+- **Validating params:** gonfig passes any params to plugin filters, unlike built-in filters, which reject params they do not accept. Return an error for unknown params, so typos don't go unnoticed.
 - **Results:** Filters may return the same types they receive. Other types, e.g. maps, fail the value.
 - **Errors** fail processing with the message prefixed by the filter name, e.g. `filter shout: ...`. A filter that panics fails the value with `the filter panicked`, the plugin keeps running.
 
