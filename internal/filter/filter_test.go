@@ -158,8 +158,10 @@ func (f *paramFilter) Process(_ any) (any, error) {
 	return f.params["v"], nil
 }
 
+// TestPluginFiltersDoNotShareParams checks that every usage of a plugin filter gets its own copy receiving its params
 func TestPluginFiltersDoNotShareParams(t *testing.T) {
-	AddPluginFilters(map[string]interface{}{"test_param_filter": &paramFilter{}})
+	added := AddPluginFilters(map[string]interface{}{"test_param_filter": &paramFilter{}})
+	t.Cleanup(func() { RemovePluginFilters(added) })
 
 	first := NewFilter("test_param_filter")
 	second := NewFilter("test_param_filter")

@@ -316,6 +316,11 @@ func chainFilters(steps []chainStep) []filter.Filter {
 		}
 
 		f := filter.NewFilter(step.name)
+		// Params a filter does not declare fail processing, e.g. typos in param names, instead of being ignored
+		if err := filter.ValidateParams(step.name, f, step.params); err != nil {
+			filters = append(filters, filter.NewErrorFilter(err))
+			continue
+		}
 		// Filters not accepting params ignore them
 		if paramsFilter, acceptsParams := f.(filter.FilterParams); acceptsParams && step.params != nil {
 			paramsFilter.AcceptParams(step.params)

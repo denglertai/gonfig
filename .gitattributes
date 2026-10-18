@@ -1,0 +1,3 @@
+# Test data and snapshots are compared byte for byte, and gofmt expects LF,
+# so text files keep LF line endings on every system, also with core.autocrlf on Windows
+* text=auto eol=lf
