@@ -2,10 +2,12 @@ package output
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
 	"testing"
 
@@ -294,4 +296,96 @@ func TestWriteTempFileErrors(t *testing.T) {
 // TestErrInPlace checks that the message of an errInPlace is the one of its error
 func TestErrInPlace(t *testing.T) {
 	assert.EqualError(t, errInPlace{syscall.EBUSY}, syscall.EBUSY.Error())
+}
+
+// TestWriteAll checks that WriteAll writes new and existing files with the mode of their options and leaves no temporary files
+func TestWriteAll(t *testing.T) {
+	dir := t.TempDir()
+	existing := filepath.Join(dir, "existing.yaml")
+	require.NoError(t, os.WriteFile(existing, []byte("old\n"), 0o600))
+	require.NoError(t, os.Chmod(existing, 0o604))
+	created := filepath.Join(dir, "new.yaml")
+
+	require.NoError(t, WriteAll([]File{
+		{Path: existing, Data: []byte("a\n"), Options: Options{Mode: 0o644}},
+		{Path: created, Data: []byte("b\n"), Options: Options{Mode: 0o640}},
+	}))
+
+	for path, want := range map[string]string{existing: "a\n", created: "b\n"} {
+		content, err := os.ReadFile(path)
+		require.NoError(t, err)
+		assert.Equal(t, want, string(content))
+	}
+	assertMode(t, existing, 0o604)
+	assertMode(t, created, 0o640)
+	assertNoLeftovers(t, dir)
+	assert.NoError(t, WriteAll(nil), "writing no files does nothing")
+}
+
+// TestWriteAllFailureChangesNoFile checks that a failure while writing the temporary file of one file,
+// e.g. because the disk is full, removes the temporary files of the others and changes no file
+func TestWriteAllFailureChangesNoFile(t *testing.T) {
+	writeTemp = func(tmp *os.File, data []byte, mode fs.FileMode) error {
+		if strings.Contains(filepath.Base(tmp.Name()), "b.yaml") {
+			_ = tmp.Close()
+			return syscall.ENOSPC
+		}
+		return writeTempFile(tmp, data, mode)
+	}
+	t.Cleanup(func() { writeTemp = writeTempFile })
+
+	dir := t.TempDir()
+	var files []File
+	for _, name := range []string{"a.yaml", "b.yaml", "c.yaml"} {
+		path := filepath.Join(dir, name)
+		require.NoError(t, os.WriteFile(path, []byte("old\n"), 0o600))
+		files = append(files, File{Path: path, Data: []byte("new\n"), Options: Options{Mode: 0o600}})
+	}
+
+	err := WriteAll(files)
+	assert.ErrorIs(t, err, syscall.ENOSPC)
+	assert.ErrorContains(t, err, "failed to write "+files[1].Path+", no file has been changed: ")
+	for _, f := range files {
+		content, err := os.ReadFile(f.Path)
+		require.NoError(t, err)
+		assert.Equal(t, "old\n", string(content), f.Path)
+	}
+	assertNoLeftovers(t, dir)
+}
+
+// TestWriteAllWritesInPlaceLast checks that files written in place are written after the renames,
+// and that an error names the files that have and have not been written
+func TestWriteAllWritesInPlaceLast(t *testing.T) {
+	dir := t.TempDir()
+	// Links to files in a missing directory are written in place, which fails
+	failing := filepath.Join(dir, "failing.yaml")
+	if err := os.Symlink(filepath.Join(dir, "missing", "failing.yaml"), failing); err != nil {
+		t.Skipf("symbolic links are not supported: %v", err)
+	}
+	skipped := filepath.Join(dir, "skipped.yaml")
+	require.NoError(t, os.Symlink(filepath.Join(dir, "missing", "skipped.yaml"), skipped))
+	first := filepath.Join(dir, "first.yaml")
+	last := filepath.Join(dir, "last.yaml")
+
+	opts := Options{Mode: 0o600}
+	err := WriteAll([]File{
+		{Path: first, Data: []byte("first\n"), Options: opts},
+		{Path: failing, Data: []byte("failing\n"), Options: opts},
+		{Path: skipped, Data: []byte("skipped\n"), Options: opts},
+		{Path: last, Data: []byte("last\n"), Options: opts},
+	})
+
+	assert.ErrorIs(t, err, fs.ErrNotExist)
+	assert.ErrorContains(t, err, fmt.Sprintf("failed to write %s (written: %s, %s; not written: %s): ", failing, first, last, skipped))
+	assert.FileExists(t, first)
+	assert.FileExists(t, last, "files replaced atomically are written before the files written in place")
+	assertNoLeftovers(t, dir)
+}
+
+// TestWriteStatus checks the list of written and not written files in errors of WriteAll
+func TestWriteStatus(t *testing.T) {
+	assert.Equal(t, "", writeStatus(nil, nil))
+	assert.Equal(t, " (written: a, b)", writeStatus([]string{"a", "b"}, nil))
+	assert.Equal(t, " (not written: c)", writeStatus(nil, []string{"c"}))
+	assert.Equal(t, " (written: a; not written: c)", writeStatus([]string{"a"}, []string{"c"}))
 }
