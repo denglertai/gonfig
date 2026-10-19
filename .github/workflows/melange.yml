@@ -24,7 +24,11 @@ jobs:
         go-version: stable
         
     - name: Set up melange
-      run: go install chainguard.dev/melange@latest
+      env:
+        # melange builds and signs the apk, so it is pinned like the actions and updated by Renovate
+        # renovate: datasource=go depName=chainguard.dev/melange
+        MELANGE_VERSION: v0.63.0
+      run: go install "chainguard.dev/melange@${MELANGE_VERSION}"
 
     - name: Checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
