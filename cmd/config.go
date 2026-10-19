@@ -53,11 +53,8 @@ func expandFiles(values []string) ([]string, error) {
 	var files []string
 	seen := map[string]bool{}
 	add := func(name string) {
-		// Abs only fails if the working directory is unknown, comparing the path as given then
-		key := name
-		if abs, err := filepath.Abs(name); err == nil {
-			key = abs
-		}
+		// Paths of the same file are compared by the file, e.g. a file and a symbolic link to it
+		key := resolvedPath(name)
 		if !seen[key] {
 			seen[key] = true
 			files = append(files, name)
@@ -89,6 +86,19 @@ func expandFiles(values []string) ([]string, error) {
 		}
 	}
 	return files, nil
+}
+
+// resolvedPath returns the absolute path of the file with symbolic links resolved, so two paths of the same file are equal.
+// Links that cannot be resolved, e.g. as the file does not exist yet, are kept.
+func resolvedPath(name string) string {
+	if resolved, err := filepath.EvalSymlinks(name); err == nil {
+		name = resolved
+	}
+	// Abs only fails if the working directory is unknown, comparing the path as given then
+	if abs, err := filepath.Abs(name); err == nil {
+		name = abs
+	}
+	return name
 }
 
 // noArgs rejects positional arguments, which used to be ignored silently, e.g. the second file of -f a.yaml b.yaml

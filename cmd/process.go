@@ -120,6 +120,7 @@ leaves all files unchanged.`,
 // outputFiles returns the output file of each input file, or nil for stdout, and the output directory if -o names one.
 // -o names a directory if it ends with a path separator or is an existing directory, so its meaning doesn't depend on
 // how many files a pattern matches. Each file is written into it under its base name.
+// Two files written to the same file are an error, including through symbolic links in the directory.
 func outputFiles(inputs []string, outputFlag string, inline bool) (outputs []string, outputDir string, err error) {
 	switch {
 	case inline:
@@ -139,10 +140,11 @@ func outputFiles(inputs []string, outputFlag string, inline bool) (outputs []str
 	writtenBy := map[string]string{}
 	for _, input := range inputs {
 		name := filepath.Join(outputFlag, filepath.Base(input))
-		if other, ok := writtenBy[name]; ok {
-			return nil, "", fmt.Errorf("%s and %s would both be written to %s", other, input, name)
+		target := resolvedPath(name)
+		if other, ok := writtenBy[target]; ok {
+			return nil, "", fmt.Errorf("%s and %s would both be written to %s", other, input, target)
 		}
-		writtenBy[name] = input
+		writtenBy[target] = input
 		outputs = append(outputs, name)
 	}
 	return outputs, outputFlag, nil

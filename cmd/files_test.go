@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -256,7 +257,39 @@ func TestCheckSeveralFiles(t *testing.T) {
 	assert.Equal(t, 0, report.Errors)
 	assert.True(t, report.Failed)
 
-	// A file that cannot be checked fails the check
-	_, err = runGonfig(t, "config", "check", "-f", paths[0], "-f", filepath.Join(dir, "missing.yaml"))
-	assert.ErrorContains(t, err, "missing.yaml")
+	// A file that cannot be read is reported as an error, and the files after it are still checked
+	missing := filepath.Join(dir, "missing.yaml")
+	output, err = runGonfig(t, "config", "check", "-f", missing, "-f", paths[0])
+	assert.EqualError(t, err, "check failed: 0 missing variables, 1 error")
+	assert.Contains(t, output, missing+": cannot be checked\n  error: open "+missing+": ")
+	assert.Contains(t, output, paths[0]+": 1 entry with placeholders\n")
+	assert.True(t, strings.HasSuffix(output, "2 files: 0 missing variables, 1 error\n"), output)
+}
+
+// TestSeveralFilesThroughLinks checks that a file given by a symbolic link as well is processed once, and that two files
+// written to the same file through a link in the output directory are an error before anything is written
+func TestSeveralFilesThroughLinks(t *testing.T) {
+	t.Setenv("MULTI_VALUE", "value")
+	dir := t.TempDir()
+	paths := writeFiles(t, dir, map[string]string{
+		"a.yaml": "a: ${MULTI_VALUE}\n", "b.yaml": "b: ${MULTI_VALUE}\n", "out/a.yaml": "existing\n",
+	}, "a.yaml", "b.yaml", "out/a.yaml")
+	link := filepath.Join(dir, "link.yaml")
+	if err := os.Symlink(paths[0], link); err != nil {
+		t.Skipf("symbolic links are not supported: %v", err)
+	}
+
+	files, err := expandFiles([]string{paths[0], link, filepath.Join(dir, "*.yaml")})
+	assert.NoError(t, err)
+	assert.Equal(t, []string{paths[0], paths[1]}, files, "the link is the same file as a.yaml")
+
+	// out/b.yaml is a link to out/a.yaml, so a.yaml and b.yaml would both be written to out/a.yaml
+	out := filepath.Join(dir, "out")
+	require.NoError(t, os.Symlink(paths[2], filepath.Join(out, "b.yaml")))
+	target, err := filepath.EvalSymlinks(paths[2])
+	require.NoError(t, err)
+
+	_, err = runGonfig(t, "config", "process", "-f", paths[0], "-f", paths[1], "-o", out, "-w")
+	assert.EqualError(t, err, fmt.Sprintf("%s and %s would both be written to %s", paths[0], paths[1], target))
+	assert.Equal(t, "existing\n", readFile(t, paths[2]))
 }
