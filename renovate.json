@@ -4,6 +4,14 @@
        "config:recommended",
        "helpers:pinGitHubActionDigests"
     ],
+    "customManagers": [
+       {
+          "description": "Tools installed in workflows, whose version is annotated with a # renovate: comment",
+          "customType": "regex",
+          "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.ya?ml$/"],
+          "matchStrings": ["# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+[A-Z_]+: (?<currentValue>\\S+)"]
+       }
+    ],
     "packageRules": [
        {
           "description": "Plugins in this repository build against the local gonfig sources via a replace directive, so the required version is only a placeholder",
