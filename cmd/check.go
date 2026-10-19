@@ -37,11 +37,12 @@ and the placeholder provides no default, independent of --fail-on-missing.`,
 			return fmt.Errorf("unsupported output %q, use text or json", output)
 		}
 
+		// Files that cannot be read are reported as errors as well, so the other files are still checked
 		reports := make(checkReports, 0, len(configSettings.Files))
 		for _, name := range configSettings.Files {
 			report, err := file.NewFileProcessor(name, configSettings.FileType, io.Discard).Check()
 			if err != nil {
-				return err
+				report = &file.CheckReport{File: name, Entries: []file.EntryReport{}, Error: err.Error()}
 			}
 			reports = append(reports, report)
 		}
@@ -132,6 +133,10 @@ func writeCheckText(w io.Writer, reports checkReports) error {
 
 // writeCheckReportText writes the report of a file in a readable format
 func writeCheckReportText(sb *strings.Builder, report *file.CheckReport) {
+	if report.Error != "" {
+		fmt.Fprintf(sb, "%s: cannot be checked\n  error: %s\n%s\n", report.File, report.Error, checkSummary(report))
+		return
+	}
 	fmt.Fprintf(sb, "%s: %s with placeholders\n", report.File, plural(len(report.Entries), "entry", "entries"))
 
 	for _, entry := range report.Entries {

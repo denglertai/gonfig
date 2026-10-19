@@ -136,6 +136,13 @@ func TestCheckUnreadableFile(t *testing.T) {
 	assert.ErrorContains(t, err, "failed to read")
 }
 
+// TestCheckReportFileError checks that a report with the error of a file that cannot be read counts it as an error and fails
+func TestCheckReportFileError(t *testing.T) {
+	report := &CheckReport{File: "missing.yaml", Entries: []EntryReport{{Path: "a", Error: "invalid"}}, Error: "open missing.yaml: no such file"}
+	assert.Equal(t, 2, report.Errors())
+	assert.True(t, report.Failed())
+}
+
 // failingProcessHandler is a YAML handler whose Process fails, which none of the real handlers does
 type failingProcessHandler struct {
 	*YamlConfigFileHandler

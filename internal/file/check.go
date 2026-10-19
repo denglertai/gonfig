@@ -19,6 +19,8 @@ const (
 type CheckReport struct {
 	File    string        `json:"file"`
 	Entries []EntryReport `json:"entries"`
+	// Error is the reason the file cannot be read, e.g. because it does not exist or is invalid, so it has no entries
+	Error string `json:"error,omitempty"`
 }
 
 // EntryReport describes an entry containing placeholders
@@ -61,9 +63,12 @@ func (e *EntryReport) addVariable(lookup filter.VariableLookup) {
 	e.Variables = append(e.Variables, VariableReport{Name: lookup.Name, Status: status, HasDefault: lookup.HasDefault})
 }
 
-// Errors returns the number of entries that cannot be processed
+// Errors returns the number of entries that cannot be processed, plus one if the file cannot be read
 func (r *CheckReport) Errors() int {
 	count := 0
+	if r.Error != "" {
+		count++
+	}
 	for _, entry := range r.Entries {
 		if entry.Error != "" {
 			count++

@@ -428,6 +428,7 @@ Error: check failed: 1 missing variable, 1 error
 The check fails with exit code `1` if processing a file would fail, or if a variable is not set and the placeholder provides no [default](./FILTERS.md#default--required), independent of `fail-on-missing`.
 Variables set to an empty value are reported, but don't fail the check.
 Several files are checked like [several files](#several-files) are processed, e.g. `-f 'conf.d/*.yaml'`: each file is reported, followed by the total.
+A file that cannot be read, e.g. because it is invalid, is reported with the error and counts as one; the other files are still checked.
 
 Use `-o json` for a report in JSON. It lists each file with its entries and the number of its missing variables and errors, followed by the totals, for a single file as well:
 
