@@ -124,4 +124,5 @@ jobs:
         # Fail the job on findings instead of uploading them to code scanning
         advanced-security: false
         annotations: true
-        version: 1.31.1
+        # Without a version, the action installs the zizmor of its own hash-pinned lockfile for latest,
+        # so zizmor stays pinned by the commit of the action and is updated with it
