@@ -96,17 +96,12 @@ jobs:
       with:
         persist-credentials: false
 
-    - name: Install Trivy
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y wget apt-transport-https gnupg lsb-release
-        wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
-        echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee -a /etc/apt/sources.list.d/trivy.list
-        sudo apt-get update
-        sudo apt-get install -y trivy
-
+    # Runs the official image by digest instead of trivy-action or setup-trivy, whose tags were
+    # replaced with malware in March 2026 (GHSA-69fq-xp46-6x23). Renovate updates tag and digest.
     - name: Run Trivy scan
-      run: trivy fs --exit-code 1 --severity HIGH,CRITICAL .
+      uses: docker://ghcr.io/aquasecurity/trivy:0.76.0@sha256:2416d1f74045b57274df1a340eee6b510cacd73c66a6ccb8da092b117eb7d222
+      with:
+        args: fs --exit-code 1 --severity HIGH,CRITICAL .
 
   # Keeps the workflows free of unpinned actions, template injection and similar problems
   zizmor:
