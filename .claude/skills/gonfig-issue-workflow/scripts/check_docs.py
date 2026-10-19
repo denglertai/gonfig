@@ -97,7 +97,13 @@ def main():
         name, indent, lang = m.group(1), m.group(2), m.group(3)
         body = dedent(m.group(4), indent)
         if name:
-            with open(os.path.join(workdir, name), "w") as f:
+            # Example files may be in directories, e.g. templates/app.yaml for examples with several files,
+            # but never outside the work directory, e.g. for a name like ../app.yaml
+            path = os.path.realpath(os.path.join(workdir, name))
+            if os.path.commonpath([path, os.path.realpath(workdir)]) != os.path.realpath(workdir):
+                sys.exit(f"example file {name} is outside the work directory")
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as f:
                 f.write(body)
             written += 1
             continue

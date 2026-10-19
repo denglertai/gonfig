@@ -237,9 +237,12 @@ TOML support is planned, see [#161](https://github.com/denglertai/gonfig/issues/
 **Container entrypoints:** Render the config files of an application from environment variables when the container starts, then start the application:
 ```sh
 #!/bin/sh
-gonfig config process -i -f /etc/app/server.xml
+gonfig config process -i -f /etc/app/server.xml -f '/etc/app/conf.d/*.yaml'
 exec /usr/bin/app
 ```
+gonfig expands the pattern itself, so it works in exec-form entrypoints of images without a shell as well.
+
+**Read-only templates:** Render templates mounted read-only, e.g. from a Kubernetes ConfigMap, into a writable directory like an `emptyDir` with `-o <dir>/`, see [several files](#several-files).
 
 **Secrets mounted as files:** Docker and Kubernetes mount secrets as files. Point a variable to the file with `@` instead of copying the secret into the environment, e.g. `DB_PASSWORD=@/run/secrets/db_password` with `${DB_PASSWORD | trim}`. See [recipes](./FILTERS.md#read-secrets-from-files).
 
@@ -269,7 +272,7 @@ Binaries installed with `go install` print the version only, and the commit is m
 
 `gonfig config` is intended to interact with various kinds of config file types including `.json`, `.xml`, `.yaml` and `.properties` files, as well as plain text files (`-t plain`).
 
-It has two subcommands: `process` processes the given config file and is described below, while [`check`](#check) reports missing variables and errors without writing anything.
+It has two subcommands: `process` processes the given config files and is described below, while [`check`](#check) reports missing variables and errors without writing anything.
 
 In general, process takes the given input file and creates a flat list of all given keys, nodes and attributes depending on the file type.
 Afterwards every entry in that list is being processed individually by applying the filters.
@@ -312,11 +315,54 @@ Usage:
    a new output file gets the mode of the input file, so restricting the template restricts the output, and an existing output file keeps its mode.
    `--mode` sets the mode in both cases, also for `-i`.
 
+1. Process several files (`-f` per file or glob patterns), see [several files](#several-files)
+    ```console
+    $ gonfig config process -i -f /etc/app/server.xml -f '/etc/app/conf.d/*.yaml'
+    $ gonfig config process -f '/templates/*' -o /etc/app/
+    ```
+
 Output files are replaced atomically where possible: the result is written to a temporary file next to the output file, which then replaces it.
 If writing the temporary file fails, e.g. because the disk is full, the output file is kept as it was, which matters most for `-i`, where it is the template as well.
 Symbolic links are kept and the file they point to is replaced, e.g. for files mounted from a Kubernetes ConfigMap.
 On Linux and macOS, the owner and group of the file are kept as well.
 If the file cannot be replaced, e.g. because its directory is not writable or it is bind-mounted into a container, it is written in place instead; an error during this fallback may leave partial output.
+
+#### Several files
+
+`-f` can be repeated and accepts glob patterns like `'conf.d/*.yaml'` (`*`, `?` and `[...]`, but not `**`), which gonfig expands itself, so quote them to keep the shell from expanding them first.
+The files of a pattern are processed in lexical order, directories are skipped, and a pattern matching no file is an error, so a typo cannot skip files silently.
+A file given several times is processed once, and `-t` applies to every file.
+
+Several files are written back with `-i`, or into a directory with `-o <dir>/`, where each file keeps its base name:
+
+`templates/app.yaml`:
+```yaml
+db:
+  host: ${DB_HOST}
+```
+
+`templates/server.xml`:
+```xml
+<server><port>${PORT | to_int}</port></server>
+```
+
+```console
+$ DB_HOST=db.internal PORT=8080 gonfig config process -f 'templates/*' -o rendered/
+$ cat rendered/app.yaml rendered/server.xml
+db:
+  host: db.internal
+<server><port>8080</port></server>
+```
+
+`-o` names a directory if it ends with `/` or is an existing directory, for a single file as well. Missing directories are created with mode `0755`, minus the umask.
+Two files with the same base name for one directory are an error, and stdout only works for a single file.
+Each output file gets its mode as for a single file: from its own input file if it is new, or it keeps its mode if it exists.
+`--mode` applies to every output file, so avoid it for files with different modes, e.g. configs with `0644` and secrets with `0600`, which would all get the same mode.
+
+All files are processed before any is written, so an error, e.g. a missing variable with `fail-on-missing`, leaves all files unchanged.
+Without `-w`, all output files are checked before any is written as well.
+Writing happens in two phases: first, the temporary files of all output files are written, and if one fails, e.g. because the disk is full, no file is changed. Then they replace the output files.
+Files that cannot be replaced and are written in place are written last. Errors of this phase name the files written already.
 
 Testdata can be found within [cmd/testdata/](cmd/testdata/).
 
@@ -350,7 +396,7 @@ $ BLA_BLUB=hello INT=5 BOOL=true STRING=test_string FLOAT=123.45 SPECIAL_CHARACT
 
 ### check
 
-`gonfig config check` processes a file like `config process`, but writes nothing and reports every entry containing placeholders with the environment variables and templates it uses.
+`gonfig config check` processes files like `config process`, but writes nothing and reports every entry containing placeholders with the environment variables and templates it uses.
 Values are not printed, only whether a variable is set, empty or missing, unless [`log-values`](#logging-notes) is enabled for debugging.
 This is useful in CI or before a deployment, e.g. to find typos in variable names.
 
@@ -379,9 +425,18 @@ check.yaml: 4 entries with placeholders
 Error: check failed: 1 missing variable, 1 error
 ```
 
-The check fails with exit code `1` if processing the file would fail, or if a variable is not set and the placeholder provides no [default](./FILTERS.md#default--required), independent of `fail-on-missing`.
+The check fails with exit code `1` if processing a file would fail, or if a variable is not set and the placeholder provides no [default](./FILTERS.md#default--required), independent of `fail-on-missing`.
 Variables set to an empty value are reported, but don't fail the check.
-Use `-o json` for a report in JSON, which includes the number of missing variables and errors.
+Several files are checked like [several files](#several-files) are processed, e.g. `-f 'conf.d/*.yaml'`: each file is reported, followed by the total.
+A file that cannot be read, e.g. because it is invalid, is reported with the error and counts as one; the other files are still checked.
+
+Use `-o json` for a report in JSON. It lists each file with its entries and the number of its missing variables and errors, followed by the totals, for a single file as well:
+
+```console
+$ DB_USER=app DB_PORT=eighty gonfig config check -f check.yaml -o json | jq -c '{files: [.files[] | {file, missingVariables, errors}], missingVariables, errors, failed}'
+{"files":[{"file":"check.yaml","missingVariables":1,"errors":1}],"missingVariables":1,"errors":1,"failed":true}
+Error: check failed: 1 missing variable, 1 error
+```
 
 ### value
 

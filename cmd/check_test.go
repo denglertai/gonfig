@@ -96,15 +96,22 @@ func TestCheckCommandJson(t *testing.T) {
 	output, err := runCheck(t, "password: ${CHECK_CMD_PASWORD}\nport: ${CHECK_CMD_PORT | to_int}\n", "-o", "json")
 	assert.Error(t, err)
 
+	// The files are a list for a single file as well
 	var report struct {
-		Entries []struct {
-			Path      string `json:"path"`
-			Variables []struct {
-				Name   string `json:"name"`
-				Status string `json:"status"`
-			} `json:"variables"`
-			Error string `json:"error"`
-		} `json:"entries"`
+		Files []struct {
+			File    string `json:"file"`
+			Entries []struct {
+				Path      string `json:"path"`
+				Variables []struct {
+					Name   string `json:"name"`
+					Status string `json:"status"`
+				} `json:"variables"`
+				Error string `json:"error"`
+			} `json:"entries"`
+			MissingVariables int  `json:"missingVariables"`
+			Errors           int  `json:"errors"`
+			Failed           bool `json:"failed"`
+		} `json:"files"`
 		MissingVariables int  `json:"missingVariables"`
 		Errors           int  `json:"errors"`
 		Failed           bool `json:"failed"`
@@ -113,9 +120,15 @@ func TestCheckCommandJson(t *testing.T) {
 	assert.Equal(t, 1, report.MissingVariables)
 	assert.Equal(t, 1, report.Errors)
 	assert.True(t, report.Failed)
-	assert.Equal(t, "password", report.Entries[0].Path)
-	assert.Equal(t, "missing", report.Entries[0].Variables[0].Status)
-	assert.Equal(t, "filter to_int: the value is not an integer", report.Entries[1].Error)
+	assert.Len(t, report.Files, 1)
+	file := report.Files[0]
+	assert.Equal(t, "config.yaml", filepath.Base(file.File))
+	assert.Equal(t, 1, file.MissingVariables)
+	assert.Equal(t, 1, file.Errors)
+	assert.True(t, file.Failed)
+	assert.Equal(t, "password", file.Entries[0].Path)
+	assert.Equal(t, "missing", file.Entries[0].Variables[0].Status)
+	assert.Equal(t, "filter to_int: the value is not an integer", file.Entries[1].Error)
 	assert.NotContains(t, output, "eighty", "values must never be printed")
 }
 
@@ -125,11 +138,30 @@ func TestCheckCommandInvalidOutput(t *testing.T) {
 	assert.EqualError(t, err, `unsupported output "xml", use text or json`)
 }
 
-// TestCheckCommandUnreadableFile checks that a file that cannot be parsed is an error without a report
+// TestCheckCommandUnreadableFile checks that a file that cannot be parsed is reported as an error, failing the check
 func TestCheckCommandUnreadableFile(t *testing.T) {
 	output, err := runCheck(t, "a: [1\n")
-	assert.ErrorContains(t, err, "failed to read")
-	assert.Empty(t, output)
+	assert.EqualError(t, err, "check failed: 0 missing variables, 1 error")
+	assert.Regexp(t, `^(\S+config\.yaml): cannot be checked\n  error: failed to read \S+config\.yaml: yaml: .+\n0 missing variables, 1 error\n$`, output)
+
+	output, err = runCheck(t, "a: [1\n", "-o", "json")
+	assert.Error(t, err)
+	var report struct {
+		Files []struct {
+			Error   string `json:"error"`
+			Entries []any  `json:"entries"`
+			Errors  int    `json:"errors"`
+			Failed  bool   `json:"failed"`
+		} `json:"files"`
+		Errors int `json:"errors"`
+	}
+	assert.NoError(t, json.Unmarshal([]byte(output), &report))
+	assert.Len(t, report.Files, 1)
+	assert.Contains(t, report.Files[0].Error, "failed to read")
+	assert.Empty(t, report.Files[0].Entries)
+	assert.Equal(t, 1, report.Files[0].Errors)
+	assert.True(t, report.Files[0].Failed)
+	assert.Equal(t, 1, report.Errors)
 }
 
 // failingCheckWriter fails on every write
