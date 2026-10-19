@@ -107,3 +107,21 @@ jobs:
 
     - name: Run Trivy scan
       run: trivy fs --exit-code 1 --severity HIGH,CRITICAL .
+
+  # Keeps the workflows free of unpinned actions, template injection and similar problems
+  zizmor:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - name: Run zizmor
+      uses: zizmorcore/zizmor-action@85b2b9fb8e3325e7a23d7d0a9d7ba5ae0f999e3e # v0.7.1
+      with:
+        # Fail the job on findings instead of uploading them to code scanning
+        advanced-security: false
+        annotations: true
+        version: 1.31.1
