@@ -15,6 +15,14 @@ func resetFlags(t *testing.T) {
 	reset = func(c *cobra.Command) {
 		for _, flags := range []*pflag.FlagSet{c.Flags(), c.PersistentFlags()} {
 			flags.VisitAll(func(f *pflag.Flag) {
+				// Set appends to slices like --file, whose default is shown as "[]", so they are replaced instead
+				if slice, ok := f.Value.(pflag.SliceValue); ok {
+					if err := slice.Replace(nil); err != nil {
+						t.Fatalf("failed to reset flag %s: %v", f.Name, err)
+					}
+					f.Changed = false
+					return
+				}
 				if err := f.Value.Set(f.DefValue); err != nil {
 					t.Fatalf("failed to reset flag %s: %v", f.Name, err)
 				}

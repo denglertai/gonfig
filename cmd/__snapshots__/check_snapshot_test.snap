@@ -69,38 +69,45 @@ host: ${SNAP_CHECK_HOST | default(localhost)}
 
 $ gonfig config check -f config.yaml -o json
 {
-  "file": "config.yaml",
-  "entries": [
+  "files": [
     {
-      "path": "password",
-      "variables": [
+      "file": "config.yaml",
+      "entries": [
         {
-          "name": "SNAP_CHECK_PASWORD",
-          "status": "missing",
-          "hasDefault": false
-        }
-      ]
-    },
-    {
-      "path": "port",
-      "variables": [
+          "path": "password",
+          "variables": [
+            {
+              "name": "SNAP_CHECK_PASWORD",
+              "status": "missing",
+              "hasDefault": false
+            }
+          ]
+        },
         {
-          "name": "SNAP_CHECK_PORT",
-          "status": "set",
-          "hasDefault": false
+          "path": "port",
+          "variables": [
+            {
+              "name": "SNAP_CHECK_PORT",
+              "status": "set",
+              "hasDefault": false
+            }
+          ],
+          "error": "filter to_int: the value is not an integer"
+        },
+        {
+          "path": "host",
+          "variables": [
+            {
+              "name": "SNAP_CHECK_HOST",
+              "status": "missing",
+              "hasDefault": true
+            }
+          ]
         }
       ],
-      "error": "filter to_int: the value is not an integer"
-    },
-    {
-      "path": "host",
-      "variables": [
-        {
-          "name": "SNAP_CHECK_HOST",
-          "status": "missing",
-          "hasDefault": true
-        }
-      ]
+      "missingVariables": 1,
+      "errors": 1,
+      "failed": true
     }
   ],
   "missingVariables": 1,

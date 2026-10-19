@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/denglertai/gonfig/internal/file"
 	"github.com/denglertai/gonfig/internal/output"
@@ -19,12 +21,20 @@ import (
 // processCmd represents the process command
 var processCmd = &cobra.Command{
 	Use:   "process",
-	Short: "Processes a file",
-	Long: `Processes a file by replacing all placeholders like ${ENV_VAR | filter} and outputs the result
-to the desired output. Defaults to stdout`,
+	Short: "Processes files",
+	Long: `Processes files by replacing all placeholders like ${ENV_VAR | filter} and outputs the results
+to the desired output. Defaults to stdout, which only works for a single file.
+
+Several files are processed with -f per file or glob patterns like -f 'conf/*.yaml', and written back
+with -i or into a directory with -o <dir>/. All files are processed before any is written, so an error
+leaves all files unchanged.`,
+	Args:             noArgs,
 	TraverseChildren: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		configSettings := getConfigSettings(cmd)
+		configSettings, err := getConfigSettings(cmd)
+		if err != nil {
+			return err
+		}
 
 		outputFile, err := cmd.Flags().GetString("output")
 		if err != nil {
@@ -51,59 +61,113 @@ to the desired output. Defaults to stdout`,
 		// Successful runs are silent by default, so their details are only logged at debug level
 		logging.Debug("Running command", "command", cmd.Name(), "args", args, "configSettings", configSettings)
 
-		// In case we want to write the output to the source file directly
+		// In case we want to write the output to the source files directly
 		if inline {
 			logging.Debug("Inline processing enabled")
-			outputFile = configSettings.File
 			overwriteExistingFile = true
 		}
-
-		// Store the output temporarily in a buffer
-		var o = new(bytes.Buffer)
-		logging.Debug("Processing file", "file", configSettings.File, "type", configSettings.FileType)
-		processor := file.NewFileProcessor(configSettings.File, configSettings.FileType, o)
-		err = processor.Process()
+		outputs, outputDir, err := outputFiles(configSettings.Files, outputFile, inline)
 		if err != nil {
 			return err
 		}
 
-		if outputFile != "-" {
-			// If the file exists and we don't want to overwrite it, return an error
-			if _, err := os.Stat(outputFile); err == nil && !overwriteExistingFile {
-				return ErrFileExists(fmt.Errorf("file %s already exists; Use -w / --overwrite if this is intended", outputFile))
+		// Existing files are checked before any file is processed or written, so a single existing file writes nothing
+		if !overwriteExistingFile {
+			for _, name := range outputs {
+				if _, err := os.Stat(name); err == nil {
+					return ErrFileExists(fmt.Errorf("file %s already exists; Use -w / --overwrite if this is intended", name))
+				}
+			}
+		}
+
+		// All files are processed before any is written, so an error while processing leaves all files unchanged
+		results := make([]output.File, 0, len(configSettings.Files))
+		for i, input := range configSettings.Files {
+			var o = new(bytes.Buffer)
+			logging.Debug("Processing file", "file", input, "type", configSettings.FileType)
+			if err := file.NewFileProcessor(input, configSettings.FileType, o).Process(); err != nil {
+				return err
+			}
+			if outputs == nil {
+				// Dump the content to stdout, which is only used for a single file
+				_, err = cmd.OutOrStdout().Write(o.Bytes())
+				return err
 			}
 
-			// New files get the mode of the input file unless --mode is given, so restricting a template restricts its output
+			// New files get the mode of their input file unless --mode is given, so restricting a template restricts its output
 			opts := output.Options{Mode: mode, ForceMode: modeFlag != ""}
 			if !opts.ForceMode {
 				// The input file has just been read, so this only fails if it was removed meanwhile, using a safe mode then
 				opts.Mode = 0o600
-				if input, err := os.Stat(configSettings.File); err == nil {
-					opts.Mode = input.Mode().Perm()
+				if info, err := os.Stat(input); err == nil {
+					opts.Mode = info.Mode().Perm()
 				}
 			}
-
-			logging.Debug("Writing output", "file", outputFile, "mode", opts.Mode, "forceMode", opts.ForceMode)
-			return output.Write(outputFile, o.Bytes(), opts)
+			logging.Debug("Writing output", "file", outputs[i], "mode", opts.Mode, "forceMode", opts.ForceMode)
+			results = append(results, output.File{Path: outputs[i], Data: o.Bytes(), Options: opts})
 		}
 
-		// Dump the content to stdout
-		_, err = cmd.OutOrStdout().Write(o.Bytes())
-		return err
+		if outputDir != "" {
+			// --mode applies to files only, as a directory without the execute permission cannot be entered
+			if err := os.MkdirAll(outputDir, 0o755); err != nil {
+				return fmt.Errorf("failed to create the output directory: %w", err)
+			}
+		}
+		return output.WriteAll(results)
 	},
+}
+
+// outputFiles returns the output file of each input file, or nil for stdout, and the output directory if -o names one.
+// -o names a directory if it ends with a path separator or is an existing directory, so its meaning doesn't depend on
+// how many files a pattern matches. Each file is written into it under its base name.
+func outputFiles(inputs []string, outputFlag string, inline bool) (outputs []string, outputDir string, err error) {
+	switch {
+	case inline:
+		return inputs, "", nil
+	case outputFlag == "-":
+		if len(inputs) > 1 {
+			return nil, "", fmt.Errorf("%d files cannot be written to stdout; use -i to write them back or -o <dir>/ to write them into a directory", len(inputs))
+		}
+		return nil, "", nil
+	case !isDirectory(outputFlag):
+		if len(inputs) > 1 {
+			return nil, "", fmt.Errorf("-o %s is not a directory, which %d files need; end it with / to create it, or use -i", outputFlag, len(inputs))
+		}
+		return []string{outputFlag}, "", nil
+	}
+
+	writtenBy := map[string]string{}
+	for _, input := range inputs {
+		name := filepath.Join(outputFlag, filepath.Base(input))
+		if other, ok := writtenBy[name]; ok {
+			return nil, "", fmt.Errorf("%s and %s would both be written to %s", other, input, name)
+		}
+		writtenBy[name] = input
+		outputs = append(outputs, name)
+	}
+	return outputs, outputFlag, nil
+}
+
+// isDirectory returns whether -o names a directory: an existing one or a path ending with a separator
+func isDirectory(path string) bool {
+	if strings.HasSuffix(path, "/") || strings.HasSuffix(path, string(os.PathSeparator)) {
+		return true
+	}
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }
 
 // init registers the process command and its flags
 func init() {
 	configCmd.AddCommand(processCmd)
 
-	processCmd.Flags().StringP("output", "o", "-", "Controls where to put the results (defaults to stdout)")
+	processCmd.Flags().StringP("output", "o", "-", "Controls where to put the results: a file, or a directory ending with / for several files (defaults to stdout)")
 
-	processCmd.Flags().BoolP("inline", "i", false, "Controls if the output should get written to the source file directly (defaults to false)")
+	processCmd.Flags().BoolP("inline", "i", false, "Controls if the output should get written to the source files directly (defaults to false)")
 
 	processCmd.Flags().BoolP("overwrite", "w", false, "Controls if an already existing output file may be overwritten (defaults to false). Not needed for -i (--inline)")
 
-	processCmd.Flags().String("mode", "", "File mode of the output file in octal, e.g. 0600 (defaults to the mode of an existing output file, or of the input file for new ones)")
+	processCmd.Flags().String("mode", "", "File mode of the output files in octal, e.g. 0600 (defaults to the mode of an existing output file, or of the input file for new ones)")
 }
 
 type ErrFileExists error
