@@ -17,16 +17,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Set up Go
-      uses: actions/setup-go@v7
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
+        # A poisoned cache could alter the released binaries
+        cache: false
         go-version: stable
         
     - name: Set up melange
       run: go install chainguard.dev/melange@latest
 
     - name: Checkout
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
+        persist-credentials: false
         fetch-depth: 0
 
     - name: Prepare melange build
@@ -39,8 +42,9 @@ jobs:
         sudo sysctl -w kernel.apparmor_restrict_unprivileged_unconfined=0
         sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
   
-    - name: clone apk repository
-      uses: actions/checkout@v7
+    # The credentials stay persisted for the push in "Commit changes", and this job uploads no artifacts
+    - name: clone apk repository # zizmor: ignore[artipacked]
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         repository: denglertai/apk
         ref: 'gh-pages'
@@ -70,7 +74,7 @@ jobs:
         echo "path=$path" >> "$GITHUB_OUTPUT"
 
     - name: Attest the build provenance of the apk
-      uses: actions/attest@v4
+      uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
       with:
         subject-path: ${{ steps.apk.outputs.path }}
     
@@ -79,10 +83,10 @@ jobs:
         cp ./melange.rsa.pub ./apk/melange.rsa.pub
 
         cd ./apk
-        git config --global user.email "${{ github.actor }}"
-        git config --global user.name "${{ github.actor }}@users.noreply.github.com"
+        git config --global user.name "${GITHUB_ACTOR}"
+        git config --global user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
         git add .
-        git commit -m "Update apk for gonfig@${{ github.ref }}"
+        git commit -m "Update apk for gonfig@${GITHUB_REF}"
         git push
       env:
         GITHUB_TOKEN: "${{ secrets.APK_REPO_TOKEN }}"
