@@ -397,7 +397,8 @@ func TestWriteAllDefersFailedRenames(t *testing.T) {
 	bindMounted := filepath.Join(dir, "bind-mounted.yaml")
 	require.NoError(t, os.WriteFile(bindMounted, []byte("old\n"), 0o600))
 	rename = func(oldpath, newpath string) error {
-		if newpath == bindMounted {
+		// The target is the resolved path, e.g. below /private/var on macOS, so it is matched by its name
+		if filepath.Base(newpath) == "bind-mounted.yaml" {
 			return syscall.EBUSY
 		}
 		return os.Rename(oldpath, newpath)
