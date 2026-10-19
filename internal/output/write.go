@@ -7,7 +7,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/denglertai/gonfig/pkg/logging"
@@ -89,16 +88,22 @@ func WriteAll(files []File) error {
 		prepared = append(prepared, p)
 	}
 
-	// Renames are written first, since writing in place may leave partial output if it fails
-	inPlace := slices.DeleteFunc(slices.Clone(prepared), func(p *pending) bool { return !p.writesInPlace() })
-	prepared = append(slices.DeleteFunc(prepared, (*pending).writesInPlace), inPlace...)
-
+	// All renames happen before any file is written in place, since writing in place may leave partial output if it fails.
+	// Files whose rename fails, e.g. bind-mounted files, are written in place as well.
 	written := make([]string, 0, len(prepared))
-	for i, p := range prepared {
-		if err := p.commit(); err != nil {
-			notWritten := make([]string, 0, len(prepared)-i-1)
-			for _, rest := range prepared[i+1:] {
-				rest.discard()
+	var inPlace []*pending
+	for _, p := range prepared {
+		if p.writesInPlace() || !p.rename() {
+			inPlace = append(inPlace, p)
+			continue
+		}
+		written = append(written, p.path)
+	}
+
+	for i, p := range inPlace {
+		if err := p.writeInPlace(); err != nil {
+			notWritten := make([]string, 0, len(inPlace)-i-1)
+			for _, rest := range inPlace[i+1:] {
 				notWritten = append(notWritten, rest.path)
 			}
 			return fmt.Errorf("failed to write %s%s: %w", p.path, writeStatus(written, notWritten), err)
@@ -194,22 +199,32 @@ func (p *pending) writesInPlace() bool {
 // commit renames the temporary file to the target, or writes the target in place if there is no temporary file
 // or the rename fails, e.g. for a bind-mounted file
 func (p *pending) commit() error {
-	if p.special {
-		return os.WriteFile(p.target, p.data, p.opts.Mode)
+	if !p.writesInPlace() && p.rename() {
+		return nil
 	}
-	if p.writesInPlace() {
-		return writeInPlace(p.target, p.data, p.existing, p.opts)
-	}
+	return p.writeInPlace()
+}
 
+// rename renames the temporary file to the target and returns whether it succeeded.
+// If it fails, e.g. for a bind-mounted file, the temporary file is removed, so the file is written in place instead.
+func (p *pending) rename() bool {
 	if err := rename(p.tmp, p.target); err != nil {
 		p.discard()
 		logging.Debug("Writing the file in place, since it cannot be replaced atomically", "file", p.target, "reason", err)
-		return writeInPlace(p.target, p.data, p.existing, p.opts)
+		return false
 	}
 	p.tmp = ""
 
 	syncDir(filepath.Dir(p.target))
-	return nil
+	return true
+}
+
+// writeInPlace writes the target in place, keeping the mode of special files like /dev/stdout
+func (p *pending) writeInPlace() error {
+	if p.special {
+		return os.WriteFile(p.target, p.data, p.opts.Mode)
+	}
+	return writeInPlace(p.target, p.data, p.existing, p.opts)
 }
 
 // discard removes the temporary file, if any

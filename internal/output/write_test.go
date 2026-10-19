@@ -389,3 +389,41 @@ func TestWriteStatus(t *testing.T) {
 	assert.Equal(t, " (not written: c)", writeStatus(nil, []string{"c"}))
 	assert.Equal(t, " (written: a; not written: c)", writeStatus([]string{"a"}, []string{"c"}))
 }
+
+// TestWriteAllDefersFailedRenames checks that a file whose rename fails, e.g. a bind-mounted file, is written in place
+// after all other files are renamed, so a failure while writing it in place cannot keep other files from being replaced
+func TestWriteAllDefersFailedRenames(t *testing.T) {
+	dir := t.TempDir()
+	bindMounted := filepath.Join(dir, "bind-mounted.yaml")
+	require.NoError(t, os.WriteFile(bindMounted, []byte("old\n"), 0o600))
+	rename = func(oldpath, newpath string) error {
+		if newpath == bindMounted {
+			return syscall.EBUSY
+		}
+		return os.Rename(oldpath, newpath)
+	}
+	t.Cleanup(func() { rename = os.Rename })
+
+	// A link to a file in a missing directory is written in place, which fails
+	failing := filepath.Join(dir, "failing.yaml")
+	if err := os.Symlink(filepath.Join(dir, "missing", "failing.yaml"), failing); err != nil {
+		t.Skipf("symbolic links are not supported: %v", err)
+	}
+	last := filepath.Join(dir, "last.yaml")
+
+	opts := Options{Mode: 0o600}
+	err := WriteAll([]File{
+		{Path: bindMounted, Data: []byte("new\n"), Options: opts},
+		{Path: failing, Data: []byte("failing\n"), Options: opts},
+		{Path: last, Data: []byte("last\n"), Options: opts},
+	})
+
+	// The bind-mounted file comes before the failing file in the in-place phase, as it comes first in the files
+	assert.ErrorContains(t, err, fmt.Sprintf("failed to write %s (written: %s, %s): ", failing, last, bindMounted))
+	for path, want := range map[string]string{bindMounted: "new\n", last: "last\n"} {
+		content, err := os.ReadFile(path)
+		require.NoError(t, err)
+		assert.Equal(t, want, string(content), path)
+	}
+	assertNoLeftovers(t, dir)
+}
