@@ -9,6 +9,12 @@ set -e
 dir=$(mktemp -d)
 trap 'rm -rf "$dir"' EXIT
 
+# The tests run with another HOME, which would download all modules into a read-only cache below it
+# that rm cannot remove, so the caches of the user are kept
+GOMODCACHE=$(go env GOMODCACHE)
+GOCACHE=$(go env GOCACHE)
+export GOMODCACHE GOCACHE
+
 config='log-level: debug
 log-source: true
 log-values: true

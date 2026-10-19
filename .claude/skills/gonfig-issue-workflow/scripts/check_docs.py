@@ -97,6 +97,8 @@ def main():
         name, indent, lang = m.group(1), m.group(2), m.group(3)
         body = dedent(m.group(4), indent)
         if name:
+            # Example files may be in directories, e.g. templates/app.yaml for examples with several files
+            os.makedirs(os.path.dirname(os.path.join(workdir, name)), exist_ok=True)
             with open(os.path.join(workdir, name), "w") as f:
                 f.write(body)
             written += 1
