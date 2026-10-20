@@ -77,34 +77,34 @@ entrypoint:
 
 Using the container image `ghcr.io/denglertai/gonfig` for `linux/amd64` and `linux/arm64`, e.g. to copy the binary into an image in a multi-stage build:
 ```dockerfile
-FROM ghcr.io/denglertai/gonfig:0.1.0 AS gonfig
+FROM ghcr.io/denglertai/gonfig:0.2.0 AS gonfig
 
 FROM eclipse-temurin:21-jre
 COPY --from=gonfig /usr/bin/gonfig /usr/bin/gonfig
 ```
 
-The image is tagged with the version both with and without a leading `v`, e.g. `v0.1.0` and `0.1.0`, and `latest` for the newest release that is not a prerelease.
+The image is tagged with the version both with and without a leading `v`, e.g. `v0.2.0` and `0.2.0`, and `latest` for the newest release that is not a prerelease.
 The binary is linked against glibc, so it runs in images based on e.g. Debian, Ubuntu, Wolfi or distroless `base`, but not in Alpine or `scratch` images.
 
 The image contains no config file and sets no `GONFIG_*` variables, so the built-in defaults apply. To change them, set the [environment variables](#options) in your own image or deployment, or mount a [config file](#config-file) as `/etc/gonfig/.gonfig.yaml`.
 
 The images are signed with [cosign](https://github.com/sigstore/cosign) by the release workflow. Verify the signature with:
 ```console
-$ cosign verify ghcr.io/denglertai/gonfig:0.1.0 \
+$ cosign verify ghcr.io/denglertai/gonfig:0.2.0 \
     --certificate-identity-regexp '^https://github\.com/denglertai/gonfig/\.github/workflows/release\.yml@refs/tags/' \
     --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
-The SBOM of each platform image, listing the packages of the base image and the Go modules of gonfig, is attached as a signed [SPDX](https://spdx.dev/) attestation, for releases after v0.1.0.
+The SBOM of each platform image, listing the packages of the base image and the Go modules of gonfig, is attached as a signed [SPDX](https://spdx.dev/) attestation, since v0.2.0.
 It is attached to the image of each platform, e.g. for scanners, and to the multi-platform image, which tags refer to.
-Verify the attestations of a release by its image tag, replacing `VERSION` with e.g. `0.1.1`. `latest` would verify the newest release that is not a prerelease, which may be another one:
+Verify the attestations of a release by its image tag, replacing `VERSION` with e.g. `0.2.0`. `latest` would verify the newest release that is not a prerelease, which may be another one:
 ```console
 $ cosign verify-attestation --type spdxjson ghcr.io/denglertai/gonfig:VERSION \
     --certificate-identity-regexp '^https://github\.com/denglertai/gonfig/\.github/workflows/release\.yml@refs/tags/' \
     --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
-The image, the release archives and the apk have a signed [SLSA build provenance](https://slsa.dev/spec/v1.0/provenance), for releases after v0.1.0, recording the workflow and commit they were built from.
+The image, the release archives and the apk have a signed [SLSA build provenance](https://slsa.dev/spec/v1.0/provenance), since v0.2.0, recording the workflow and commit they were built from.
 Verify it with the [GitHub CLI](https://cli.github.com/), replacing `VERSION` with the version of the release as above:
 ```console
 $ gh attestation verify oci://ghcr.io/denglertai/gonfig:VERSION --repo denglertai/gonfig
