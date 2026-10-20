@@ -57,12 +57,14 @@ def commands(body):
 
 
 def matches(cmd, got, expected):
+    """Return whether the output matches the expected lines. bcrypt hashes only have to match in their cost."""
     if "bcrypt" in cmd:
         return len(got) == len(expected) and all(BCRYPT_RE.sub(r"\1H", g) == BCRYPT_RE.sub(r"\1H", e) for g, e in zip(got, expected))
     return got == expected
 
 
 def main():
+    """Run the documented commands of the file and report the ones whose output differs."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("file")
     parser.add_argument("--bin", required=True)
