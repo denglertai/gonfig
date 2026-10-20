@@ -37,4 +37,4 @@ Not vulnerabilities:
 
 ## Verifying releases
 
-Container images are signed with cosign, and releases include SBOM attestations and SLSA build provenance. See the [installation instructions](./README.md#installation) for how to verify them.
+Container images are signed with cosign. Since v0.2.0, the container images also have signed SBOM attestations, and the images, the release archives and the apk have SLSA build provenance. See the [installation instructions](./README.md#installation) for how to verify them.
