@@ -540,7 +540,7 @@ ${ENV_VAR | filter1 | filter2(param) | filter3}
 | `to_bool` | Converts the value to a boolean, e.g. from `true` or `1` | `${VAL \| to_bool}` |
 | `multiply(m=factor)` | Multiplies an integer value by `m`, which defaults to `1` and may be given by position | `${VAL \| to_int \| multiply(2)}` |
 | `md5` | Hashes the value with MD5 (hex encoded) | `${VAL \| md5}` |
-| `bcrypt` | Hashes the value with bcrypt, fails for values longer than 72 bytes | `${VAL \| bcrypt}` |
+| `bcrypt(cost)` | Hashes the value with bcrypt, fails for values longer than 72 bytes. `cost` from 4 to 31 defaults to `10` and may be given by position | `${VAL \| bcrypt(cost=12)}` |
 | `base64` | Encodes the value to base64 | `${VAL \| base64}` |
 | `base64_decode` | Decodes a base64 value, fails on invalid input | `${VAL \| base64_decode}` |
 | `url_encode(mode)` | Escapes the value for URL query parameters, or path segments with mode `path` | `${VAL \| url_encode}` |

@@ -61,6 +61,47 @@ func TestBcryptFilter(t *testing.T) {
 	}
 }
 
+// TestBcryptCost checks that the bcrypt filter hashes with the cost param, given by name or position, and with
+// exactly 10 without it. Costs out of range are an error, since bcrypt would silently use 10 for costs below 4.
+func TestBcryptCost(t *testing.T) {
+	testCases := []struct {
+		desc     string
+		params   map[string]string
+		wantCost int
+		wantErr  string
+	}{
+		{desc: "without params", params: nil, wantCost: 10},
+		{desc: "empty brackets", params: map[string]string{}, wantCost: 10},
+		{desc: "by name", params: map[string]string{"cost": "5"}, wantCost: 5},
+		{desc: "by position", params: map[string]string{"0": "4"}, wantCost: 4},
+		{desc: "below the minimum", params: map[string]string{"cost": "3"}, wantErr: `filter bcrypt: the cost "3" is not an integer from 4 to 31`},
+		{desc: "above the maximum", params: map[string]string{"cost": "32"}, wantErr: `filter bcrypt: the cost "32" is not an integer from 4 to 31`},
+		{desc: "not an integer", params: map[string]string{"cost": "high"}, wantErr: `filter bcrypt: the cost "high" is not an integer from 4 to 31`},
+		{desc: "empty", params: map[string]string{"cost": ""}, wantErr: `filter bcrypt: the cost "" is not an integer from 4 to 31`},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			filter := NewFilter(bcryptFilterKey)
+			assert.NoError(t, ValidateParams(bcryptFilterKey, filter, tC.params))
+			if tC.params != nil {
+				filter.(FilterParams).AcceptParams(tC.params)
+			}
+
+			result, err := filter.Process("s3cret")
+			if tC.wantErr != "" {
+				assert.EqualError(t, err, tC.wantErr)
+				return
+			}
+			assert.NoError(t, err)
+
+			cost, err := bcrypt.Cost([]byte(result.(string)))
+			assert.NoError(t, err)
+			assert.Equal(t, tC.wantCost, cost)
+			assert.NoError(t, bcrypt.CompareHashAndPassword([]byte(result.(string)), []byte("s3cret")))
+		})
+	}
+}
+
 func TestMd5Filter(t *testing.T) {
 	testCases := []struct {
 		desc           string

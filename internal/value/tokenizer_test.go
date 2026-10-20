@@ -7,6 +7,7 @@ import (
 
 	"github.com/denglertai/gonfig/internal/filter"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func TestProcessValue(t *testing.T) {
@@ -229,7 +230,7 @@ func TestProcessValueWithUnknownParams(t *testing.T) {
 
 	for value, wantErr := range map[string]string{
 		"${PARAMS_TEST | upper(foo=bar)}":          `filter upper accepts no params, but got "foo"`,
-		"${PARAMS_TEST | bcrypt(cost=4)}":          `filter bcrypt accepts no params, but got "cost"`,
+		"${PARAMS_TEST | bcrypt(rounds=4)}":        `filter bcrypt has no param "rounds", it accepts cost`,
 		"${PARAMS_TEST | replace(a,b,c)}":          "filter replace accepts 2 params (old, new), but got 3",
 		"${PARAMS_TEST | trim | replace(a,old=b)}": "filter replace got the param old twice, by position and by name",
 	} {
@@ -240,6 +241,26 @@ func TestProcessValueWithUnknownParams(t *testing.T) {
 	result, err := ProcessValue("${PARAMS_TEST | split(,) | join(;)}")
 	assert.NoError(t, err)
 	assert.Equal(t, "a;b", result)
+}
+
+// TestProcessValueBcryptCost checks the cost of bcrypt hashes for the params as written in placeholders,
+// which is 10 without a cost param
+func TestProcessValueBcryptCost(t *testing.T) {
+	t.Setenv("BCRYPT_TEST", "s3cret")
+
+	for value, wantCost := range map[string]int{
+		"${BCRYPT_TEST | bcrypt}":         10,
+		"${BCRYPT_TEST | bcrypt()}":       10,
+		"${BCRYPT_TEST | bcrypt(cost=5)}": 5,
+		"${BCRYPT_TEST | bcrypt(4)}":      4,
+	} {
+		result, err := ProcessValue(value)
+		assert.NoError(t, err, value)
+
+		cost, err := bcrypt.Cost([]byte(result.(string)))
+		assert.NoError(t, err, value)
+		assert.Equal(t, wantCost, cost, value)
+	}
 }
 
 // TestProcessValueEdgeCases checks unusual but valid values, e.g. empty placeholders or brackets after placeholders
