@@ -157,14 +157,14 @@ func TestFragments(t *testing.T) {
 			fileType: general.JSON,
 			content:  `{"appenders": "${FRAGMENT | fragment}", "level": "info"}`,
 			fragment: `[{"type": "console", "port": "${FRAGMENT_PORT | to_int}"}]`,
-			want:     "{\n  \"appenders\": [\n    {\n      \"type\": \"console\",\n      \"port\": 8080\n    }\n  ],\n  \"level\": \"info\"\n}",
+			want:     "{\n  \"appenders\": [\n    {\n      \"type\": \"console\",\n      \"port\": 8080\n    }\n  ],\n  \"level\": \"info\"\n}\n",
 		},
 		{
 			desc:     "json value replaced by null for an empty fragment",
 			fileType: general.JSON,
 			content:  `{"key": "${FRAGMENT | fragment}"}`,
 			fragment: " ",
-			want:     "{\n  \"key\": null\n}",
+			want:     "{\n  \"key\": null\n}\n",
 		},
 		{
 			desc:     "invalid json fragment",
@@ -185,7 +185,7 @@ func TestFragments(t *testing.T) {
 			fileType: general.JSON,
 			content:  `{"b": "${FRAGMENT | split | fragment}"}`,
 			fragment: `alpha,"quoted"`,
-			want:     "{\n  \"b\": [\n    \"alpha\",\n    \"\\\"quoted\\\"\"\n  ]\n}",
+			want:     "{\n  \"b\": [\n    \"alpha\",\n    \"\\\"quoted\\\"\"\n  ]\n}\n",
 		},
 		// JSON keys
 		{
@@ -193,21 +193,21 @@ func TestFragments(t *testing.T) {
 			fileType: general.JSON,
 			content:  `{"database": {"host": "localhost", "pool": {"timeout": 30}, "${FRAGMENT | fragment}": null, "port": 5432}}`,
 			fragment: `{"host": "db.prod", "pool": {"size": 20}, "${FRAGMENT_PORT}_key": "${FRAGMENT_SECRET}"}`,
-			want:     "{\n  \"database\": {\n    \"host\": \"db.prod\",\n    \"pool\": {\n      \"timeout\": 30,\n      \"size\": 20\n    },\n    \"port\": 5432,\n    \"8080_key\": \"s3cret\"\n  }\n}",
+			want:     "{\n  \"database\": {\n    \"host\": \"db.prod\",\n    \"pool\": {\n      \"timeout\": 30,\n      \"size\": 20\n    },\n    \"port\": 5432,\n    \"8080_key\": \"s3cret\"\n  }\n}\n",
 		},
 		{
 			desc:     "json key merged into the first of duplicate keys",
 			fileType: general.JSON,
 			content:  `{"a": {"x": 1}, "a": {"y": 2}, "${FRAGMENT | fragment}": null}`,
 			fragment: `{"a": {"z": 3}, "b": 1, "b": 2}`,
-			want:     "{\n  \"a\": {\n    \"x\": 1,\n    \"z\": 3\n  },\n  \"a\": {\n    \"y\": 2\n  },\n  \"b\": 2\n}",
+			want:     "{\n  \"a\": {\n    \"x\": 1,\n    \"z\": 3\n  },\n  \"a\": {\n    \"y\": 2\n  },\n  \"b\": 2\n}\n",
 		},
 		{
 			desc:     "json key removed for an empty fragment",
 			fileType: general.JSON,
 			content:  `{"a": 1, "${FRAGMENT | fragment}": null}`,
 			fragment: "",
-			want:     "{\n  \"a\": 1\n}",
+			want:     "{\n  \"a\": 1\n}\n",
 		},
 		{
 			desc:     "json key with a value",
@@ -228,7 +228,7 @@ func TestFragments(t *testing.T) {
 			fileType: general.JSON,
 			content:  `{"${FRAGMENT_PORT | to_int}": "${FRAGMENT_PORT | to_int}"}`,
 			fragment: "",
-			want:     "{\n  \"8080\": 8080\n}",
+			want:     "{\n  \"8080\": 8080\n}\n",
 		},
 		// XML
 		{

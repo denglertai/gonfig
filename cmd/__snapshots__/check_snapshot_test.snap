@@ -388,7 +388,6 @@ config.json: 3 entries with placeholders
 -  "pool": "${SNAP_CHECK_POOL | fragment}",
 -  "${SNAP_CHECK_OVERRIDES | fragment}": null,
 -  "hosts": "${SNAP_CHECK_HOSTS | split | fragment}"
--}
 +  "pool": {
 +    "max": "***",
 +    "ssl": "***",
@@ -399,8 +398,7 @@ config.json: 3 entries with placeholders
 +    "***"
 +  ],
 +  "timeout": "***"
-+}
-\ No newline at end of file
+ }
 (exit code 0)
 
 ---

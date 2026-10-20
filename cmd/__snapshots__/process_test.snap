@@ -107,6 +107,7 @@
     }
   }
 }
+
 ---
 
 [TestStdout/JSON_Explicit - 1]
@@ -165,6 +166,7 @@
     }
   }
 }
+
 ---
 
 [TestStdout/YAML_AutoDiscover - 1]
@@ -383,6 +385,7 @@ inty.mc.int.int = 123
     }
   }
 }
+
 ---
 
 [TestFile/JSON_Explicit - 1]
@@ -441,6 +444,7 @@ inty.mc.int.int = 123
     }
   }
 }
+
 ---
 
 [TestFile/YAML_AutoDiscover - 1]
@@ -659,6 +663,7 @@ inty.mc.int.int = 123
     }
   }
 }
+
 ---
 
 [TestFileOverwrite/JSON_Explicit - 1]
@@ -717,6 +722,7 @@ inty.mc.int.int = 123
     }
   }
 }
+
 ---
 
 [TestFileOverwrite/YAML_AutoDiscover - 1]
@@ -909,6 +915,7 @@ inty.mc.int.int = 123
     }
   }
 }
+
 ---
 
 [TestPassingExtension/YAML_Explicit - 1]
