@@ -399,6 +399,9 @@ func (j *JsonConfigFileHandler) Write(target io.Writer) error {
 		return err
 	}
 
+	// Text files end with a line break, which Indent doesn't add after the top-level value
+	indented.WriteByte('\n')
+
 	_, err := target.Write(indented.Bytes())
 	return err
 }

@@ -194,16 +194,17 @@ func processJson(t *testing.T, input string, fn func(ConfigEntry) string) (strin
 	return output.String(), err
 }
 
+// TestJsonRoundTrip checks that unchanged documents are written as read, keeping key order and number formatting
 func TestJsonRoundTrip(t *testing.T) {
 	testCases := []struct {
 		desc  string
 		input string
 	}{
-		{desc: "key order", input: "{\n  \"z\": 1,\n  \"a\": {\n    \"c\": \"x\",\n    \"b\": \"y\"\n  }\n}"},
-		{desc: "number formatting and precision", input: "[\n  1.50,\n  1e3,\n  12345678901234567890\n]"},
-		{desc: "bool and null", input: "{\n  \"a\": true,\n  \"b\": null\n}"},
-		{desc: "empty containers", input: "{\n  \"a\": {},\n  \"b\": []\n}"},
-		{desc: "top-level scalar", input: "\"value\""},
+		{desc: "key order", input: "{\n  \"z\": 1,\n  \"a\": {\n    \"c\": \"x\",\n    \"b\": \"y\"\n  }\n}\n"},
+		{desc: "number formatting and precision", input: "[\n  1.50,\n  1e3,\n  12345678901234567890\n]\n"},
+		{desc: "bool and null", input: "{\n  \"a\": true,\n  \"b\": null\n}\n"},
+		{desc: "empty containers", input: "{\n  \"a\": {},\n  \"b\": []\n}\n"},
+		{desc: "top-level scalar", input: "\"value\"\n"},
 	}
 	for _, tC := range testCases {
 		t.Run(tC.desc, func(t *testing.T) {
@@ -214,6 +215,7 @@ func TestJsonRoundTrip(t *testing.T) {
 	}
 }
 
+// TestJsonSetValues checks that set values keep the type of the original value and fail if they cannot have it
 func TestJsonSetValues(t *testing.T) {
 	testCases := []struct {
 		desc     string
@@ -222,10 +224,10 @@ func TestJsonSetValues(t *testing.T) {
 		expected string
 		wantErr  bool
 	}{
-		{desc: "string stays string", input: `{"a":"x"}`, value: "1", expected: "{\n  \"a\": \"1\"\n}"},
-		{desc: "number", input: `{"a":1}`, value: "2.5", expected: "{\n  \"a\": 2.5\n}"},
+		{desc: "string stays string", input: `{"a":"x"}`, value: "1", expected: "{\n  \"a\": \"1\"\n}\n"},
+		{desc: "number", input: `{"a":1}`, value: "2.5", expected: "{\n  \"a\": 2.5\n}\n"},
 		{desc: "invalid number", input: `{"a":1}`, value: "NaN", wantErr: true},
-		{desc: "bool", input: `{"a":true}`, value: "false", expected: "{\n  \"a\": false\n}"},
+		{desc: "bool", input: `{"a":true}`, value: "false", expected: "{\n  \"a\": false\n}\n"},
 		{desc: "invalid bool", input: `{"a":true}`, value: "x", wantErr: true},
 		{desc: "null", input: `{"a":null}`, value: "x", wantErr: true},
 	}

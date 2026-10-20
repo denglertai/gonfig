@@ -213,7 +213,7 @@ func TestCheckDiffMasksValues(t *testing.T) {
 			fileType: general.JSON,
 			env:      map[string]string{"DIFF_FRAGMENT": `{"${DIFF_KEY}": 1, "ssl": true, "none": null, "list": ["a"]}`},
 			content:  "{\n  \"db\": \"${DIFF_FRAGMENT | fragment}\"\n}\n",
-			want:     "@@ -1,3 +1,10 @@\n {\n-  \"db\": \"${DIFF_FRAGMENT | fragment}\"\n-}\n+  \"db\": {\n+    \"***\": \"***\",\n+    \"ssl\": \"***\",\n+    \"none\": \"***\",\n+    \"list\": [\n+      \"***\"\n+    ]\n+  }\n+}\n\\ No newline at end of file\n",
+			want:     "@@ -1,3 +1,10 @@\n {\n-  \"db\": \"${DIFF_FRAGMENT | fragment}\"\n+  \"db\": {\n+    \"***\": \"***\",\n+    \"ssl\": \"***\",\n+    \"none\": \"***\",\n+    \"list\": [\n+      \"***\"\n+    ]\n+  }\n }\n",
 		},
 		{
 			name:     "xml attributes and elements",
