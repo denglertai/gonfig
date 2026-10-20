@@ -22,7 +22,10 @@ with the environment variables and templates it uses. Values are not printed unl
 Several files are checked with -f per file or glob patterns like -f 'conf/*.yaml'.
 
 The check fails, with exit code 1, if processing a file would fail or if a variable is not set
-and the placeholder provides no default, independent of --fail-on-missing.`,
+and the placeholder provides no default, independent of --fail-on-missing.
+
+--diff adds a unified diff of the changes processing would make to the report of each file. The results of
+placeholders and the values inserted by fragments are shown as *** unless --log-values is set.`,
 	Args:             noArgs,
 	TraverseChildren: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -33,6 +36,7 @@ and the placeholder provides no default, independent of --fail-on-missing.`,
 
 		// The flag is defined in init, so reading it cannot fail
 		output, _ := cmd.Flags().GetString("output")
+		showDiff, _ := cmd.Flags().GetBool("diff")
 		if output != "text" && output != "json" {
 			return fmt.Errorf("unsupported output %q, use text or json", output)
 		}
@@ -40,7 +44,9 @@ and the placeholder provides no default, independent of --fail-on-missing.`,
 		// Files that cannot be read are reported as errors as well, so the other files are still checked
 		reports := make(checkReports, 0, len(configSettings.Files))
 		for _, name := range configSettings.Files {
-			report, err := file.NewFileProcessor(name, configSettings.FileType, io.Discard).Check()
+			processor := file.NewFileProcessor(name, configSettings.FileType, io.Discard)
+			processor.Diff = showDiff
+			report, err := processor.Check()
 			if err != nil {
 				report = &file.CheckReport{File: name, Entries: []file.EntryReport{}, Error: err.Error()}
 			}
@@ -158,6 +164,9 @@ func writeCheckReportText(sb *strings.Builder, report *file.CheckReport) {
 	}
 
 	fmt.Fprintf(sb, "%s\n", checkSummary(report))
+	if report.Diff != nil {
+		sb.WriteString(*report.Diff)
+	}
 }
 
 // checkFileJson is the JSON report of a file, including the counts of its problems
@@ -192,4 +201,6 @@ func init() {
 	configCmd.AddCommand(checkCmd)
 
 	checkCmd.Flags().StringP("output", "o", "text", "Format of the report: text or json")
+
+	checkCmd.Flags().Bool("diff", false, "Show the changes processing would make as a unified diff, with values masked unless --log-values is set")
 }

@@ -1,6 +1,7 @@
 package file
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -49,8 +50,12 @@ type FileProcessor struct {
 	FileType general.FileType
 	// Output represents the output writer
 	Output io.Writer
+	// Diff adds the changes processing the file would make to the report of Check
+	Diff bool
 	// report collects the problems of all entries while checking the file, see Check
 	report *CheckReport
+	// source is the content of the file as read, which is only kept for the diff
+	source []byte
 }
 
 // NewFileProcessor creates a new file processor
@@ -110,14 +115,14 @@ func (fp *FileProcessor) read() (ConfigFileHandler, iter.Seq[ConfigEntry], error
 
 // readWith reads and parses the file with the given handler and returns the handler and its entries
 func (fp *FileProcessor) readWith(handler ConfigFileHandler) (ConfigFileHandler, iter.Seq[ConfigEntry], error) {
-	file, err := os.Open(fp.FileName)
+	source, err := fp.open()
 	if err != nil {
 		return nil, nil, err
 	}
 	// The file is only read, so an error closing it does not affect the result
-	defer func() { _ = file.Close() }()
+	defer func() { _ = source.Close() }()
 
-	if err := handler.Read(file); err != nil {
+	if err := handler.Read(source); err != nil {
 		return nil, nil, fmt.Errorf("failed to read %s: %w", fp.FileName, err)
 	}
 
@@ -127,6 +132,21 @@ func (fp *FileProcessor) readWith(handler ConfigFileHandler) (ConfigFileHandler,
 	}
 
 	return handler, entries, nil
+}
+
+// open opens the file for reading. The diff needs the content after parsing, so it is read at once and kept then.
+// Otherwise the file is streamed, so handlers reading it line by line don't keep it in memory.
+func (fp *FileProcessor) open() (io.ReadCloser, error) {
+	if !fp.Diff {
+		return os.Open(fp.FileName)
+	}
+
+	source, err := os.ReadFile(fp.FileName)
+	if err != nil {
+		return nil, err
+	}
+	fp.source = source
+	return io.NopCloser(bytes.NewReader(source)), nil
 }
 
 // fileGroup returns the attributes describing the file in log records
@@ -154,7 +174,11 @@ func (fp *FileProcessor) processEntry(entry ConfigEntry, allowFragments bool, fi
 func (fp *FileProcessor) applyEntry(entry ConfigEntry, current string, allowFragments bool, fileGroup slog.Attr) error {
 	logging.Debug("Processing entry", "entry", entryPath{entry}, fileGroup)
 
-	newVal, err := value.ProcessValue(current)
+	process := value.ProcessValue
+	if fp.masked() {
+		process = value.ProcessMaskedValue
+	}
+	newVal, err := process(current)
 
 	if err != nil {
 		return fmt.Errorf("failed to process the value of %s in %s: %w", entry.Path(), fp.FileName, err)
@@ -215,7 +239,30 @@ func (fp *FileProcessor) insertFragment(entry ConfigEntry, fragment filter.Fragm
 		}
 	}
 
+	// The fragment may contain secrets, so only its structure is shown, e.g. the keys of mappings.
+	// Values that failed to process are masked as well, since their text is part of the fragment.
+	if fp.masked() {
+		for _, insertedEntry := range inserted {
+			if maskable, ok := insertedEntry.(maskableConfigEntry); ok {
+				maskable.mask()
+			}
+		}
+	}
+
 	return nil
+}
+
+// maskableConfigEntry is implemented by entries that can be inserted by fragments, see FileProcessor.masked
+type maskableConfigEntry interface {
+	ConfigEntry
+	// mask replaces a value by value.Mask as a string. Keys are kept, since they are part of the structure.
+	mask()
+}
+
+// masked returns whether values are masked, which is the case while checking a file unless values may be logged.
+// Checking writes nothing but the diff of the report, which shows the masked values.
+func (fp *FileProcessor) masked() bool {
+	return fp.report != nil && !logValues
 }
 
 // entryPath logs the path of an entry. The path is only computed if the log record is written,

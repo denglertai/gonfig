@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/denglertai/gonfig/internal/filter"
+	"github.com/denglertai/gonfig/internal/value"
 )
 
 // jsonKind represents the kind of a JSON node
@@ -78,6 +79,17 @@ func (j *JsonConfigEntry) SetValue(value string) {
 	j.edited = j.edited || j.value != value
 	j.value = value
 	j.typed = nil
+}
+
+// mask replaces a value by value.Mask as a string, so numbers, booleans and nulls are masked as well.
+// Keys are kept, since they are part of the structure.
+func (j *JsonConfigEntry) mask() {
+	if j.isKey {
+		return
+	}
+	// The value is written with the type of the node, which is a string from now on
+	j.node.value = value.Mask
+	j.SetValue(value.Mask)
 }
 
 // SetTypedValue sets a number or boolean, which replaces the original value regardless of its type.

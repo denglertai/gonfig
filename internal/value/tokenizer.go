@@ -43,6 +43,21 @@ func init() {
 // which may be of another type than string (e.g. to_int). Otherwise, the result is a string
 // and results of other types are formatted as text.
 func ProcessValue(value string) (any, error) {
+	return processValue(value, false)
+}
+
+// Mask replaces the results of placeholders in masked values, see ProcessMaskedValue
+const Mask = "***"
+
+// ProcessMaskedValue processes the value like ProcessValue, but replaces the result of each placeholder by Mask,
+// since it may contain secrets. The filters are still applied, so missing variables and errors are found as well.
+// Fragments are returned as is, as their structure is masked by the file they are inserted into.
+func ProcessMaskedValue(value string) (any, error) {
+	return processValue(value, true)
+}
+
+// processValue replaces all placeholders within the value by the result of their filters, or by Mask if masked
+func processValue(value string, masked bool) (any, error) {
 	// Most values do not contain any placeholders, so return them without any further processing
 	if !strings.Contains(value, "${") {
 		return value, nil
@@ -58,7 +73,11 @@ func ProcessValue(value string) (any, error) {
 
 	// Keep the type of the result, so file types supporting it can write e.g. numbers as such
 	if len(placeholders) == 1 && placeholders[0].start == 0 && placeholders[0].end == len(value) {
-		return applyFilters(placeholders[0])
+		filtered, err := applyFilters(placeholders[0])
+		if _, isFragment := filtered.(filter.Fragment); err == nil && masked && !isFragment {
+			return Mask, nil
+		}
+		return filtered, err
 	}
 
 	// Build the result in a single pass, copying the text between the placeholders as is
@@ -80,7 +99,10 @@ func ProcessValue(value string) (any, error) {
 
 		// Results of other types than string are embedded into the surrounding text as text
 		s, ok := filtered.(string)
-		if !ok {
+		switch {
+		case masked:
+			s = Mask
+		case !ok:
 			s = fmt.Sprint(filtered)
 		}
 

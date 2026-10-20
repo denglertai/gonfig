@@ -12,6 +12,7 @@ import (
 
 	"github.com/beevik/etree"
 	"github.com/denglertai/gonfig/internal/filter"
+	"github.com/denglertai/gonfig/internal/value"
 )
 
 // XmlAttributeConfigEntry represents a single configuration entry for an attribute
@@ -53,6 +54,11 @@ func (x *XmlAttributeConfigEntry) SetValue(value string) {
 	x.element.CreateAttr(x.fullKey, value)
 }
 
+// mask replaces the value by value.Mask
+func (x *XmlAttributeConfigEntry) mask() {
+	x.SetValue(value.Mask)
+}
+
 // XmlTextConfigEntry represents a text node of an element, which is either plain text or a CDATA section.
 // An element containing child elements may have several text nodes, e.g. before and after a child element.
 type XmlTextConfigEntry struct {
@@ -81,6 +87,11 @@ func (x *XmlTextConfigEntry) GetValue() string {
 // SetValue sets the value of the configuration entry. A CDATA section stays a CDATA section.
 func (x *XmlTextConfigEntry) SetValue(value string) {
 	x.text.Data = value
+}
+
+// mask replaces the text by value.Mask
+func (x *XmlTextConfigEntry) mask() {
+	x.SetValue(value.Mask)
 }
 
 // SetFragment replaces the whole content of the element containing the text by the fragment, which may consist of
