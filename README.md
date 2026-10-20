@@ -484,7 +484,7 @@ deploy.yaml: 3 entries with placeholders
 
 The diff shows what `config process` would write, so it includes changes of the formatting as well, e.g. the indentation of YAML and JSON files.
 Masked values are strings, so typed results like `${PORT | to_int}` are shown as `'***'` in YAML files and `"***"` in JSON files.
-Entries that cannot be processed keep their placeholders.
+Entries of the file that cannot be processed keep their placeholders, while values inserted by fragments are masked even if they cannot be processed, since the text of a fragment may contain secrets. The report names the failed entry either way.
 
 ### value
 

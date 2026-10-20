@@ -246,6 +246,24 @@ func TestCheckDiffMasksValues(t *testing.T) {
 	}
 }
 
+// TestCheckDiffMasksFailedFragmentValues checks that values of fragments are masked even if they cannot be processed,
+// since their text is part of the fragment, while the error is reported
+func TestCheckDiffMasksFailedFragmentValues(t *testing.T) {
+	t.Setenv("DIFF_FRAGMENT", "port: ${DIFF_INVALID | to_int}")
+	t.Setenv("DIFF_INVALID", "eighty")
+
+	file := path.Join(t.TempDir(), "config.yaml")
+	assert.NoError(t, os.WriteFile(file, []byte("db: ${DIFF_FRAGMENT | fragment}\n"), 0o644))
+
+	processor := NewFileProcessor(file, general.Undefined, nil)
+	processor.Diff = true
+	report, err := processor.Check()
+	assert.NoError(t, err)
+	assert.Equal(t, "filter to_int: the value is not an integer", report.Entries[1].Error)
+	assert.Contains(t, *report.Diff, "+  port: '***'\n")
+	assert.NotContains(t, *report.Diff, "DIFF_INVALID")
+}
+
 // TestCheckDiffWithLogValues checks that the diff shows the values if values may be logged
 func TestCheckDiffWithLogValues(t *testing.T) {
 	t.Setenv("DIFF_HOST", "db.internal")

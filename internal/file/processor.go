@@ -239,7 +239,8 @@ func (fp *FileProcessor) insertFragment(entry ConfigEntry, fragment filter.Fragm
 		}
 	}
 
-	// The fragment may contain secrets, so only its structure is shown, e.g. the keys of mappings
+	// The fragment may contain secrets, so only its structure is shown, e.g. the keys of mappings.
+	// Values that failed to process are masked as well, since their text is part of the fragment.
 	if fp.masked() {
 		for _, insertedEntry := range inserted {
 			if maskable, ok := insertedEntry.(maskableConfigEntry); ok {
