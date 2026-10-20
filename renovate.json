@@ -19,6 +19,15 @@
           "matchFileNames": ["plugins/**"],
           "matchPackageNames": ["github.com/denglertai/gonfig"],
           "enabled": false
+       },
+       {
+          "description": "Indirect Go dependencies are only updated with the direct ones by default. They are updated together once a week, since they are rarely worth a PR of their own, and go mod tidy drops what is no longer needed.",
+          "matchManagers": ["gomod"],
+          "matchDepTypes": ["indirect"],
+          "enabled": true,
+          "groupName": "indirect Go dependencies",
+          "schedule": ["* 0-5 * * 1"],
+          "postUpdateOptions": ["gomodTidy"]
        }
     ]
  }
