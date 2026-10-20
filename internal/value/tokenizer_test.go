@@ -332,3 +332,39 @@ func TestProcessValueWithFragments(t *testing.T) {
 	_, err = ProcessValue("key: ${FRAGMENT_TEST | fragment}")
 	assert.EqualError(t, err, "the fragment of ${FRAGMENT_TEST | fragment} has to make up the whole value")
 }
+
+// TestProcessMaskedValue checks that the results of placeholders are masked, while errors and fragments are kept
+func TestProcessMaskedValue(t *testing.T) {
+	t.Setenv("MASKED_HOST", "db.internal")
+	t.Setenv("MASKED_PORT", "5432")
+	t.Setenv("MASKED_INVALID", "eighty")
+	t.Setenv("MASKED_LIST", "a,b")
+
+	tests := []struct {
+		name    string
+		value   string
+		want    any
+		wantErr string
+	}{
+		{name: "without placeholders", value: "static", want: "static"},
+		{name: "whole value", value: "${MASKED_HOST}", want: Mask},
+		{name: "typed whole value", value: "${MASKED_PORT | to_int}", want: Mask},
+		{name: "embedded", value: "postgres://${MASKED_HOST}:${MASKED_PORT | to_int}/db", want: "postgres://***:***/db"},
+		{name: "default", value: "${MASKED_UNSET | default(localhost)}", want: Mask},
+		{name: "fragment", value: "${MASKED_LIST | split | fragment}", want: filter.Fragment{Text: `["a","b"]`, IsList: true}},
+		{name: "error of a whole value", value: "${MASKED_INVALID | to_int}", wantErr: "filter to_int: the value is not an integer"},
+		{name: "error of an embedded value", value: "port ${MASKED_INVALID | to_int}", wantErr: "filter to_int: the value is not an integer"},
+		{name: "embedded fragment", value: "list ${MASKED_LIST | split | fragment}", wantErr: "the fragment of ${MASKED_LIST | split | fragment} has to make up the whole value"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ProcessMaskedValue(tt.value)
+			if tt.wantErr != "" {
+				assert.EqualError(t, err, tt.wantErr)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}

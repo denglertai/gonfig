@@ -132,6 +132,91 @@ exec app --user '${SNAP_CHECK_USER | required}'
 			fileName: "config.yaml",
 			content:  "database:\n  host: localhost\n",
 		},
+		{
+			name:     "diff with masked values",
+			fileName: "config.yaml",
+			content: `database:
+  host: ${SNAP_CHECK_HOST}
+  port: ${SNAP_CHECK_PORT | to_int}
+  url: postgres://${SNAP_CHECK_USER}@${SNAP_CHECK_HOST}/app
+  password: ${SNAP_CHECK_PASWORD}
+  name: static
+`,
+			env:  map[string]string{"SNAP_CHECK_HOST": "db.internal", "SNAP_CHECK_PORT": "eighty", "SNAP_CHECK_USER": "app"},
+			args: []string{"--diff"},
+		},
+		{
+			name:     "diff of fragments",
+			fileName: "config.yaml",
+			content: `logging:
+  level: info
+  appenders: ${SNAP_CHECK_APPENDERS | fragment}
+database:
+  host: localhost
+  pool:
+    max: 5
+  ${SNAP_CHECK_OVERRIDES | fragment}:
+`,
+			env: map[string]string{
+				"SNAP_CHECK_APPENDERS": "- name: console\n  level: ${SNAP_CHECK_LEVEL | default(debug)}\n- name: file\n  path: /var/log/app.log",
+				"SNAP_CHECK_OVERRIDES": "host: db.internal\npool:\n  max: 20\n  idle: 2\nssl: true",
+			},
+			args: []string{"--diff"},
+		},
+		{
+			name:     "diff of fragments in a json file",
+			fileName: "config.json",
+			content: `{
+  "pool": "${SNAP_CHECK_POOL | fragment}",
+  "${SNAP_CHECK_OVERRIDES | fragment}": null,
+  "hosts": "${SNAP_CHECK_HOSTS | split | fragment}"
+}
+`,
+			env: map[string]string{
+				"SNAP_CHECK_POOL":      `{"max": 20, "ssl": true, "name": null}`,
+				"SNAP_CHECK_OVERRIDES": `{"timeout": 30}`,
+				"SNAP_CHECK_HOSTS":     "a,b",
+			},
+			args: []string{"--diff"},
+		},
+		{
+			name:     "diff of an xml file",
+			fileName: "server.xml",
+			content: `<server port="${SNAP_CHECK_PORT}">
+  <resources>${SNAP_CHECK_RESOURCES | fragment}</resources>
+</server>
+`,
+			env: map[string]string{
+				"SNAP_CHECK_PORT":      "8080",
+				"SNAP_CHECK_RESOURCES": `<datasource name="main"><user>sa</user></datasource>`,
+			},
+			args: []string{"--diff"},
+		},
+		{
+			name:     "diff with log-values",
+			fileName: "config.yaml",
+			content: `host: ${SNAP_CHECK_HOST}
+port: ${SNAP_CHECK_PORT | to_int}
+appenders: ${SNAP_CHECK_APPENDERS | fragment}
+`,
+			env:  map[string]string{"SNAP_CHECK_HOST": "db.internal", "SNAP_CHECK_PORT": "5432", "SNAP_CHECK_APPENDERS": "- name: console"},
+			args: []string{"--diff", "--log-values"},
+		},
+		{
+			name:     "diff in json output",
+			fileName: "config.yaml",
+			content: `host: ${SNAP_CHECK_HOST}
+port: 5432
+`,
+			env:  map[string]string{"SNAP_CHECK_HOST": "db.internal"},
+			args: []string{"--diff", "-o", "json"},
+		},
+		{
+			name:     "diff without changes",
+			fileName: "config.yaml",
+			content:  "database:\n  host: localhost\n",
+			args:     []string{"--diff", "-o", "json"},
+		},
 	}
 
 	for _, tC := range testCases {

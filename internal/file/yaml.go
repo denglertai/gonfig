@@ -10,6 +10,7 @@ import (
 	"strconv"
 
 	"github.com/denglertai/gonfig/internal/filter"
+	"github.com/denglertai/gonfig/internal/value"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -46,6 +47,16 @@ func (y *YamlConfigEntry) GetValue() string {
 // SetValue sets the value of the configuration entry
 func (y *YamlConfigEntry) SetValue(value string) {
 	y.node.Value = value
+}
+
+// mask replaces a value by value.Mask as a string, so numbers, booleans and nulls are masked as well.
+// Keys are kept, since they are part of the structure.
+func (y *YamlConfigEntry) mask() {
+	if y.isKey {
+		return
+	}
+	y.node.Value = value.Mask
+	y.node.Tag = "!!str"
 }
 
 // yamlTags are the YAML tags of the kinds of typed values

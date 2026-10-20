@@ -1,8 +1,11 @@
 package file
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 
+	"github.com/denglertai/gonfig/internal/diff"
 	"github.com/denglertai/gonfig/internal/filter"
 	"github.com/denglertai/gonfig/internal/value"
 )
@@ -15,12 +18,16 @@ const (
 )
 
 // CheckReport is the result of checking a file: every entry containing placeholders with the environment variables
-// and templates it uses and the error processing it would cause. It never contains values, since they may be secrets.
+// and templates it uses and the error processing it would cause. It never contains values, since they may be secrets,
+// unless values may be logged and the diff is requested.
 type CheckReport struct {
 	File    string        `json:"file"`
 	Entries []EntryReport `json:"entries"`
 	// Error is the reason the file cannot be read, e.g. because it does not exist or is invalid, so it has no entries
 	Error string `json:"error,omitempty"`
+	// Diff is the unified diff of the changes processing the file would make, with masked values unless values may be
+	// logged. It is only set if requested by FileProcessor.Diff, and empty if nothing would change.
+	Diff *string `json:"diff,omitempty"`
 }
 
 // EntryReport describes an entry containing placeholders
@@ -98,7 +105,16 @@ func (r *CheckReport) Failed() bool {
 // Check processes the file like Process, but writes nothing and collects all problems instead of stopping at the first one.
 // It returns an error only if the file cannot be read.
 func (fp *FileProcessor) Check() (*CheckReport, error) {
-	_, entries, err := fp.read()
+	handler, err := fp.getFileProcessor()
+	if err != nil {
+		return nil, err
+	}
+	return fp.checkWith(handler)
+}
+
+// checkWith checks the file with the given handler, see Check
+func (fp *FileProcessor) checkWith(handler ConfigFileHandler) (*CheckReport, error) {
+	handler, entries, err := fp.readWith(handler)
 	if err != nil {
 		return nil, err
 	}
@@ -109,6 +125,17 @@ func (fp *FileProcessor) Check() (*CheckReport, error) {
 	for entry := range entries {
 		// Errors are recorded in the report
 		_ = fp.processEntry(entry, true, fp.fileGroup())
+	}
+
+	if fp.Diff {
+		// Entries with errors keep their placeholders, so the diff shows the changes of all other entries
+		var processed bytes.Buffer
+		if err := handler.Write(&processed); err != nil {
+			fp.report.Error = fmt.Sprintf("failed to write %s: %v", fp.FileName, err)
+			return fp.report, nil
+		}
+		changes := diff.Unified(fp.FileName, fp.FileName, string(fp.source), processed.String())
+		fp.report.Diff = &changes
 	}
 
 	return fp.report, nil

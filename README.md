@@ -438,6 +438,54 @@ $ DB_USER=app DB_PORT=eighty gonfig config check -f check.yaml -o json | jq -c '
 Error: check failed: 1 missing variable, 1 error
 ```
 
+#### Showing the changes
+
+Use `--diff` to review how processing would change a file before deploying it, e.g. where a [fragment](./FILTERS.md#fragments) is inserted.
+It adds a unified diff of the changes to the report of each file, and the field `diff` to each file of the JSON report, which is empty if nothing would change.
+The results of placeholders and the values inserted by fragments may be secrets, so they are shown as `***`, while the keys and elements of fragments are shown.
+Enable [`log-values`](#logging-notes) to see the values.
+
+`deploy.yaml`:
+```yaml
+database:
+  url: postgres://${DB_HOST}:5432/app
+  password: ${DB_PASSWORD}
+logging:
+  level: info
+  appenders: ${LOG_APPENDERS | fragment}
+```
+
+```console
+$ DB_HOST=db.internal DB_PASSWORD=s3cret LOG_APPENDERS='[{name: console}, {name: file, path: /var/log/app.log}]' gonfig config check -f deploy.yaml --diff
+deploy.yaml: 3 entries with placeholders
+  database.url
+    DB_HOST                  set
+  database.password
+    DB_PASSWORD              set
+  logging.appenders
+    LOG_APPENDERS            set
+0 missing variables, 0 errors
+--- deploy.yaml
++++ deploy.yaml
+@@ -1,6 +1,9 @@
+ database:
+-  url: postgres://${DB_HOST}:5432/app
+-  password: ${DB_PASSWORD}
++  url: postgres://***:5432/app
++  password: '***'
+ logging:
+   level: info
+-  appenders: ${LOG_APPENDERS | fragment}
++  appenders:
++    - name: '***'
++    - name: '***'
++      path: '***'
+```
+
+The diff shows what `config process` would write, so it includes changes of the formatting as well, e.g. the indentation of YAML and JSON files.
+Masked values are strings, so typed results like `${PORT | to_int}` are shown as `'***'` in YAML files and `"***"` in JSON files.
+Entries that cannot be processed keep their placeholders.
+
 ### value
 
 `gonfig value` basically does the same as `gonfig config process` but expects an input string instead. This may be useful if any transformation has to be done in scripts or other places where no file is directly involved.
@@ -523,7 +571,7 @@ Order of precedence (highest to lowest):
 | Include source location | `--log-source`, `-s` | `GONFIG_LOG_SOURCE` | `false` | Includes source location in log output |
 | Config directory | `--config-path` | `GONFIG_CONFIG_PATH` | empty | Directory that contains `.gonfig.yaml` |
 | Plugin directory | `--plugin-path` | `GONFIG_PLUGIN_PATH` | `./plugins` | Directory scanned recursively for executable plugins (`gonfig-plugin-*`) and deprecated Go plugins (`.so` files) |
-| Log values | `--log-values` | `GONFIG_LOG_VALUES` | `false` | Includes processed values in debug logs, error messages of filters and the parser messages of invalid fragments. Values may contain secrets, so only use it for debugging; gonfig warns on startup while it is enabled |
+| Log values | `--log-values` | `GONFIG_LOG_VALUES` | `false` | Includes processed values in debug logs, error messages of filters, the parser messages of invalid fragments and the diff of `config check --diff`. Values may contain secrets, so only use it for debugging; gonfig warns on startup while it is enabled |
 | Fail on missing variables | `--fail-on-missing` | `GONFIG_FAIL_ON_MISSING` | `false` | Fails for [environment variables that are not set](./FILTERS.md#missing-variables) instead of using empty strings, unless the placeholder provides a default |
 | Allow unknown filters | `--allow-unknown-filters` | `GONFIG_ALLOW_UNKNOWN_FILTERS` | `false` | Passes values on unchanged with a warning instead of failing for [unknown filters](./FILTERS.md#order-of-operations). This may write secrets that were meant to be hashed or encrypted |
 
@@ -601,6 +649,7 @@ Successful runs write nothing to stderr at the default level `info`, so gonfig c
 Processed values are not logged by default, even at `trace` level, since they may contain secrets. Debug logs show the entry and the type of its result instead, e.g. `"entry":"database.password","type":"string"`.
 Error messages of filters don't contain values either, e.g. `filter to_int: the value is not an integer`, together with the entry that failed.
 Invalid fragments only report their format and, if known, the location, e.g. `invalid YAML fragment on line 3`, since the messages of the parsers may quote parts of the fragment.
+The diff of [`config check --diff`](#showing-the-changes) shows values as `***`.
 To include the values for debugging, enable `log-values` with `--log-values`, `GONFIG_LOG_VALUES=true` or in `.gonfig.yaml`. gonfig then logs a warning on startup, so the option is not left enabled by accident.
 
 ## Plugins

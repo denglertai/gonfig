@@ -2,9 +2,11 @@ package file
 
 import (
 	"bytes"
+	"io"
 	"iter"
 	"os"
 	"path"
+	"strings"
 	"testing"
 
 	"github.com/denglertai/gonfig/internal/config"
@@ -161,4 +163,141 @@ func TestReadProcessError(t *testing.T) {
 	_, _, err := NewFileProcessor(file, general.Undefined, nil).readWith(failingProcessHandler{NewYamlConfigFileHandler()})
 	assert.ErrorIs(t, err, assert.AnError)
 	assert.ErrorContains(t, err, "failed to process "+file)
+}
+
+// checkDiff checks the content as a file of the given type with the diff requested and returns the diff
+// without its header, which names the temporary file
+func checkDiff(t *testing.T, fileType general.FileType, content string) string {
+	t.Helper()
+
+	file := path.Join(t.TempDir(), "config."+string(fileType))
+	assert.NoError(t, os.WriteFile(file, []byte(content), 0o644))
+
+	processor := NewFileProcessor(file, fileType, io.Discard)
+	processor.Diff = true
+	report, err := processor.Check()
+	assert.NoError(t, err)
+	assert.Empty(t, report.Error)
+	if !assert.NotNil(t, report.Diff) || *report.Diff == "" {
+		return ""
+	}
+
+	header := "--- " + file + "\n+++ " + file + "\n"
+	assert.True(t, strings.HasPrefix(*report.Diff, header), "diff %q starts with the file names", *report.Diff)
+	return strings.TrimPrefix(*report.Diff, header)
+}
+
+// TestCheckDiffMasksValues checks that the diff masks the results of placeholders and every value inserted by
+// fragments, while keys and elements of fragments are shown
+func TestCheckDiffMasksValues(t *testing.T) {
+	t.Setenv("DIFF_HOST", "db.internal")
+	t.Setenv("DIFF_PORT", "5432")
+	t.Setenv("DIFF_KEY", "user")
+
+	tests := []struct {
+		name     string
+		fileType general.FileType
+		env      map[string]string
+		content  string
+		want     string
+	}{
+		{
+			name:     "yaml values and fragments",
+			fileType: general.YAML,
+			env:      map[string]string{"DIFF_FRAGMENT": "port: ${DIFF_PORT | to_int}\nssl: true\nempty:"},
+			content:  "host: ${DIFF_HOST}\nurl: pg://${DIFF_HOST}:${DIFF_PORT}\nname: static\n${DIFF_FRAGMENT | fragment}:\n",
+			want:     "@@ -1,4 +1,6 @@\n-host: ${DIFF_HOST}\n-url: pg://${DIFF_HOST}:${DIFF_PORT}\n+host: '***'\n+url: pg://***:***\n name: static\n-${DIFF_FRAGMENT | fragment}:\n+port: '***'\n+ssl: '***'\n+empty: '***'\n",
+		},
+		{
+			name:     "json fragment with a key containing a placeholder",
+			fileType: general.JSON,
+			env:      map[string]string{"DIFF_FRAGMENT": `{"${DIFF_KEY}": 1, "ssl": true, "none": null, "list": ["a"]}`},
+			content:  "{\n  \"db\": \"${DIFF_FRAGMENT | fragment}\"\n}\n",
+			want:     "@@ -1,3 +1,10 @@\n {\n-  \"db\": \"${DIFF_FRAGMENT | fragment}\"\n-}\n+  \"db\": {\n+    \"***\": \"***\",\n+    \"ssl\": \"***\",\n+    \"none\": \"***\",\n+    \"list\": [\n+      \"***\"\n+    ]\n+  }\n+}\n\\ No newline at end of file\n",
+		},
+		{
+			name:     "xml attributes and elements",
+			fileType: general.XML,
+			env:      map[string]string{"DIFF_FRAGMENT": `<user name="${DIFF_KEY}">sa</user><port>${DIFF_PORT}</port>`},
+			content:  "<db host=\"${DIFF_HOST}\">${DIFF_FRAGMENT | fragment}</db>\n",
+			want:     "@@ -1 +1 @@\n-<db host=\"${DIFF_HOST}\">${DIFF_FRAGMENT | fragment}</db>\n+<db host=\"***\"><user name=\"***\">***</user><port>***</port></db>\n",
+		},
+		{
+			name:     "properties",
+			fileType: general.PROPERTIES,
+			content:  "host=${DIFF_HOST}\nport=5432\n",
+			// The properties writer separates keys and values by " = ", which the diff shows as well
+			want: "@@ -1,2 +1,2 @@\n-host=${DIFF_HOST}\n-port=5432\n+host = ***\n+port = 5432\n",
+		},
+		{
+			name:     "without changes",
+			fileType: general.YAML,
+			content:  "host: localhost\n",
+			want:     "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for name, value := range tt.env {
+				t.Setenv(name, value)
+			}
+			assert.Equal(t, tt.want, checkDiff(t, tt.fileType, tt.content))
+		})
+	}
+}
+
+// TestCheckDiffWithLogValues checks that the diff shows the values if values may be logged
+func TestCheckDiffWithLogValues(t *testing.T) {
+	t.Setenv("DIFF_HOST", "db.internal")
+	t.Setenv("DIFF_FRAGMENT", "port: 5432")
+	SetLogValues(true)
+	t.Cleanup(func() { SetLogValues(false) })
+
+	got := checkDiff(t, general.YAML, "host: ${DIFF_HOST}\ndb: ${DIFF_FRAGMENT | fragment}\n")
+	assert.Equal(t, "@@ -1,2 +1,3 @@\n-host: ${DIFF_HOST}\n-db: ${DIFF_FRAGMENT | fragment}\n+host: db.internal\n+db:\n+  port: 5432\n", got)
+}
+
+// TestCheckWithoutDiff checks that the report has no diff unless it is requested
+func TestCheckWithoutDiff(t *testing.T) {
+	t.Setenv("DIFF_HOST", "db.internal")
+	report := checkFile(t, general.YAML, "host: ${DIFF_HOST}\n")
+	assert.Nil(t, report.Diff)
+}
+
+// failingWriteHandler is a YAML handler whose Write fails, which none of the real handlers does for checked files
+type failingWriteHandler struct {
+	*YamlConfigFileHandler
+}
+
+// Write returns an error instead of writing the document
+func (failingWriteHandler) Write(io.Writer) error {
+	return assert.AnError
+}
+
+// TestCheckDiffWriteError checks that a file whose processed content cannot be written is reported as an error
+func TestCheckDiffWriteError(t *testing.T) {
+	file := path.Join(t.TempDir(), "config.yaml")
+	assert.NoError(t, os.WriteFile(file, []byte("a: 1\n"), 0o644))
+
+	processor := NewFileProcessor(file, general.Undefined, nil)
+	processor.Diff = true
+	report, err := processor.checkWith(failingWriteHandler{NewYamlConfigFileHandler()})
+	assert.NoError(t, err)
+	assert.Equal(t, "failed to write "+file+": "+assert.AnError.Error(), report.Error)
+	assert.Nil(t, report.Diff)
+	assert.True(t, report.Failed())
+}
+
+// TestCheckUnsupportedFileType checks that a file of an unsupported type cannot be checked
+func TestCheckUnsupportedFileType(t *testing.T) {
+	_, err := NewFileProcessor("config.abc", general.Undefined, nil).Check()
+	assert.EqualError(t, err, "unsupported file type: abc")
+}
+
+// TestCheckDiffMissingFile checks that a file that cannot be read is an error with the diff requested as well
+func TestCheckDiffMissingFile(t *testing.T) {
+	processor := NewFileProcessor(path.Join(t.TempDir(), "missing.yaml"), general.Undefined, nil)
+	processor.Diff = true
+	_, err := processor.Check()
+	assert.ErrorIs(t, err, os.ErrNotExist)
 }
