@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -75,7 +76,7 @@ leaves all files unchanged.`,
 		if !overwriteExistingFile {
 			for _, name := range outputs {
 				if _, err := os.Stat(name); err == nil {
-					return ErrFileExists(fmt.Errorf("file %s already exists; Use -w / --overwrite if this is intended", name))
+					return fmt.Errorf("%w: %s; use -w / --overwrite if this is intended", ErrFileExists, name)
 				}
 			}
 		}
@@ -172,7 +173,9 @@ func init() {
 	processCmd.Flags().String("mode", "", "File mode of the output files in octal, e.g. 0600 (defaults to the mode of an existing output file, or of the input file for new ones)")
 }
 
-type ErrFileExists error
+// ErrFileExists is returned if an output file exists and may not be overwritten, see -w / --overwrite.
+// It is wrapped with the name of the file, so callers detect it with errors.Is.
+var ErrFileExists = errors.New("file already exists")
 
 // parseMode parses the octal file mode of --mode, e.g. "0600" or "600". An empty value returns 0.
 func parseMode(value string) (fs.FileMode, error) {

@@ -736,6 +736,8 @@ func TestOutputFileExists(t *testing.T) {
 
 	resetFlags(t)
 	rootCmd.SetArgs([]string{"config", "process", "-f", input, "-o", output})
-	assert.EqualError(t, rootCmd.Execute(), fmt.Sprintf("file %s already exists; Use -w / --overwrite if this is intended", output))
+	err := rootCmd.Execute()
+	assert.ErrorIs(t, err, ErrFileExists)
+	assert.EqualError(t, err, fmt.Sprintf("file already exists: %s; use -w / --overwrite if this is intended", output))
 	assert.Equal(t, "existing\n", readFile(t, output))
 }
