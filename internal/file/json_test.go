@@ -194,6 +194,7 @@ func processJson(t *testing.T, input string, fn func(ConfigEntry) string) (strin
 	return output.String(), err
 }
 
+// TestJsonRoundTrip checks that unchanged documents are written as read, keeping key order and number formatting
 func TestJsonRoundTrip(t *testing.T) {
 	testCases := []struct {
 		desc  string
@@ -214,6 +215,7 @@ func TestJsonRoundTrip(t *testing.T) {
 	}
 }
 
+// TestJsonSetValues checks that set values keep the type of the original value and fail if they cannot have it
 func TestJsonSetValues(t *testing.T) {
 	testCases := []struct {
 		desc     string
