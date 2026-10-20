@@ -97,7 +97,7 @@ $ cosign verify ghcr.io/denglertai/gonfig:0.2.0 \
 
 The SBOM of each platform image, listing the packages of the base image and the Go modules of gonfig, is attached as a signed [SPDX](https://spdx.dev/) attestation, since v0.2.0.
 It is attached to the image of each platform, e.g. for scanners, and to the multi-platform image, which tags refer to.
-Verify the attestations of a release by its image tag, replacing `VERSION` with e.g. `0.1.1`. `latest` would verify the newest release that is not a prerelease, which may be another one:
+Verify the attestations of a release by its image tag, replacing `VERSION` with e.g. `0.2.0`. `latest` would verify the newest release that is not a prerelease, which may be another one:
 ```console
 $ cosign verify-attestation --type spdxjson ghcr.io/denglertai/gonfig:VERSION \
     --certificate-identity-regexp '^https://github\.com/denglertai/gonfig/\.github/workflows/release\.yml@refs/tags/' \
