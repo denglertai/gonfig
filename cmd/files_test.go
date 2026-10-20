@@ -195,7 +195,7 @@ func TestProcessSeveralFilesErrors(t *testing.T) {
 		{name: "stdout", args: []string{"-f", a, "-f", b}, wantErr: "2 files cannot be written to stdout; use -i to write them back or -o <dir>/ to write them into a directory"},
 		{name: "output file", args: []string{"-f", a, "-f", b, "-o", notADir}, wantErr: fmt.Sprintf("-o %s is not a directory, which 2 files need; end it with / to create it, or use -i", notADir)},
 		{name: "same base name", args: []string{"-f", a, "-f", otherA, "-o", out}, wantErr: fmt.Sprintf("%s and %s would both be written to %s", a, otherA, filepath.Join(out, "a.yaml"))},
-		{name: "existing output file", args: []string{"-f", a, "-f", b, "-o", out}, wantErr: fmt.Sprintf("file %s already exists; Use -w / --overwrite if this is intended", filepath.Join(out, "b.yaml"))},
+		{name: "existing output file", args: []string{"-f", a, "-f", b, "-o", out}, wantErr: fmt.Sprintf("file already exists: %s; use -w / --overwrite if this is intended", filepath.Join(out, "b.yaml"))},
 		{name: "processing error", args: []string{"-i", "-f", a, "-f", invalid}, wantErr: fmt.Sprintf(`failed to process the value of c in %s: unknown filter "nope"`, invalid)},
 		{name: "output directory below a file", args: []string{"-f", a, "-o", filepath.Join(a, "out") + "/"}, wantErr: "failed to create the output directory: "},
 	}
