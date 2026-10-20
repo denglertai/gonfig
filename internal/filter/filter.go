@@ -691,6 +691,7 @@ func init() {
 		}
 	}
 
+	// bcrypt hashes the value with the cost param, or with the default cost of 10 without it
 	filterMap[bcryptFilterKey] = func(token string) Filter {
 		return &FuncFilter{
 			paramNames: bcryptParams,
