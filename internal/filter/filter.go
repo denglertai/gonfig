@@ -435,6 +435,21 @@ func requiredParam(filter string, params map[string]string, name string, positio
 	return value, nil
 }
 
+// bcryptCost returns the cost param of the bcrypt filter, given by name or position, or bcrypt.DefaultCost (10) without it.
+// GenerateFromPassword silently uses the default cost for costs below bcrypt.MinCost, so costs out of range are an error.
+func bcryptCost(filter string, params map[string]string) (int, error) {
+	text, found := param(params, "cost", 0)
+	if !found {
+		return bcrypt.DefaultCost, nil
+	}
+
+	cost, err := strconv.Atoi(text)
+	if err != nil || cost < bcrypt.MinCost || cost > bcrypt.MaxCost {
+		return 0, fmt.Errorf("filter %s: the cost %q is not an integer from %d to %d", filter, text, bcrypt.MinCost, bcrypt.MaxCost)
+	}
+	return cost, nil
+}
+
 // stringFunc creates a filter function applying fn to the string value, or to each element of a list created by split
 func stringFunc(fn func(string, map[string]string) (string, error)) func(any, map[string]string) (any, error) {
 	return func(value any, params map[string]string) (any, error) {
@@ -561,6 +576,7 @@ var (
 	replaceParams  = []string{"old", "new"}
 	regexParams    = []string{"pattern", "replacement"}
 	listParams     = []string{"delimiter"}
+	bcryptParams   = []string{"cost"}
 )
 
 // init initializes the filter map
@@ -677,8 +693,14 @@ func init() {
 
 	filterMap[bcryptFilterKey] = func(token string) Filter {
 		return &FuncFilter{
-			fn: func(value any, _ map[string]string) (any, error) {
-				hash, err := bcrypt.GenerateFromPassword([]byte(toString(value)), bcrypt.DefaultCost)
+			paramNames: bcryptParams,
+			fn: func(value any, params map[string]string) (any, error) {
+				cost, err := bcryptCost(token, params)
+				if err != nil {
+					return "", err
+				}
+
+				hash, err := bcrypt.GenerateFromPassword([]byte(toString(value)), cost)
 				if err != nil {
 					return "", err
 				}

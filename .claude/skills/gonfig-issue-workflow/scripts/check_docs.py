@@ -7,7 +7,7 @@ Blocks are handled in document order:
   - Each "$ command" line of a ```console block is run with `sh -c` in the work directory. The lines
     following it, up to the next "$ " line, are the expected output (stdout and stderr combined).
 
-Blocks nested in list items may be indented. bcrypt hashes are compared by format only, since their salt is random.
+Blocks nested in list items may be indented. bcrypt hashes are compared by their cost only, since their salt is random.
 
 Usage:
   check_docs.py FILE --bin DIR [--workdir DIR] [--config FILE | --config-from HEADING] [--replace OLD=NEW ...]
@@ -31,7 +31,7 @@ import sys
 import tempfile
 
 BLOCK_RE = re.compile(r"(?:^[ \t]*`([\w.\-/]+)`:\n(?:[ \t]*\n)?)?^([ \t]*)```(\w*)\n(.*?)^[ \t]*```", re.S | re.M)
-BCRYPT_RE = re.compile(r"\$2a\$10\$\S+")
+BCRYPT_RE = re.compile(r"(\$2a\$\d\d\$)\S+")
 
 
 def dedent(body, indent):
@@ -58,7 +58,7 @@ def commands(body):
 
 def matches(cmd, got, expected):
     if "bcrypt" in cmd:
-        return len(got) == len(expected) and all(BCRYPT_RE.sub("H", g) == BCRYPT_RE.sub("H", e) for g, e in zip(got, expected))
+        return len(got) == len(expected) and all(BCRYPT_RE.sub(r"\1H", g) == BCRYPT_RE.sub(r"\1H", e) for g, e in zip(got, expected))
     return got == expected
 
 

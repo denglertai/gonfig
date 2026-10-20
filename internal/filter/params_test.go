@@ -24,8 +24,8 @@ func TestValidateParams(t *testing.T) {
 		{name: "trailing empty param", filter: "regex", params: map[string]string{"0": "a", "1": "b", "2": ""}},
 		{name: "empty params without declared params", filter: "upper", params: map[string]string{"0": "", "1": ""}},
 		{
-			name: "unknown name without declared params", filter: "bcrypt", params: map[string]string{"cost": "4"},
-			wantErr: `filter bcrypt accepts no params, but got "cost"`,
+			name: "unknown name without declared params", filter: "md5", params: map[string]string{"cost": "4"},
+			wantErr: `filter md5 accepts no params, but got "cost"`,
 		},
 		{
 			name: "unknown name", filter: "default", params: map[string]string{"vaule": "x"},

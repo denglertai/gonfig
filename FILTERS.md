@@ -138,7 +138,7 @@ api.example.com
 | [`to_bool`](#to_int--to_float--to_bool) | | Converts the value to a boolean |
 | [`multiply`](#multiply) | `m` | Multiplies an integer |
 | [`md5`](#md5) | | Hashes the value with MD5 |
-| [`bcrypt`](#bcrypt) | | Hashes the value with bcrypt |
+| [`bcrypt`](#bcrypt) | `cost` | Hashes the value with bcrypt |
 | [`base64`](#base64--base64_decode) | | Encodes the value to base64 |
 | [`base64_decode`](#base64--base64_decode) | | Decodes a base64 value |
 | [`url_encode`](#url_encode--url_decode) | `mode` | Escapes the value for use within URLs |
@@ -253,12 +253,18 @@ $ V=hello gonfig value '${V | md5}'
 
 ### bcrypt
 
-Hashes the value with bcrypt using the default cost of 10. The salt is random, so the result differs on every run.
+Hashes the value with bcrypt. The salt is random, so the result differs on every run.
 Values longer than 72 bytes cannot be hashed and cause an error.
+
+The param `cost` sets the cost, given by name or by position, from 4 to 31. It defaults to 10. Each step doubles the time hashing and checking a password takes, so a higher cost makes hashes stronger against brute force, but slows down every login. The cost is part of the hash, e.g. `$2a$12$` for 12.
 
 ```console
 $ ADMIN_PASSWORD=s3cret gonfig value '${ADMIN_PASSWORD | bcrypt}'
 $2a$10$3nh7.N18au9F.xLeAg3Hs.7sPqH.aHmJE7eBoMMv8gEDIQHslpm3i
+$ ADMIN_PASSWORD=s3cret gonfig value '${ADMIN_PASSWORD | bcrypt(cost=12)}'
+$2a$12$8GU85KD04YphWSZl7KUjW.peGO5.UoUfO7v.7JU.Wsig57BTQGlZK
+$ ADMIN_PASSWORD=s3cret gonfig value '${ADMIN_PASSWORD | bcrypt(3)}'
+Error: filter bcrypt: the cost "3" is not an integer from 4 to 31
 ```
 
 ### base64 / base64_decode
