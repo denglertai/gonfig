@@ -99,7 +99,7 @@ jobs:
     # Runs the official image by digest instead of trivy-action or setup-trivy, whose tags were
     # replaced with malware in March 2026 (GHSA-69fq-xp46-6x23). Renovate updates tag and digest.
     - name: Run Trivy scan
-      uses: docker://ghcr.io/aquasecurity/trivy:0.76.0@sha256:2416d1f74045b57274df1a340eee6b510cacd73c66a6ccb8da092b117eb7d222
+      uses: docker://ghcr.io/aquasecurity/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
       with:
         args: fs --exit-code 1 --severity HIGH,CRITICAL .
 
