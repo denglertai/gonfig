@@ -27,7 +27,7 @@ jobs:
       env:
         # melange builds and signs the apk, so it is pinned like the actions and updated by Renovate
         # renovate: datasource=go depName=chainguard.dev/melange
-        MELANGE_VERSION: v0.63.0
+        MELANGE_VERSION: v0.63.1
       run: go install "chainguard.dev/melange@${MELANGE_VERSION}"
 
     - name: Checkout
