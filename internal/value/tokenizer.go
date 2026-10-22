@@ -11,8 +11,8 @@ import (
 )
 
 // Values are processed in two stages:
-//  1. findPlaceholders finds the placeholders "${...}" within a value, everything else is kept as is.
-//     A placeholder without a closing bracket is an error.
+//  1. scanValue finds the placeholders "${...}" and escape sequences like "$${" within a value,
+//     everything else is kept as is. A placeholder without a closing bracket is an error.
 //  2. filterParser splits the content of a placeholder, e.g. "ENV_VAR | filter1 | filter2(param)",
 //     into the name of the environment variable, the filter names, their params and the separators between them.
 //
@@ -63,7 +63,7 @@ func processValue(value string, masked bool) (any, error) {
 		return value, nil
 	}
 
-	placeholders, err := findPlaceholders(value)
+	placeholders, err := scanValue(value)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +72,7 @@ func processValue(value string, masked bool) (any, error) {
 	}
 
 	// Keep the type of the result, so file types supporting it can write e.g. numbers as such
-	if len(placeholders) == 1 && placeholders[0].start == 0 && placeholders[0].end == len(value) {
+	if len(placeholders) == 1 && !placeholders[0].isEscape() && placeholders[0].start == 0 && placeholders[0].end == len(value) {
 		filtered, err := applyFilters(placeholders[0])
 		if _, isFragment := filtered.(filter.Fragment); err == nil && masked && !isFragment {
 			return Mask, nil
@@ -87,6 +87,13 @@ func processValue(value string, masked bool) (any, error) {
 	last := 0
 
 	for _, p := range placeholders {
+		if p.isEscape() {
+			result.WriteString(value[last:p.start])
+			result.WriteString(p.literal)
+			last = p.end
+			continue
+		}
+
 		filtered, err := applyFilters(p)
 		if err != nil {
 			return nil, err
@@ -124,13 +131,20 @@ func applyFilters(p placeholder) (any, error) {
 	return filter.ApplyFilters(p.token, parseFilters(p.content()))
 }
 
-// placeholder is a placeholder "${...}" found within a value
+// placeholder is a placeholder "${...}" or an escape sequence like "$${" found within a value
 type placeholder struct {
-	// token is the placeholder including "${" and "}"
+	// token is the placeholder including "${" and "}", or the escape sequence
 	token string
 	// start and end are the byte offsets of the placeholder within the value
 	start int
 	end   int
+	// literal is the text replacing an escape sequence, e.g. "${" for "$${". It is empty for placeholders.
+	literal string
+}
+
+// isEscape returns whether this is an escape sequence instead of a placeholder
+func (p placeholder) isEscape() bool {
+	return p.literal != ""
 }
 
 // content returns the content of the placeholder without "${" and "}"
@@ -138,11 +152,40 @@ func (p placeholder) content() string {
 	return p.token[2 : len(p.token)-1]
 }
 
-// findPlaceholders returns the placeholders within the value in the order they appear.
+// findPlaceholders returns the placeholders within the value in the order they appear, without escape sequences,
+// see scanValue
+func findPlaceholders(value string) ([]placeholder, error) {
+	all, err := scanValue(value)
+	placeholders := all[:0]
+	for _, p := range all {
+		if !p.isEscape() {
+			placeholders = append(placeholders, p)
+		}
+	}
+	return placeholders, err
+}
+
+// HasPlaceholders returns whether the value contains placeholders, including unterminated ones,
+// as opposed to escape sequences only
+func HasPlaceholders(value string) bool {
+	if !strings.Contains(value, "${") {
+		return false
+	}
+	placeholders, err := findPlaceholders(value)
+	return len(placeholders) > 0 || err != nil
+}
+
+// scanValue returns the placeholders and escape sequences within the value in the order they appear.
+//
+// Like in docker compose, "$$" before a "{" stands for a literal "$", so "$${" is written as "${" without starting
+// a placeholder. An odd "$" left over starts a placeholder, e.g. "$$${VAR}" is a "$" followed by the value.
+// Dollar signs that are not followed by a "{" are kept as is, e.g. "$$HOME". The escape covers the "${" only,
+// so placeholders after it are found as usual, e.g. "$${TARGET:-${FALLBACK}}" contains the placeholder "${FALLBACK}".
+//
 // A placeholder ends at the first closing bracket that is not escaped by a backslash, so placeholders
 // cannot be nested. A placeholder without a closing bracket is an error, e.g. a typo like "${VAR | upper",
 // since it would otherwise be written to the output as is. The placeholders before it are returned as well.
-func findPlaceholders(value string) ([]placeholder, error) {
+func scanValue(value string) ([]placeholder, error) {
 	var placeholders []placeholder
 
 	for offset := 0; offset < len(value); {
@@ -152,6 +195,23 @@ func findPlaceholders(value string) ([]placeholder, error) {
 		}
 
 		start := offset + i
+		// Find the dollar signs preceding the one of "${", which belong to the same sequence
+		run := start
+		for run > offset && value[run-1] == '$' {
+			run--
+		}
+		if dollars := start - run + 1; dollars > 1 {
+			escape := placeholder{token: value[run:start], start: run, end: start, literal: strings.Repeat("$", dollars/2)}
+			if dollars%2 == 0 {
+				// The "{" is part of the escape sequence, so no placeholder starts here
+				escape.token, escape.end, escape.literal = value[run:start+2], start+2, escape.literal+"{"
+				placeholders = append(placeholders, escape)
+				offset = escape.end
+				continue
+			}
+			placeholders = append(placeholders, escape)
+		}
+
 		end := closingBracket(value, start+2)
 		if end == -1 {
 			return placeholders, fmt.Errorf("unterminated placeholder %q, the closing } is missing", excerpt(value[start:]))

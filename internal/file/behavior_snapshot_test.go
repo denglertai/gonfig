@@ -258,3 +258,51 @@ chained: ${NAME | @clean | upper | @secret}
 		},
 	})
 }
+
+// TestEscapeSnapshots documents that "$${" is written as a literal "${" by each file type, while "$$${" is a "$"
+// followed by the value of a placeholder
+func TestEscapeSnapshots(t *testing.T) {
+	env := map[string]string{"NAME": "gonfig"}
+
+	runBehaviorSnapshots(t, []behaviorCase{
+		{
+			name:     "yaml",
+			fileType: general.YAML,
+			env:      env,
+			content: `escaped: $${NAME}
+mixed: $${NAME} is ${NAME}
+dollar: $$${NAME}
+$${NAME}: keys are unescaped as well
+`,
+		},
+		{
+			name:     "json",
+			fileType: general.JSON,
+			env:      env,
+			content:  `{"escaped": "$${NAME}", "mixed": "$${NAME} is ${NAME}", "$${NAME}": "keys are unescaped as well"}`,
+		},
+		{
+			name:     "xml",
+			fileType: general.XML,
+			env:      env,
+			content:  `<app name="$${NAME}"><text>$${NAME} is ${NAME}</text><script><![CDATA[echo "$${NAME}"]]></script></app>`,
+		},
+		{
+			name:     "properties",
+			fileType: general.PROPERTIES,
+			env:      env,
+			content:  "spring.name=$${NAME}\nname=${NAME}\n",
+		},
+		{
+			name:     "plain text",
+			fileType: general.PLAIN,
+			env:      env,
+			content: `#!/bin/sh
+# $$ and $NAME are no placeholders
+echo "$${NAME:-default} $$ $NAME"
+name="${NAME}"
+location / { proxy_set_header Host $host; set $x "$${host}"; }
+`,
+		},
+	})
+}

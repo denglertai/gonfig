@@ -143,6 +143,11 @@ func (fp *FileProcessor) checkWith(handler ConfigFileHandler) (*CheckReport, err
 
 // checkEntry processes the entry like applyEntry and records the variables, templates and error in the report
 func (fp *FileProcessor) checkEntry(entry ConfigEntry, current string, allowFragments bool) error {
+	// Entries with escape sequences like "$${" only are not reported, but unescaped, so the diff shows the change
+	if !value.HasPlaceholders(current) {
+		return fp.applyEntry(entry, current, allowFragments, fp.fileGroup())
+	}
+
 	// Reserve the position of the entry, since processing a fragment adds the entries of the fragment
 	index := len(fp.report.Entries)
 	fp.report.Entries = append(fp.report.Entries, EntryReport{})

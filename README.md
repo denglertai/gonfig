@@ -226,7 +226,19 @@ server {
 }
 ```
 
-Every `${...}` is replaced, so avoid plain text mode for files using the same syntax for other purposes, like shell scripts.
+Every `${...}` is replaced. Files using the same syntax for other purposes, like shell scripts, write a literal `${` as `$${`, see [placeholder syntax](FILTERS.md#placeholder-syntax).
+
+`deploy.sh`:
+```sh
+#!/bin/sh
+echo "Deploying ${VERSION} to $${TARGET:-staging} at $(date) by $1"
+```
+
+```console
+$ VERSION=1.4.2 gonfig config process -f deploy.sh -t plain
+#!/bin/sh
+echo "Deploying 1.4.2 to ${TARGET:-staging} at $(date) by $1"
+```
 
 ### TOML
 

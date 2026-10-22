@@ -76,6 +76,22 @@ func TestCheckWithoutProblems(t *testing.T) {
 	assert.False(t, report.Failed())
 }
 
+// TestCheckEscapes checks that entries with escaped placeholders only are not reported, since they have no placeholders,
+// while the diff shows that they are unescaped
+func TestCheckEscapes(t *testing.T) {
+	t.Setenv("CHECK_SET", "value")
+	content := "escaped: $${CHECK_MISSING}\nboth: $${CHECK_MISSING} ${CHECK_SET}\nunterminated: $${CHECK_MISSING} ${CHECK_SET\n"
+
+	report := checkFile(t, general.YAML, content)
+	assert.Equal(t, []EntryReport{
+		{Path: "both", Variables: []VariableReport{{Name: "CHECK_SET", Status: VariableSet}}},
+		{Path: "unterminated", Variables: []VariableReport{}, Error: `unterminated placeholder "${CHECK_SET", the closing } is missing`},
+	}, report.Entries)
+
+	assert.Equal(t, "@@ -1,3 +1,3 @@\n-escaped: $${CHECK_MISSING}\n-both: $${CHECK_MISSING} ${CHECK_SET}\n+escaped: ${CHECK_MISSING}\n+both: ${CHECK_MISSING} ***\n unterminated: $${CHECK_MISSING} ${CHECK_SET\n",
+		checkDiff(t, general.YAML, content))
+}
+
 // TestCheckFragments checks that the entries of fragments are reported and errors of fragments are collected
 func TestCheckFragments(t *testing.T) {
 	t.Setenv("CHECK_FRAGMENT", "inner: ${CHECK_INNER}\nnested: ${CHECK_NESTED | fragment}")

@@ -279,7 +279,7 @@ func TestProcessValueEdgeCases(t *testing.T) {
 		{desc: "unclosed params", value: "${EDGE_TEST|upper(}", want: "X"},
 		{desc: "empty placeholder", value: "${}", want: "${}"},
 		{desc: "closing bracket after placeholder", value: "${EDGE_TEST}}", want: "x}"},
-		{desc: "dollar before placeholder", value: "$${EDGE_TEST}", want: "$x"},
+		{desc: "dollar before placeholder", value: "$$${EDGE_TEST}", want: "$x"},
 		{desc: "escaped closing bracket", value: `${EDGE_TEST|replace(\},y)}`, want: "x"},
 		{desc: "placeholders without separator", value: "${EDGE_TEST|upper}${EDGE_TEST}", want: "Xx"},
 		{desc: "non-string result of whole value", value: "${EDGE_TEST_INT|to_int}", want: 5},
@@ -309,6 +309,88 @@ func TestFindPlaceholders(t *testing.T) {
 	assert.Equal(t, `B|replace(\},x)`, placeholders[1].content())
 }
 
+// TestProcessValueEscapes checks that "$$" before "{" stands for a literal "$", so "$${" is not a placeholder,
+// while dollar signs not followed by "{" are kept as is
+func TestProcessValueEscapes(t *testing.T) {
+	t.Setenv("EDGE_TEST", "x")
+	t.Setenv("EDGE_TEST_INT", "5")
+
+	testCases := []struct {
+		desc  string
+		value string
+		want  any
+	}{
+		{desc: "escaped placeholder", value: "$${EDGE_TEST}", want: "${EDGE_TEST}"},
+		{desc: "escaped placeholder with filters", value: "a $${EDGE_TEST | upper} b", want: "a ${EDGE_TEST | upper} b"},
+		{desc: "dollar followed by a placeholder", value: "$$${EDGE_TEST}", want: "$x"},
+		{desc: "two dollars followed by an escaped placeholder", value: "$$$${EDGE_TEST}", want: "$${EDGE_TEST}"},
+		{desc: "two dollars followed by a placeholder", value: "$$$$${EDGE_TEST}", want: "$$x"},
+		{desc: "escaped placeholder without closing bracket", value: "$${EDGE_TEST", want: "${EDGE_TEST"},
+		{desc: "escaped placeholder and placeholder", value: "$${EDGE_TEST}=${EDGE_TEST}", want: "${EDGE_TEST}=x"},
+		{desc: "placeholder followed by escaped placeholder", value: "${EDGE_TEST}$${EDGE_TEST}", want: "x${EDGE_TEST}"},
+		{desc: "escape within shell syntax", value: `echo "$${HOME:-/root}" $$`, want: `echo "${HOME:-/root}" $$`},
+		{desc: "dollars without bracket", value: "$$EDGE_TEST $ ${EDGE_TEST}", want: "$$EDGE_TEST $ x"},
+		{desc: "escaped empty placeholder", value: "$${}", want: "${}"},
+		{desc: "dollar before a typed result is text", value: "$$${EDGE_TEST_INT|to_int}", want: "$5"},
+		// Like in docker compose, the escape covers the "${" only, so a shell default can be filled in
+		{desc: "placeholder within escaped text", value: "$${TARGET:-${EDGE_TEST}}", want: "${TARGET:-x}"},
+		{desc: "escaped placeholder within escaped text", value: "$${TARGET:-$${EDGE_TEST}}", want: "${TARGET:-${EDGE_TEST}}"},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			result, err := ProcessValue(tC.value)
+			assert.NoError(t, err)
+			assert.Equal(t, tC.want, result)
+		})
+	}
+
+	// The escape doesn't hide an unterminated placeholder after it
+	_, err := ProcessValue("$${EDGE_TEST} ${EDGE_TEST")
+	assert.ErrorContains(t, err, "unterminated placeholder")
+	_, err = ProcessValue("$$${EDGE_TEST")
+	assert.ErrorContains(t, err, "unterminated placeholder")
+
+	// Escaped text is not a secret, so it is not masked
+	masked, err := ProcessMaskedValue("$${EDGE_TEST} ${EDGE_TEST}")
+	assert.NoError(t, err)
+	assert.Equal(t, "${EDGE_TEST} "+Mask, masked)
+}
+
+// TestScanValue checks the escape sequences and placeholders found within a value, and that findPlaceholders
+// returns the placeholders only
+func TestScanValue(t *testing.T) {
+	value := "$${A} $$${B} $$$${C}"
+	all, err := scanValue(value)
+	assert.NoError(t, err)
+	assert.Equal(t, []placeholder{
+		{token: "$${", start: 0, end: 3, literal: "${"},
+		{token: "$$", start: 6, end: 8, literal: "$"},
+		{token: "${B}", start: 8, end: 12},
+		{token: "$$$${", start: 13, end: 18, literal: "$${"},
+	}, all)
+
+	placeholders, err := findPlaceholders(value)
+	assert.NoError(t, err)
+	assert.Equal(t, []placeholder{{token: "${B}", start: 8, end: 12}}, placeholders)
+}
+
+// TestHasPlaceholders checks that escape sequences alone are no placeholders, but unterminated placeholders are
+func TestHasPlaceholders(t *testing.T) {
+	for value, want := range map[string]bool{
+		"plain":          false,
+		"$$HOME":         false,
+		"$${A}":          false,
+		"$${A} $${B":     false,
+		"${A}":           true,
+		"$$${A}":         true,
+		"$${A} ${B":      true,
+		"${":             true,
+		"$${A} and ${B}": true,
+	} {
+		assert.Equal(t, want, HasPlaceholders(value), value)
+	}
+}
+
 // TestFindPlaceholdersUnterminated checks that a placeholder without a closing bracket is an error,
 // which returns the placeholders before it and quotes only the beginning of a long rest of the value
 func TestFindPlaceholdersUnterminated(t *testing.T) {
@@ -332,7 +414,7 @@ func TestProcessValueUnterminated(t *testing.T) {
 
 // FuzzProcessValue checks that any value is processed without panicking, seeded with inputs that panicked before
 func FuzzProcessValue(f *testing.F) {
-	for _, value := range []string{"${A}", "a${A", "${A}${", "${A|replace(}", `${A|regex(\(x\),y)}`, "${${A}}", "${\\", "${A|split(-1=a)}", "${A|split(9223372036854775807=a)}"} {
+	for _, value := range []string{"${A}", "a${A", "${A}${", "${A|replace(}", `${A|regex(\(x\),y)}`, "${${A}}", "${\\", "${A|split(-1=a)}", "${A|split(9223372036854775807=a)}", "$${A}", "$$${A", "$$$${A}${B}"} {
 		f.Add(value)
 	}
 	f.Fuzz(func(t *testing.T, value string) {
