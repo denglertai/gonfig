@@ -177,9 +177,10 @@ func HasPlaceholders(value string) bool {
 
 // scanValue returns the placeholders and escape sequences within the value in the order they appear.
 //
-// Like in docker compose, "$$" before a "{" stands for a literal "$", so "$${" is written as "${" and the text
-// following it is not a placeholder. An odd "$" left over starts a placeholder, e.g. "$$${VAR}" is a "$" followed
-// by the value. Dollar signs that are not followed by a "{" are kept as is, e.g. "$$HOME".
+// Like in docker compose, "$$" before a "{" stands for a literal "$", so "$${" is written as "${" without starting
+// a placeholder. An odd "$" left over starts a placeholder, e.g. "$$${VAR}" is a "$" followed by the value.
+// Dollar signs that are not followed by a "{" are kept as is, e.g. "$$HOME". The escape covers the "${" only,
+// so placeholders after it are found as usual, e.g. "$${TARGET:-${FALLBACK}}" contains the placeholder "${FALLBACK}".
 //
 // A placeholder ends at the first closing bracket that is not escaped by a backslash, so placeholders
 // cannot be nested. A placeholder without a closing bracket is an error, e.g. a typo like "${VAR | upper",

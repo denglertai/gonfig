@@ -332,6 +332,9 @@ func TestProcessValueEscapes(t *testing.T) {
 		{desc: "dollars without bracket", value: "$$EDGE_TEST $ ${EDGE_TEST}", want: "$$EDGE_TEST $ x"},
 		{desc: "escaped empty placeholder", value: "$${}", want: "${}"},
 		{desc: "dollar before a typed result is text", value: "$$${EDGE_TEST_INT|to_int}", want: "$5"},
+		// Like in docker compose, the escape covers the "${" only, so a shell default can be filled in
+		{desc: "placeholder within escaped text", value: "$${TARGET:-${EDGE_TEST}}", want: "${TARGET:-x}"},
+		{desc: "escaped placeholder within escaped text", value: "$${TARGET:-$${EDGE_TEST}}", want: "${TARGET:-${EDGE_TEST}}"},
 	}
 	for _, tC := range testCases {
 		t.Run(tC.desc, func(t *testing.T) {

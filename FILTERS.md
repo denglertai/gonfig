@@ -43,13 +43,20 @@ $ V=abc gonfig value '${V | upper'
 Error: unterminated placeholder "${V | upper", the closing } is missing
 ```
 
-To write a literal `${`, double the dollar sign: `$${` is written as `${`, and the text after it is not processed, like in docker compose.
+To write a literal `${`, double the dollar sign: `$${` is written as `${` without starting a placeholder, like in docker compose.
 Each `$$` directly before a `{` stands for one `$`, so `$$${NAME}` is a `$` followed by the value.
 Dollar signs that are not followed by a `{` are kept as they are:
 
 ```console
 $ NAME=gonfig gonfig value '$${NAME} is ${NAME}, $$${NAME} costs $$5'
 ${NAME} is gonfig, $gonfig costs $$5
+```
+
+The escape covers the `${` only, so placeholders after it are processed as usual, e.g. to fill in the default of a shell variable. Escape them as well to keep them:
+
+```console
+$ FALLBACK=staging gonfig value '$${TARGET:-${FALLBACK}} $${TARGET:-$${FALLBACK}}'
+${TARGET:-staging} ${TARGET:-${FALLBACK}}
 ```
 
 ## Order of operations
