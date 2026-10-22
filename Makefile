@@ -160,6 +160,7 @@ test:
 	go test ./...
 
 # Run the linters configured in .golangci.yml with the version used in CI (.github/workflows/go.yml)
+# renovate: datasource=github-releases depName=golangci/golangci-lint
 GOLANGCI_LINT_VERSION ?= v2.15.0
 lint:
 	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) run ./...
@@ -175,11 +176,18 @@ profile:
 	@echo "Inspect the memory profile with: go tool pprof -http=: benchmarks.test mem.out"
 	go tool pprof -http=: benchmarks.test cpu.out
 
-# Install goreleaser if not present
+# Install goreleaser if not present, with the version of the release workflow (.github/workflows/release.yml)
+# renovate: datasource=github-releases depName=goreleaser/goreleaser
+GORELEASER_VERSION ?= v2.18.3
 install-goreleaser:
 	@if ! command -v goreleaser >/dev/null 2>&1; then \
-		echo "Installing goreleaser..."; \
-		go install github.com/goreleaser/goreleaser/v2@latest; \
+		echo "Installing goreleaser $(GORELEASER_VERSION)..."; \
+		go install github.com/goreleaser/goreleaser/v2@$(GORELEASER_VERSION); \
 	else \
-		echo "goreleaser is already installed: $$(goreleaser --version)"; \
+		installed=$$(goreleaser --version 2>/dev/null | awk '/^GitVersion:/ {print $$2}'); \
+		if [ "$${installed#v}" = "$(patsubst v%,%,$(GORELEASER_VERSION))" ]; then \
+			echo "goreleaser $(GORELEASER_VERSION) is already installed"; \
+		else \
+			echo "WARNING: goreleaser $$installed is installed, but the release uses $(GORELEASER_VERSION)"; \
+		fi; \
 	fi
