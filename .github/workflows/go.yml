@@ -69,6 +69,10 @@ jobs:
 
   lint:
     runs-on: ubuntu-latest
+    env:
+      # Same version as make lint, updated by Renovate
+      # renovate: datasource=github-releases depName=golangci/golangci-lint
+      GOLANGCI_LINT_VERSION: v2.15.0
 
     steps:
     - name: Checkout code
@@ -84,8 +88,7 @@ jobs:
     - name: Run golangci-lint
       uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
       with:
-        # Keep in sync with GOLANGCI_LINT_VERSION in the Makefile
-        version: v2.15.0
+        version: ${{ env.GOLANGCI_LINT_VERSION }}
 
   trivy-scan:
     runs-on: ubuntu-latest
@@ -106,6 +109,10 @@ jobs:
   # Fails on deprecated properties as well, so they are noticed before a GoReleaser update drops them
   goreleaser-check:
     runs-on: ubuntu-latest
+    env:
+      # Same version as release.yml and the Makefile, updated by Renovate
+      # renovate: datasource=github-releases depName=goreleaser/goreleaser
+      GORELEASER_VERSION: v2.18.3
 
     steps:
     - name: Checkout code
@@ -117,8 +124,7 @@ jobs:
       uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
       with:
         distribution: goreleaser
-        # Keep in sync with the version in release.yml
-        version: "~> v2"
+        version: ${{ env.GORELEASER_VERSION }}
         args: check
 
   # Keeps the workflows free of unpinned actions, template injection and similar problems

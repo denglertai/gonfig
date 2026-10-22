@@ -22,6 +22,10 @@ jobs:
       # Store the build provenance in the attestations of the repository
       attestations: write
     runs-on: ubuntu-latest
+    env:
+      # Same version as goreleaser-check in go.yml and the Makefile, so local dry runs match the release
+      # renovate: datasource=github-releases depName=goreleaser/goreleaser
+      GORELEASER_VERSION: v2.18.3
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -94,8 +98,7 @@ jobs:
         with:
           # either 'goreleaser' (default) or 'goreleaser-pro'
           distribution: goreleaser
-          # 'latest', 'nightly', or a semver
-          version: "~> v2"
+          version: ${{ env.GORELEASER_VERSION }}
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

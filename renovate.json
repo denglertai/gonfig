@@ -6,10 +6,10 @@
     ],
     "customManagers": [
        {
-          "description": "Tools installed in workflows, whose version is annotated with a # renovate: comment",
+          "description": "Tools installed in workflows and the Makefile, whose version is annotated with a # renovate: comment",
           "customType": "regex",
-          "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.ya?ml$/"],
-          "matchStrings": ["# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+[A-Z_]+: (?<currentValue>\\S+)"]
+          "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.ya?ml$/", "/^Makefile$/"],
+          "matchStrings": ["# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+[A-Z_]+(?:: | \\?= )(?<currentValue>\\S+)"]
        }
     ],
     "packageRules": [
