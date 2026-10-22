@@ -25,7 +25,7 @@ jobs:
     env:
       # Same version as goreleaser-check in go.yml and the Makefile, so local dry runs match the release
       # renovate: datasource=github-releases depName=goreleaser/goreleaser
-      GORELEASER_VERSION: v2.18.3
+      GORELEASER_VERSION: v2.19.0
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
