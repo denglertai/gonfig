@@ -1,0 +1,66 @@
+name: govulncheck
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  # Vulnerabilities are published without a change in this repository
+  schedule:
+    - cron: '23 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # renovate: datasource=go depName=golang.org/x/vuln
+  GOVULNCHECK_VERSION: v1.9.0
+
+jobs:
+  # Fails only if gonfig calls vulnerable code. Vulnerabilities in imported packages and required modules
+  # that aren't called are only reported.
+  source:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    # The standard library is checked as well, so use the Go version the releases are built with
+    - name: Set up Go
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version: stable
+
+    - name: Run govulncheck
+      run: go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...
+
+  # The latest release keeps the standard library and modules it was built with, so new vulnerabilities in them
+  # aren't found by scanning main
+  release:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version: stable
+        # There is no go.sum to key the cache on
+        cache: false
+
+    - name: Download the latest release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh release download --repo "$GITHUB_REPOSITORY" --pattern gonfig_Linux_x86_64.tar.gz
+        tar xzf gonfig_Linux_x86_64.tar.gz gonfig
+
+    # Reads the Go version and module versions embedded in the binary
+    - name: Run govulncheck
+      run: go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" -mode=binary gonfig
