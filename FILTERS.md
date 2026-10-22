@@ -43,6 +43,15 @@ $ V=abc gonfig value '${V | upper'
 Error: unterminated placeholder "${V | upper", the closing } is missing
 ```
 
+To write a literal `${`, double the dollar sign: `$${` is written as `${`, and the text after it is not processed, like in docker compose.
+Each `$$` directly before a `{` stands for one `$`, so `$$${NAME}` is a `$` followed by the value.
+Dollar signs that are not followed by a `{` are kept as they are:
+
+```console
+$ NAME=gonfig gonfig value '$${NAME} is ${NAME}, $$${NAME} costs $$5'
+${NAME} is gonfig, $gonfig costs $$5
+```
+
 ## Order of operations
 
 Every placeholder is resolved in the following steps:
@@ -742,5 +751,5 @@ db1,db2,db3
 - **Missing variables are empty:** A variable that is not set is replaced by an empty string without an error, unless [`fail-on-missing`](#missing-variables) is enabled.
 - **Types in config files:** Processed values are strings unless a filter like `to_int` converts them, see [types](#types).
 - **YAML flow collections:** Within `[...]` or `{...}` an unquoted `${...}` is invalid YAML. Quote it, e.g. `hosts: ["${HOST_A}", "${HOST_B}"]`.
-- **Plain text files:** Every `${...}` is treated as a placeholder, including shell variables that were meant to be expanded by the shell later.
+- **Plain text files:** Every `${...}` is treated as a placeholder, including shell variables that were meant to be expanded by the shell later. Write those as `$${...}`, see [placeholder syntax](#placeholder-syntax).
 - **No nesting:** Placeholders cannot be nested, `${A_${B}}` does not work.

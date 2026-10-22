@@ -343,3 +343,78 @@ placeholder template "db_host": define either env or value, not both
 placeholder template "db_url": unknown placeholder template "db_hots" in value
 filter templates refer to each other in a cycle: loop_a -> loop_b -> loop_a
 ---
+
+[TestEscapeSnapshots/yaml - 1]
+environment:
+NAME="gonfig"
+
+file (config.yaml):
+escaped: $${NAME}
+mixed: $${NAME} is ${NAME}
+dollar: $$${NAME}
+$${NAME}: keys are unescaped as well
+
+result:
+escaped: ${NAME}
+mixed: ${NAME} is gonfig
+dollar: $gonfig
+${NAME}: keys are unescaped as well
+---
+
+[TestEscapeSnapshots/json - 1]
+environment:
+NAME="gonfig"
+
+file (config.json):
+{"escaped": "$${NAME}", "mixed": "$${NAME} is ${NAME}", "$${NAME}": "keys are unescaped as well"}
+
+result:
+{
+  "escaped": "${NAME}",
+  "mixed": "${NAME} is gonfig",
+  "${NAME}": "keys are unescaped as well"
+}
+---
+
+[TestEscapeSnapshots/xml - 1]
+environment:
+NAME="gonfig"
+
+file (config.xml):
+<app name="$${NAME}"><text>$${NAME} is ${NAME}</text><script><![CDATA[echo "$${NAME}"]]></script></app>
+
+result:
+<app name="${NAME}"><text>${NAME} is gonfig</text><script><![CDATA[echo "${NAME}"]]></script></app>
+---
+
+[TestEscapeSnapshots/properties - 1]
+environment:
+NAME="gonfig"
+
+file (config.properties):
+spring.name=$${NAME}
+name=${NAME}
+
+result:
+spring.name = ${NAME}
+name = gonfig
+---
+
+[TestEscapeSnapshots/plain_text - 1]
+environment:
+NAME="gonfig"
+
+file (config.plain):
+#!/bin/sh
+# $$ and $NAME are no placeholders
+echo "$${NAME:-default} $$ $NAME"
+name="${NAME}"
+location / { proxy_set_header Host $host; set $x "$${host}"; }
+
+result:
+#!/bin/sh
+# $$ and $NAME are no placeholders
+echo "${NAME:-default} $$ $NAME"
+name="gonfig"
+location / { proxy_set_header Host $host; set $x "${host}"; }
+---

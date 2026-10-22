@@ -296,6 +296,19 @@ func TestValueTemplateWithEmptyPlaceholder(t *testing.T) {
 	assert.Equal(t, "a${}b", result)
 }
 
+// TestValueTemplateWithEscapedPlaceholder checks that escaped placeholders within the value of a template
+// are neither validated nor processed, but written as "${"
+func TestValueTemplateWithEscapedPlaceholder(t *testing.T) {
+	t.Setenv("TPL_ESCAPE", "x")
+	setTemplates(t, config.Templates{Placeholders: map[string]config.PlaceholderTemplate{
+		"literal": {Value: "$${@missing | uper} ${TPL_ESCAPE}"},
+	}})
+
+	result, err := ProcessValue("${@literal}")
+	assert.NoError(t, err)
+	assert.Equal(t, "${@missing | uper} x", result)
+}
+
 // TestFailOnMissing checks which placeholders fail for missing variables when enabled, depending on the defaults they provide
 func TestFailOnMissing(t *testing.T) {
 	setTemplates(t, config.Templates{
@@ -352,4 +365,5 @@ func TestTemplateReferences(t *testing.T) {
 	assert.Equal(t, []string{"@db_url", "@secret", "@clean"}, TemplateReferences("${@db_url}?p=${PASSWORD | @secret | upper | @clean} ${@db_url}"))
 	assert.Empty(t, TemplateReferences("${PLAIN | trim} text"))
 	assert.Empty(t, TemplateReferences("no placeholders"))
+	assert.Equal(t, []string{"@clean"}, TemplateReferences("$${@db_url} $$${X | @clean}"))
 }
