@@ -1,0 +1,85 @@
+name: govulncheck
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  # Vulnerabilities are published without a change in this repository
+  schedule:
+    - cron: '23 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # renovate: datasource=go depName=golang.org/x/vuln
+  GOVULNCHECK_VERSION: v1.9.0
+
+jobs:
+  # Fails only if gonfig calls vulnerable code. Vulnerabilities in imported packages and required modules
+  # that aren't called are only reported.
+  source:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    # The standard library is checked as well, so use the Go version the releases are built with
+    - name: Set up Go
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version: stable
+
+    - name: Run govulncheck
+      run: go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...
+
+  # The latest release keeps the standard library and modules it was built with, so new vulnerabilities in them
+  # aren't found by scanning main. Its source is scanned instead of the binary, since -mode=binary has no call
+  # graph and also reports vulnerable symbols that aren't called.
+  release:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version: stable
+        # The cache is keyed on go.sum, which isn't checked out yet
+        cache: false
+
+    # Built with the stable Go, since older toolchains may be too old to build govulncheck
+    - name: Install govulncheck
+      run: go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
+
+    - name: Find the latest release and its Go version
+      id: release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
+        gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern gonfig_Linux_x86_64.tar.gz --dir "$RUNNER_TEMP"
+        tar xzf "$RUNNER_TEMP/gonfig_Linux_x86_64.tar.gz" -C "$RUNNER_TEMP" gonfig
+        # Releases are built with the Go that was stable then, which the binary records, e.g. go1.27.3
+        echo "tag=$tag" >> "$GITHUB_OUTPUT"
+        echo "go-version=$(go version "$RUNNER_TEMP/gonfig" | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+    - name: Checkout the release
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: ${{ steps.release.outputs.tag }}
+        persist-credentials: false
+
+    # The go command switches to the toolchain of the release, so its standard library is checked
+    - name: Run govulncheck
+      env:
+        GOTOOLCHAIN: ${{ steps.release.outputs.go-version }}
+      run: |
+        "$(go env GOPATH)/bin/govulncheck" ./...

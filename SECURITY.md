@@ -33,7 +33,7 @@ Not vulnerabilities:
 - Values passed on unchanged after enabling `--allow-unknown-filters`, as documented
 - Anything requiring control of the environment variables, the templates or the `.gonfig.yaml` that gonfig is run with, since these define what is written
 - Harm done by plugins you installed in the plugin directory, since they run with the permissions of gonfig. Plugins loaded although nobody installed them are in scope, though.
-- Vulnerabilities in dependencies without an effect on gonfig. They are updated by Renovate, and alerts are tracked with Dependabot.
+- Vulnerabilities in dependencies without an effect on gonfig. They are updated by Renovate, and alerts are tracked with Dependabot. govulncheck checks every change and, daily, the latest release for vulnerable code that gonfig calls, in dependencies and the Go standard library.
 
 ## Verifying releases
 
