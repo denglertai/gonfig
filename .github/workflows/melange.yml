@@ -21,6 +21,7 @@ jobs:
       with:
         # A poisoned cache could alter the released binaries
         cache: false
+        # Only builds melange, which may need a newer Go than gonfig; the apk is built with the go package of Wolfi
         go-version: stable
         
     - name: Set up melange
