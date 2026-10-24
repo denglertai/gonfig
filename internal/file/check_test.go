@@ -92,17 +92,16 @@ func TestCheckEscapes(t *testing.T) {
 		checkDiff(t, general.YAML, content))
 }
 
-// TestCheckUnterminatedParams checks that params without a closing bracket are reported as errors of their entries
+// TestCheckUnterminatedParams checks that params without a closing bracket are reported as errors of their entries.
+// The variables are not read, like for unterminated placeholders, so a missing variable doesn't hide the error.
 func TestCheckUnterminatedParams(t *testing.T) {
-	t.Setenv("CHECK_SET", "value")
-
-	report := checkFile(t, general.YAML, "filter: ${CHECK_SET | default(a}\nnested: ${CHECK_SET | default(${CHECK_OTHER})}\n")
+	report := checkFile(t, general.YAML, "filter: ${CHECK_MISSING | default(a}\nnested: ${CHECK_MISSING | default(${CHECK_OTHER})}\n")
 	assert.Equal(t, []EntryReport{
-		{Path: "filter", Variables: []VariableReport{{Name: "CHECK_SET", Status: VariableSet, HasDefault: true}},
-			Error: `unterminated params "(a" of default, the closing ) is missing`},
-		{Path: "nested", Variables: []VariableReport{{Name: "CHECK_SET", Status: VariableSet, HasDefault: true}},
+		{Path: "filter", Variables: []VariableReport{}, Error: `unterminated params "(a" of default, the closing ) is missing`},
+		{Path: "nested", Variables: []VariableReport{},
 			Error: `unterminated params "(${CHECK_OTHER" of default, the closing ) is missing; params cannot contain placeholders, escape { and } with a backslash`},
 	}, report.Entries)
+	assert.Equal(t, 0, report.MissingVariables())
 	assert.Equal(t, 2, report.Errors())
 	assert.True(t, report.Failed())
 }

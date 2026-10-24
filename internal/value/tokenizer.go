@@ -385,15 +385,19 @@ func parseFilters(content string) []filter.Filter {
 		return []filter.Filter{}
 	}
 
+	// Invalid steps fail before the variable is read, so the error isn't hidden by a missing variable with fail-on-missing
+	for _, step := range steps {
+		if step.err != nil {
+			return []filter.Filter{filter.NewErrorFilter(step.err)}
+		}
+	}
+
 	return append(sourceFilters(steps[0], chainHasDefault(steps[1:])), chainFilters(steps[1:])...)
 }
 
 // sourceFilters returns the filters reading the value of a placeholder, from either an environment variable or a placeholder template.
 // hasDefault marks chains providing a default, which never fail for a missing variable. Params given for the source are ignored.
 func sourceFilters(step chainStep, hasDefault bool) []filter.Filter {
-	if step.err != nil {
-		return []filter.Filter{filter.NewErrorFilter(step.err)}
-	}
 	if name, isTemplate := templateName(step.name); isTemplate {
 		return []filter.Filter{placeholderTemplateFilter(name, hasDefault)}
 	}
@@ -419,16 +423,12 @@ func chainHasDefault(steps []chainStep) bool {
 	return false
 }
 
-// chainFilters creates the filters of the steps of a filter chain
+// chainFilters creates the filters of the steps of a filter chain. Invalid steps are not expected: placeholders
+// containing them fail in parseFilters, and templates containing them fail validation on startup.
 func chainFilters(steps []chainStep) []filter.Filter {
 	filters := make([]filter.Filter, 0, len(steps))
 
 	for _, step := range steps {
-		if step.err != nil {
-			filters = append(filters, filter.NewErrorFilter(step.err))
-			continue
-		}
-
 		// Filter templates are applied as a single filter, which ignores params
 		if name, isTemplate := templateName(step.name); isTemplate {
 			filters = append(filters, filterTemplateFilter(name))

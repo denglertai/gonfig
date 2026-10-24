@@ -452,6 +452,16 @@ func TestProcessValueUnknownFilterWithUnterminatedParams(t *testing.T) {
 	assert.EqualError(t, err, `unterminated params "(a" of not_a_filter, the closing ) is missing`)
 }
 
+// TestProcessValueUnterminatedParamsWithFailOnMissing checks that unterminated params are reported instead of
+// a missing variable, since the variable is not read
+func TestProcessValueUnterminatedParamsWithFailOnMissing(t *testing.T) {
+	filter.SetFailOnMissing(true)
+	t.Cleanup(func() { filter.SetFailOnMissing(false) })
+
+	_, err := ProcessValue("${UNTERMINATED_UNSET | upper(}")
+	assert.EqualError(t, err, `unterminated params "(" of upper, the closing ) is missing`)
+}
+
 // TestProcessValueTerminatedParams checks params ending with escaped backslashes, whose closing bracket is not escaped
 func TestProcessValueTerminatedParams(t *testing.T) {
 	for value, want := range map[string]string{
