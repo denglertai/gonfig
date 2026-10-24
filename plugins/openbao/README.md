@@ -8,7 +8,7 @@ See [PLUGINS.md](../../PLUGINS.md) for how plugins work.
 - [Configuration](#configuration)
 - [Authentication](#authentication)
 - [Errors](#errors)
-- [Build](#build)
+- [Installation](#installation)
 
 ## Usage
 
@@ -127,15 +127,21 @@ Error: filter openbao: failed to connect: no token, set BAO_TOKEN, VAULT_TOKEN o
 
 `gonfig config check` runs the filter as well, so it reads the secrets and reports these errors, while the [diff](../../README.md#showing-the-changes) masks the secrets.
 
-## Build
+## Installation
 
-Within this directory:
+The plugin is released with gonfig, see [installation](../../README.md#plugins-for-secret-managers):
+
+- the release archives `gonfig-plugin-openbao_<OS>_<arch>`, e.g. `gonfig-plugin-openbao_Linux_x86_64.tar.gz`
+- the apk `gonfig-plugin-openbao`, which installs gonfig as well
+- the container image `ghcr.io/denglertai/gonfig`, which contains the plugin
+
+The packages and the image install the plugin into `/usr/libexec/gonfig/plugins`, which gonfig searches by default. Binaries from the archives go there as well, or into a directory set with `--plugin-path`.
+
+To build the plugin from source, run within this directory:
 
 ```console
 $ go build -o gonfig-plugin-openbao .
 ```
-
-Copy the binary into a plugin directory, e.g. `/usr/libexec/gonfig/plugins`, which gonfig searches by default.
 
 The tests include integration tests against a dev server, which run if `TEST_OPENBAO_ADDR` and `TEST_OPENBAO_TOKEN` are set:
 

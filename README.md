@@ -112,6 +112,27 @@ $ gh attestation verify oci://ghcr.io/denglertai/gonfig:VERSION --repo denglerta
 $ gh attestation verify gonfig_Linux_x86_64.tar.gz --repo denglertai/gonfig
 ```
 
+### Plugins for secret managers
+
+The [plugins for secret managers](./PLUGINS.md#plugins-for-secret-managers) are released with gonfig:
+
+- **Release archives:** `gonfig-plugin-openbao` and `gonfig-plugin-azure-keyvault` for Linux, macOS and Windows, e.g. `gonfig-plugin-openbao_Linux_x86_64.tar.gz`. Unpack the binary into `/usr/libexec/gonfig/plugins`, which gonfig searches by default on Linux and macOS, or into another directory set with `--plugin-path`.
+- **apk:** each plugin is a package of its own, which installs into `/usr/libexec/gonfig/plugins` and installs gonfig as well:
+  ```bash
+  $ apk add gonfig-plugin-openbao gonfig-plugin-azure-keyvault
+  ```
+  With apko, add the plugin packages to `contents.packages`.
+- **Container image:** `ghcr.io/denglertai/gonfig` contains both plugins in `/usr/libexec/gonfig/plugins`. The plugins are statically linked, so they run in any image. Copy them together with gonfig in a multi-stage build:
+  ```dockerfile
+  FROM ghcr.io/denglertai/gonfig:VERSION AS gonfig
+
+  FROM eclipse-temurin:21-jre
+  COPY --from=gonfig /usr/bin/gonfig /usr/bin/gonfig
+  COPY --from=gonfig /usr/libexec/gonfig/plugins /usr/libexec/gonfig/plugins
+  ```
+
+The plugin archives and apks have a build provenance like gonfig's, e.g. `gh attestation verify gonfig-plugin-openbao_Linux_x86_64.tar.gz --repo denglertai/gonfig`.
+
 ## Quick start
 
 1. [Install](#installation) gonfig.
