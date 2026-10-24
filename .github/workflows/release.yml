@@ -138,6 +138,8 @@ jobs:
           subject-path: |
             dist/gonfig_*.tar.gz
             dist/gonfig_*.zip
+            dist/gonfig-plugin-*.tar.gz
+            dist/gonfig-plugin-*.zip
 
   build-macos:
     needs: goreleaser
