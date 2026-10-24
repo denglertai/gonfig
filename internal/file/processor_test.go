@@ -191,7 +191,7 @@ func TestProcessKeepsFormat(t *testing.T) {
 		// The JSON parser rejects a BOM, so it is removed before parsing
 		{desc: "json with BOM", fileType: general.JSON, content: bom + "{\"a\": \"${FORMAT_TEST}\"}\r\n", want: bom + "{\r\n  \"a\": \"value\"\r\n}\r\n"},
 		{desc: "xml", fileType: general.XML, content: bom + "<a>\r\n  <b x=\"${FORMAT_TEST}\">${FORMAT_TEST}</b>\r\n</a>\r\n", want: bom + "<a>\r\n  <b x=\"value\">value</b>\r\n</a>\r\n"},
-		{desc: "properties", fileType: general.PROPERTIES, content: bom + "a=${FORMAT_TEST}\r\nb=2\r\n", want: bom + "a = value\r\nb = 2\r\n"},
+		{desc: "properties", fileType: general.PROPERTIES, content: bom + "a=${FORMAT_TEST}\r\nb=2\r\n", want: bom + "a=value\r\nb=2\r\n"},
 		{desc: "plain", fileType: general.PLAIN, content: bom + "a ${FORMAT_TEST}\r\nb\nc\r\n", want: bom + "a value\r\nb\nc\r\n"},
 		{desc: "lf", fileType: general.YAML, content: "a: ${FORMAT_TEST}\nb: 2\n", want: "a: value\nb: 2\n"},
 		{desc: "single line", fileType: general.YAML, content: "a: ${FORMAT_TEST}", want: "a: value\n"},

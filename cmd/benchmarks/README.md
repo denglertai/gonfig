@@ -109,10 +109,10 @@ Measured with the gonfig binary, `/usr/bin/time` and files with two placeholders
 | yaml | 0.29 s | 2.15 s | 8.32 s | 154 MiB | 906 MiB | 3,543 MiB |
 | json | 0.08 s | 0.60 s | 2.43 s | 44 MiB | 298 MiB | 987 MiB |
 | xml | 0.07 s | 0.56 s | 2.31 s | 36 MiB | 199 MiB | 748 MiB |
-| properties | 0.13 s | 1.05 s | 4.63 s | 29 MiB | 127 MiB | 487 MiB |
+| properties | 0.06 s | 0.43 s | 1.81 s | 28 MiB | 103 MiB | 359 MiB |
 | plain | 0.02 s | 0.19 s | 0.76 s | 26 MiB | 114 MiB | 380 MiB |
 
-The peak memory of the process is a multiple of the file size: about 110 times for YAML and 12 to 31 times for the other file types.
+The peak memory of the process is a multiple of the file size: about 110 times for YAML and 11 to 31 times for the other file types.
 Config files are usually much smaller than 1 MiB, but very large YAML files may exceed the memory limit of a container.
 
 ## Fragments
@@ -170,7 +170,9 @@ The plugin is started once per run of gonfig, so its startup time is added once,
 - **YAML encoding:** About 60% of the memory allocated for YAML files is allocated by the encoder of `go.yaml.in/yaml/v3`, whose event queue grows with the size of the document instead of being reused.
   This is also the main reason for the high peak memory of YAML files, see [scaling](#scaling).
   The archived `gopkg.in/yaml.v3`, which gonfig used before, has the same implementation and performance. Fixing it requires changes to the library.
-- **Properties:** Most of the time is spent reading and writing by `github.com/magiconair/properties`.
+- **Properties:** Most of the time was spent reading and writing by `github.com/magiconair/properties`, which rewrote the whole file.
+  Since [#315](https://github.com/denglertai/gonfig/issues/315), properties files are parsed line by line and unchanged lines are written as read, which takes 72 to 86% less time,
+  50 to 67% less allocated memory and 82 to 93% fewer allocations than with the library (1 MiB, Go 1.27.3). The scaling table above was measured afterwards.
 - **Parsing filters:** Parsing the content of a placeholder makes up about half of the cost of a placeholder, mostly allocations of the tokenizer, but only 10 to 15% of processing a file with placeholders.
   Caching parsed placeholders would only help for placeholders used repeatedly, a dedicated parser would avoid the allocations in general.
 - **Streaming:** Files are read into memory as a whole, because all supported libraries parse complete documents and gonfig must not write any output if a value fails to process.

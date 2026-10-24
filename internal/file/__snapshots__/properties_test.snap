@@ -1,26 +1,24 @@
 
 [TestPropertiesFileHandler - 1]
 # Database Configuration
-database.url = jdbc:mysql://localhost:3306/mydatabase
-database.username = test
-database.password = password
-port = 9000
+database.url=jdbc:mysql://localhost:3306/mydatabase
+database.username=test
+database.password=password
+port= 9000
 
 # Server Configuration
-server.host = 127.0.0.1
-server.port = 8080
-
+server.host=127.0.0.1
+server.port=8080
 ---
 
 [TestPropertiesFileHandlerEdit - 1]
 # Database Configuration
-database.url = jdbc:mysql://localhost:3306/mydatabase
-database.username = test
-database.password = password
-port = 9000
+database.url=jdbc:mysql://localhost:3306/mydatabase
+database.username=test
+database.password=password
+port= 9000
 
 # Server Configuration
-server.host = 127.0.0.1
-server.port = 12345
-
+server.host=127.0.0.1
+server.port=12345
 ---

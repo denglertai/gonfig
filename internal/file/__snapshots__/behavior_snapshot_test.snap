@@ -90,9 +90,9 @@ whole=${WHOLE | to_float}
 enabled=${ENABLED | to_bool}
 
 result:
-port = 8080
-whole = 2
-enabled = true
+port=8080
+whole=2
+enabled=true
 ---
 
 [TestTypedValueSnapshots/error_for_an_invalid_number - 1]
@@ -396,8 +396,8 @@ spring.name=$${NAME}
 name=${NAME}
 
 result:
-spring.name = ${NAME}
-name = gonfig
+spring.name=${NAME}
+name=gonfig
 ---
 
 [TestEscapeSnapshots/plain_text - 1]

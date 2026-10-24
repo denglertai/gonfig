@@ -80,6 +80,7 @@ func TestTypedValuesJson(t *testing.T) {
 	}, result)
 }
 
+// TestTypedValuesWithoutTypeSupport checks that non-string results are written as text by file types without types
 func TestTypedValuesWithoutTypeSupport(t *testing.T) {
 	testCases := []struct {
 		fileType general.FileType
@@ -87,7 +88,7 @@ func TestTypedValuesWithoutTypeSupport(t *testing.T) {
 		want     string
 	}{
 		{general.XML, `<r a="${TYPED_PORT | to_int}"><b>${TYPED_ON | to_bool}</b></r>`, `<r a="8080"><b>true</b></r>`},
-		{general.PROPERTIES, "port=${TYPED_PORT | to_int}\n", "port = 8080\n"},
+		{general.PROPERTIES, "port=${TYPED_PORT | to_int}\n", "port=8080\n"},
 		{general.PLAIN, "port ${TYPED_PORT | to_int}\n", "port 8080\n"},
 	}
 	for _, tC := range testCases {
