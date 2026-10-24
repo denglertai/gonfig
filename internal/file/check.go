@@ -130,7 +130,7 @@ func (fp *FileProcessor) checkWith(handler ConfigFileHandler) (*CheckReport, err
 	if fp.Diff {
 		// Entries with errors keep their placeholders, so the diff shows the changes of all other entries
 		var processed bytes.Buffer
-		if err := handler.Write(&processed); err != nil {
+		if err := fp.write(handler, &processed); err != nil {
 			fp.report.Error = fmt.Sprintf("failed to write %s: %v", fp.FileName, err)
 			return fp.report, nil
 		}

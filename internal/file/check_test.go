@@ -92,6 +92,15 @@ func TestCheckEscapes(t *testing.T) {
 		checkDiff(t, general.YAML, content))
 }
 
+// TestCheckDiffKeepsFormat checks that the diff of a file with CRLF line endings only shows the lines that change
+func TestCheckDiffKeepsFormat(t *testing.T) {
+	t.Setenv("CHECK_SET", "value")
+
+	// The BOM is part of the first line on both sides
+	assert.Equal(t, "@@ -1,2 +1,2 @@\n-\ufeffa: ${CHECK_SET}\r\n+\ufeffa: '***'\r\n b: 2\r\n",
+		checkDiff(t, general.YAML, "\xEF\xBB\xBFa: ${CHECK_SET}\r\nb: 2\r\n"))
+}
+
 // TestCheckFragments checks that the entries of fragments are reported and errors of fragments are collected
 func TestCheckFragments(t *testing.T) {
 	t.Setenv("CHECK_FRAGMENT", "inner: ${CHECK_INNER}\nnested: ${CHECK_NESTED | fragment}")
