@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"runtime/debug"
 	"slices"
 )
 
@@ -20,6 +21,52 @@ type paramsAcceptor interface {
 	AcceptParams(params map[string]string)
 }
 
+// describer is implemented by filters describing themselves for gonfig plugin list
+type describer interface {
+	Description() string
+}
+
+// paramsDeclarer is implemented by filters declaring the params they accept, which gonfig validates
+type paramsDeclarer interface {
+	Params() []string
+}
+
+// Option sets optional information about the plugin, which gonfig plugin list shows
+type Option func(*Handshake)
+
+// WithVersion sets the version of the plugin, e.g. set with -ldflags "-X main.version=1.2.0" when building it.
+// Without it, or if it is empty, the version of the main module from the build info is used: the version of plugins
+// installed with go install example.com/plugin@v1.2.0, or the pseudo-version Go derives from the commit for builds
+// within a repository, e.g. v0.0.0-20261024211216-12c2cfce85a1, and no version for builds without it ("(devel)").
+func WithVersion(version string) Option {
+	return func(h *Handshake) {
+		if version != "" {
+			h.Version = version
+		}
+	}
+}
+
+// WithDescription sets the description of the plugin, e.g. "Reads secrets from OpenBao and HashiCorp Vault"
+func WithDescription(description string) Option {
+	return func(h *Handshake) {
+		h.Description = description
+	}
+}
+
+// buildVersion returns the version of the main module from the build info, see moduleVersion
+func buildVersion() string {
+	return moduleVersion(debug.ReadBuildInfo())
+}
+
+// moduleVersion returns the version of the main module of the build info, or an empty string without build info and
+// for builds without a version ("(devel)")
+func moduleVersion(info *debug.BuildInfo, ok bool) string {
+	if !ok || info.Main.Version == "(devel)" {
+		return ""
+	}
+	return info.Main.Version
+}
+
 // Serve runs an executable plugin providing the filters: it writes the Handshake and answers requests of gonfig
 // until stdin is closed. The keys of the map are the filter names, the values the filters, which are the same as
 // for the deprecated Go plugins:
@@ -28,29 +75,31 @@ type paramsAcceptor interface {
 //	Process(value any) (any, error)
 //	// Optional: receives the params given in brackets, e.g. encrypt(encoding=base64)
 //	AcceptParams(params map[string]string)
+//	// Optional: describes the filter for gonfig plugin list
+//	Description() string
+//	// Optional: the names of the params in the order of their positions, which gonfig validates like for its
+//	// built-in filters. Filters without it receive any params.
+//	Params() []string
 //
 // Every request works on its own shallow copy of the filter, so params of one usage do not affect another one.
 // Stdout is reserved for the protocol, so anything the filters write to os.Stdout goes to stderr instead.
+// The options set the version and description of the plugin, which gonfig plugin list shows.
 // Serve returns an error if a filter is invalid or the protocol is violated.
-func Serve(filters map[string]any) error {
+func Serve(filters map[string]any, options ...Option) error {
 	out := os.Stdout
 	os.Stdout = os.Stderr
-	return serve(os.Stdin, out, filters)
+	return serve(os.Stdin, out, filters, options...)
 }
 
 // serve answers the requests read from r by writing responses to w, see Serve
-func serve(r io.Reader, w io.Writer, filters map[string]any) error {
-	names := make([]string, 0, len(filters))
-	for name, filter := range filters {
-		if _, ok := filter.(processor); !ok {
-			return fmt.Errorf("filter %s of type %T does not implement Process(value any) (any, error)", name, filter)
-		}
-		names = append(names, name)
+func serve(r io.Reader, w io.Writer, filters map[string]any, options ...Option) error {
+	handshake, err := newHandshake(filters, options...)
+	if err != nil {
+		return err
 	}
-	slices.Sort(names)
 
 	encoder := json.NewEncoder(w)
-	if err := encoder.Encode(Handshake{Protocol: ProtocolVersion, Filters: names}); err != nil {
+	if err := encoder.Encode(handshake); err != nil {
 		return fmt.Errorf("failed to write the handshake: %w", err)
 	}
 
@@ -67,6 +116,41 @@ func serve(r io.Reader, w io.Writer, filters map[string]any) error {
 			return fmt.Errorf("failed to write the response: %w", err)
 		}
 	}
+}
+
+// newHandshake returns the handshake of the plugin: the filters with their descriptions and params, if they provide
+// them, and the version and description of the options
+func newHandshake(filters map[string]any, options ...Option) (Handshake, error) {
+	handshake := Handshake{Protocol: ProtocolVersion, Filters: make([]string, 0, len(filters)), Version: buildVersion()}
+	for name, filter := range filters {
+		if _, ok := filter.(processor); !ok {
+			return Handshake{}, fmt.Errorf("filter %s of type %T does not implement Process(value any) (any, error)", name, filter)
+		}
+		handshake.Filters = append(handshake.Filters, name)
+
+		var info FilterInfo
+		described, isDescriber := filter.(describer)
+		if isDescriber {
+			info.Description = described.Description()
+		}
+		declared, isDeclarer := filter.(paramsDeclarer)
+		if isDeclarer {
+			// An empty list declares that the filter accepts no params, unlike nil
+			info.Params = append([]string{}, declared.Params()...)
+		}
+		if isDescriber || isDeclarer {
+			if handshake.FilterInfo == nil {
+				handshake.FilterInfo = map[string]FilterInfo{}
+			}
+			handshake.FilterInfo[name] = info
+		}
+	}
+	slices.Sort(handshake.Filters)
+
+	for _, option := range options {
+		option(&handshake)
+	}
+	return handshake, nil
 }
 
 // handle processes the value of the request with a copy of the requested filter

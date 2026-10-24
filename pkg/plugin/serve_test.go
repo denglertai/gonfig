@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime/debug"
 	"strings"
 	"testing"
 
@@ -157,4 +158,73 @@ func TestServeStdio(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "{\"protocol\":1,\"filters\":[\"print\"]}\n{\"id\":0,\"value\":\"x\"}\n", string(output))
 	assert.Equal(t, "true", printed)
+}
+
+// describedFilter is a filter with a description and declared params
+type describedFilter struct {
+	funcFilter
+	params []string
+}
+
+// Description describes the filter
+func (describedFilter) Description() string {
+	return "Shows the value"
+}
+
+// Params returns the declared params
+func (f describedFilter) Params() []string {
+	return f.params
+}
+
+// onlyParamsFilter declares params without a description
+type onlyParamsFilter struct {
+	funcFilter
+}
+
+// Params declares no params by returning nil, which is an empty list in the handshake
+func (onlyParamsFilter) Params() []string {
+	return nil
+}
+
+// TestServeHandshakeInfo checks the optional fields of the handshake: version, description and the descriptions and
+// declared params of filters, which are left out for filters without them
+func TestServeHandshakeInfo(t *testing.T) {
+	identity := funcFilter(func(value any) (any, error) { return value, nil })
+	var out bytes.Buffer
+	err := serve(strings.NewReader(""), &out, map[string]any{
+		"described": describedFilter{funcFilter: identity, params: []string{"a", "b"}},
+		"none":      onlyParamsFilter{identity},
+		"plain":     identity,
+	}, WithVersion("1.2.3"), WithDescription("A test plugin"))
+	assert.NoError(t, err)
+	assert.JSONEq(t, `{"protocol":1,"filters":["described","none","plain"],"version":"1.2.3","description":"A test plugin",
+		"filter_info":{"described":{"description":"Shows the value","params":["a","b"]},"none":{"params":[]}}}`, out.String())
+
+	var handshake Handshake
+	assert.NoError(t, json.Unmarshal(out.Bytes(), &handshake))
+	assert.Nil(t, handshake.FilterInfo["plain"].Params, "filters without info accept any params")
+	assert.Equal(t, []string{}, handshake.FilterInfo["none"].Params, "an empty list accepts no params")
+}
+
+// TestWithVersion checks that an empty version keeps the version of the build info
+func TestWithVersion(t *testing.T) {
+	handshake := Handshake{Version: "v1.0.0"}
+	WithVersion("")(&handshake)
+	assert.Equal(t, "v1.0.0", handshake.Version)
+	WithVersion("2.0.0")(&handshake)
+	assert.Equal(t, "2.0.0", handshake.Version)
+}
+
+// TestBuildVersion checks that test binaries, which are development builds, have no version, or a pseudo-version
+// derived from the commit
+func TestBuildVersion(t *testing.T) {
+	version := buildVersion()
+	assert.True(t, version == "" || strings.HasPrefix(version, "v"), version)
+}
+
+// TestModuleVersion checks the version of the main module for builds with and without a version and without build info
+func TestModuleVersion(t *testing.T) {
+	assert.Equal(t, "v1.2.0", moduleVersion(&debug.BuildInfo{Main: debug.Module{Version: "v1.2.0"}}, true))
+	assert.Empty(t, moduleVersion(&debug.BuildInfo{Main: debug.Module{Version: "(devel)"}}, true))
+	assert.Empty(t, moduleVersion(nil, false))
 }
