@@ -7,6 +7,7 @@ Plugins add custom [filters](./FILTERS.md) to gonfig without changing gonfig its
 - [Values and params](#values-and-params)
 - [The dummy plugin](#the-dummy-plugin)
 - [Example: hash filters](#example-hash-filters)
+- [Plugins for secret managers](#plugins-for-secret-managers)
 - [Packaging with melange and apko](#packaging-with-melange-and-apko)
 - [The protocol](#the-protocol)
 - [Migrating from Go plugins](#migrating-from-go-plugins)
@@ -246,6 +247,17 @@ Error: filter hmac_sha256: the param key is required
 
 Since the key is a param, it may contain [escaped](./FILTERS.md#filter-params) special characters, but it is part of the config file.
 To keep the key out of the file, read it from an environment variable in the plugin instead, since plugins inherit gonfig's environment.
+
+## Plugins for secret managers
+
+Plugins reading secrets from secret managers build on [pkg/plugin/secret](./pkg/plugin/secret/), which provides a filter resolving references like `secret/app/db#password` with a `Provider` for the secret manager.
+The variable of a placeholder holds the reference, e.g. `${DB_PASSWORD | openbao}` with `DB_PASSWORD=secret/app/db#password`. The filter:
+
+- connects to the secret manager on its first request, so the plugin starts without credentials and only fails the values using it
+- reads every secret once per run, also if several of its fields are used
+- selects the field after `#`, also of secrets containing a JSON object. Without a field, secrets with fields are returned as a JSON object, e.g. for [fragments](./FILTERS.md#fragments)
+- limits every request to 20 s, or the duration in `GONFIG_SECRET_TIMEOUT`, e.g. `10s`, which has to be shorter than the 30 s gonfig waits for an answer
+- keeps secrets out of its errors, which the `Provider` has to do as well
 
 ## Packaging with melange and apko
 
