@@ -103,6 +103,7 @@ func TestProcess(t *testing.T) {
 		{desc: "field of invalid JSON", value: "broken#password", wantErr: `filter fake: the secret "broken" has no fields, since it doesn't contain a JSON object`},
 		{desc: "missing secret", value: "missing", wantErr: `filter fake: failed to read the secret "missing": not found`},
 		{desc: "empty reference", value: "", wantErr: "filter fake: the reference is empty, e.g. as its variable is not set"},
+		{desc: "field without secret", value: "#password", wantErr: `filter fake: the reference "#password" names no secret before the #`},
 		{desc: "reference of another type", value: 5, wantErr: "filter fake: the reference has to be a string, not int"},
 	}
 	for _, tC := range testCases {
@@ -161,6 +162,30 @@ func TestProcessConnectsLazilyOnce(t *testing.T) {
 	assert.Empty(t, provider.reads)
 }
 
+// TestCacheKey checks that different references and params never share a key, also if they contain the characters
+// separating them
+func TestCacheKey(t *testing.T) {
+	keys := map[string]string{}
+	for desc, tC := range map[string]struct {
+		ref    string
+		params map[string]string
+	}{
+		"value with =":       {ref: "a", params: map[string]string{"a": "b=c"}},
+		"name with =":        {ref: "a", params: map[string]string{"a=b": "c"}},
+		"nul in value":       {ref: "a", params: map[string]string{"x": "1\x00y=2"}},
+		"two params":         {ref: "a", params: map[string]string{"x": "1", "y": "2"}},
+		"reference":          {ref: "a\x001:x1:1"},
+		"reference + params": {ref: "a", params: map[string]string{"x": "1"}},
+		"no params":          {ref: "a"},
+	} {
+		key := cacheKey(tC.ref, tC.params)
+		if other, found := keys[key]; found {
+			t.Errorf("%s and %s share the key %q", desc, other, key)
+		}
+		keys[key] = desc
+	}
+}
+
 // TestProcessDoesNotCacheErrors checks that a failed read is retried by the next request
 func TestProcessDoesNotCacheErrors(t *testing.T) {
 	f, provider := newFake(map[string]any{"a": "1"})
@@ -215,15 +240,21 @@ func TestRequestTimeout(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 5*time.Second, timeout)
 
-	for _, value := range []string{"5", "-1s", "0s"} {
+	t.Setenv(TimeoutEnv, "29s")
+	timeout, err = requestTimeout()
+	assert.NoError(t, err)
+	assert.Equal(t, 29*time.Second, timeout)
+
+	// gonfig stops waiting for the plugin after 30 s, so longer timeouts would never take effect
+	for _, value := range []string{"5", "-1s", "0s", "30s", "1m"} {
 		t.Setenv(TimeoutEnv, value)
 		_, err = requestTimeout()
-		assert.EqualError(t, err, `invalid GONFIG_SECRET_TIMEOUT "`+value+`", use a positive duration like 10s`)
+		assert.EqualError(t, err, `invalid GONFIG_SECRET_TIMEOUT "`+value+`", use a positive duration below 30s like 10s`)
 	}
 
 	f, _ := newFake(map[string]any{"a": "1"})
 	_, err = process(f, nil, "a")
-	assert.EqualError(t, err, `filter fake: invalid GONFIG_SECRET_TIMEOUT "0s", use a positive duration like 10s`)
+	assert.EqualError(t, err, `filter fake: invalid GONFIG_SECRET_TIMEOUT "1m", use a positive duration below 30s like 10s`)
 }
 
 // TestProcessInvalidSecrets checks the errors for secrets of unsupported types and secrets that cannot be encoded

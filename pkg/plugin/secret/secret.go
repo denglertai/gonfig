@@ -51,6 +51,10 @@ const TimeoutEnv = "GONFIG_SECRET_TIMEOUT"
 // DefaultTimeout is the time a request may take if TimeoutEnv is not set
 const DefaultTimeout = 20 * time.Second
 
+// pluginTimeout is the time gonfig waits for an answer of a plugin, which a timeout has to stay below, so its error
+// reaches the user instead of gonfig stopping the plugin
+const pluginTimeout = 30 * time.Second
+
 // Filter resolves references to secrets with a Provider. It is served with plugin.Serve, which works on a copy of the
 // filter per request; the copies share the connection and the cache.
 type Filter struct {
@@ -97,6 +101,9 @@ func (f *Filter) Process(value any) (any, error) {
 	}
 
 	ref, field, hasField := strings.Cut(reference, "#")
+	if ref == "" {
+		return nil, fmt.Errorf("filter %s: the reference %q names no secret before the #", f.name, reference)
+	}
 	secret, err := f.read(ref)
 	if err != nil {
 		return nil, err
@@ -214,12 +221,15 @@ func format(value any) (string, error) {
 }
 
 // cacheKey returns the key of a secret in the cache: the reference without field and the params, which may select
-// another secret, e.g. a version
+// another secret, e.g. a version. Every part is prefixed by its length, so different references and params never
+// result in the same key, whatever characters they contain.
 func cacheKey(ref string, params map[string]string) string {
 	var key strings.Builder
-	key.WriteString(ref)
+	part := func(s string) { fmt.Fprintf(&key, "%d:%s", len(s), s) }
+	part(ref)
 	for _, name := range slices.Sorted(maps.Keys(params)) {
-		fmt.Fprintf(&key, "\x00%s=%s", name, params[name])
+		part(name)
+		part(params[name])
 	}
 	return key.String()
 }
@@ -231,8 +241,8 @@ func requestTimeout() (time.Duration, error) {
 		return DefaultTimeout, nil
 	}
 	timeout, err := time.ParseDuration(value)
-	if err != nil || timeout <= 0 {
-		return 0, fmt.Errorf("invalid %s %q, use a positive duration like 10s", TimeoutEnv, value)
+	if err != nil || timeout <= 0 || timeout >= pluginTimeout {
+		return 0, fmt.Errorf("invalid %s %q, use a positive duration below %s like 10s", TimeoutEnv, value, pluginTimeout)
 	}
 	return timeout, nil
 }
