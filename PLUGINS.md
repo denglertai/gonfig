@@ -284,7 +284,7 @@ The plugins build on [pkg/plugin/secret](./pkg/plugin/secret/), so they behave t
   ```
 - **Prefer files or workload identities to credentials in the environment**, which other processes of the same user may read: e.g. `GONFIG_OPENBAO_TOKEN_FILE` or Kubernetes authentication for OpenBao, and workload or managed identity for Azure.
 - **Secrets travel only through the pipe** between gonfig and the plugin. The plugins never put them into errors, and gonfig leaves processed values out of its logs unless [`log-values`](./README.md#configuration) is enabled for debugging.
-- **The image contains all plugins**, and gonfig starts every plugin it finds, so it runs code for every secret manager even if only one is used. Plugins don't contact a secret manager before a placeholder uses them.
+- **gonfig starts every plugin it finds**, so installed plugins run even if no placeholder uses them. They don't contact a secret manager before a placeholder uses them.
 
 ### Writing a plugin for another secret manager
 

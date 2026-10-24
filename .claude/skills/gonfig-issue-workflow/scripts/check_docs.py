@@ -11,6 +11,7 @@ Blocks nested in list items may be indented. bcrypt hashes are compared by their
 
 Usage:
   check_docs.py FILE --bin DIR [--workdir DIR] [--config FILE | --config-from HEADING] [--replace OLD=NEW ...]
+                [--plugin-path DIR]
 
   --bin       directory containing the gonfig binary to test, e.g. a fresh `go build -o DIR/gonfig .`
   --workdir   directory to run the commands in, a temporary directory by default
@@ -18,6 +19,7 @@ Usage:
   --config-from  heading of FILE whose first yaml block becomes WORKDIR/.gonfig.yaml,
                  e.g. "## Templates" for the template examples of FILTERS.md
   --replace   replaces paths within commands, e.g. /run/secrets=WORKDIR for documented absolute paths
+  --plugin-path  directory of the plugins used by the examples, e.g. built secret plugins; no plugins otherwise
 
 Commands using placeholder paths like /path/to/file.xml are expected to fail and can be ignored.
 """

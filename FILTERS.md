@@ -720,7 +720,8 @@ Use an absolute path or one starting with `./` or `../` (or `.\` or `..\` on Win
 
 ### Read secrets from secret managers
 
-The [plugins for secret managers](./PLUGINS.md#plugins-for-secret-managers) read secrets from OpenBao, HashiCorp Vault and Azure Key Vault. The variable holds the reference to the secret:
+The [plugins for secret managers](./PLUGINS.md#plugins-for-secret-managers) read secrets from OpenBao, HashiCorp Vault and Azure Key Vault. The variable holds the reference to the secret.
+This example uses a local dev server (`bao server -dev -dev-root-token-id=root`), whose root token and plain HTTP are only meant for development. Use an `https://` address and a token with a policy limited to the secrets needed, or AppRole or Kubernetes authentication, for real servers, see the [OpenBao plugin](./plugins/openbao/#authentication):
 
 ```console
 $ export BAO_ADDR=http://127.0.0.1:8200 BAO_TOKEN=root
