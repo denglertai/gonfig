@@ -101,6 +101,20 @@ func TestCheckDiffKeepsFormat(t *testing.T) {
 		checkDiff(t, general.YAML, "\xEF\xBB\xBFa: ${CHECK_SET}\r\nb: 2\r\n"))
 }
 
+// TestCheckUnterminatedParams checks that params without a closing bracket are reported as errors of their entries.
+// The variables are not read, like for unterminated placeholders, so a missing variable doesn't hide the error.
+func TestCheckUnterminatedParams(t *testing.T) {
+	report := checkFile(t, general.YAML, "filter: ${CHECK_MISSING | default(a}\nnested: ${CHECK_MISSING | default(${CHECK_OTHER})}\n")
+	assert.Equal(t, []EntryReport{
+		{Path: "filter", Variables: []VariableReport{}, Error: `unterminated params "(a" of default, the closing ) is missing`},
+		{Path: "nested", Variables: []VariableReport{},
+			Error: `unterminated params "(${CHECK_OTHER" of default, the closing ) is missing; params cannot contain placeholders, escape { and } with a backslash`},
+	}, report.Entries)
+	assert.Equal(t, 0, report.MissingVariables())
+	assert.Equal(t, 2, report.Errors())
+	assert.True(t, report.Failed())
+}
+
 // TestCheckFragments checks that the entries of fragments are reported and errors of fragments are collected
 func TestCheckFragments(t *testing.T) {
 	t.Setenv("CHECK_FRAGMENT", "inner: ${CHECK_INNER}\nnested: ${CHECK_NESTED | fragment}")

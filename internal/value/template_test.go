@@ -182,6 +182,36 @@ func TestSetTemplatesValidation(t *testing.T) {
 			wantErr:   `placeholder template "url": unterminated placeholder "${X | upper", the closing } is missing in value`,
 		},
 		{
+			desc:      "unterminated params in filter template",
+			templates: config.Templates{Filters: map[string]config.FilterTemplate{"secret": {Filters: "trim | replace(a,b"}}},
+			wantErr:   `filter template "secret": unterminated params "(a,b" of replace, the closing ) is missing`,
+		},
+		{
+			desc:      "unterminated params in placeholder template",
+			templates: config.Templates{Placeholders: map[string]config.PlaceholderTemplate{"host": {Env: "X", Filters: "default(a"}}},
+			wantErr:   `placeholder template "host": unterminated params "(a" of default, the closing ) is missing`,
+		},
+		{
+			desc:      "unterminated params in value",
+			templates: config.Templates{Placeholders: map[string]config.PlaceholderTemplate{"url": {Value: "jdbc:${X | default(a}"}}},
+			wantErr:   `placeholder template "url": unterminated params "(a" of default, the closing ) is missing in value`,
+		},
+		{
+			desc:      "unterminated params of the source in value",
+			templates: config.Templates{Placeholders: map[string]config.PlaceholderTemplate{"url": {Value: "jdbc:${X(a}"}}},
+			wantErr:   `placeholder template "url": unterminated params "(a" of X, the closing ) is missing in value`,
+		},
+		{
+			desc:      "params without a name in filter template",
+			templates: config.Templates{Filters: map[string]config.FilterTemplate{"secret": {Filters: "(a) | upper"}}},
+			wantErr:   `filter template "secret": params "(a)" without a name in front of them`,
+		},
+		{
+			desc:      "params without a name in value",
+			templates: config.Templates{Placeholders: map[string]config.PlaceholderTemplate{"url": {Value: "jdbc:${(a}"}}},
+			wantErr:   `placeholder template "url": params "(a" without a name in front of them in value`,
+		},
+		{
 			desc:      "unknown param in filter template",
 			templates: config.Templates{Filters: map[string]config.FilterTemplate{"secret": {Filters: "trim(both) | base64"}}},
 			wantErr:   `filter template "secret": filter trim accepts no params, but got 1`,
