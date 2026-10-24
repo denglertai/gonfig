@@ -92,6 +92,15 @@ func TestCheckEscapes(t *testing.T) {
 		checkDiff(t, general.YAML, content))
 }
 
+// TestCheckDiffKeepsFormat checks that the diff of a file with CRLF line endings only shows the lines that change
+func TestCheckDiffKeepsFormat(t *testing.T) {
+	t.Setenv("CHECK_SET", "value")
+
+	// The BOM is part of the first line on both sides
+	assert.Equal(t, "@@ -1,2 +1,2 @@\n-\ufeffa: ${CHECK_SET}\r\n+\ufeffa: '***'\r\n b: 2\r\n",
+		checkDiff(t, general.YAML, "\xEF\xBB\xBFa: ${CHECK_SET}\r\nb: 2\r\n"))
+}
+
 // TestCheckUnterminatedParams checks that params without a closing bracket are reported as errors of their entries.
 // The variables are not read, like for unterminated placeholders, so a missing variable doesn't hide the error.
 func TestCheckUnterminatedParams(t *testing.T) {

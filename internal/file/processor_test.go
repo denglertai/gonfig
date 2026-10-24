@@ -10,6 +10,7 @@ import (
 	"path"
 	"strings"
 	"testing"
+	"testing/iotest"
 
 	"github.com/denglertai/gonfig/internal/general"
 	"github.com/denglertai/gonfig/internal/logging"
@@ -156,4 +157,147 @@ func TestProcessedValuesAreLoggedIfEnabled(t *testing.T) {
 	assert.NoError(t, NewFileProcessor(file, general.Undefined, io.Discard).Process())
 
 	assert.Contains(t, logs.String(), `"entry":"plain","type":"string","value":"visible-value"`)
+}
+
+// processContent processes the content as a file of the given type and returns the output
+func processContent(t *testing.T, fileType general.FileType, content string) string {
+	t.Helper()
+
+	file := path.Join(t.TempDir(), "config."+string(fileType))
+	assert.NoError(t, os.WriteFile(file, []byte(content), 0o644))
+
+	var output bytes.Buffer
+	assert.NoError(t, NewFileProcessor(file, fileType, &output).Process())
+	return output.String()
+}
+
+// TestProcessKeepsFormat checks that the BOM and CRLF line endings of a file are written as read for every file type
+func TestProcessKeepsFormat(t *testing.T) {
+	t.Setenv("FORMAT_TEST", "value")
+	t.Setenv("FORMAT_FRAGMENT", "x: 1\ny: 2")
+	bom := "\xEF\xBB\xBF"
+
+	testCases := []struct {
+		desc     string
+		fileType general.FileType
+		content  string
+		want     string
+	}{
+		{desc: "yaml", fileType: general.YAML, content: "a: ${FORMAT_TEST}\r\nb: |\r\n  l1\r\n  l2\r\n", want: "a: value\r\nb: |\r\n  l1\r\n  l2\r\n"},
+		{desc: "yaml with BOM", fileType: general.YAML, content: bom + "a: ${FORMAT_TEST}\r\n", want: bom + "a: value\r\n"},
+		{desc: "yaml with BOM and LF", fileType: general.YAML, content: bom + "a: ${FORMAT_TEST}\n", want: bom + "a: value\n"},
+		{desc: "yaml fragment", fileType: general.YAML, content: "a: ${FORMAT_FRAGMENT | fragment}\r\n", want: "a:\r\n  x: 1\r\n  y: 2\r\n"},
+		{desc: "json", fileType: general.JSON, content: "{\r\n  \"a\": \"${FORMAT_TEST}\"\r\n}\r\n", want: "{\r\n  \"a\": \"value\"\r\n}\r\n"},
+		// The JSON parser rejects a BOM, so it is removed before parsing
+		{desc: "json with BOM", fileType: general.JSON, content: bom + "{\"a\": \"${FORMAT_TEST}\"}\r\n", want: bom + "{\r\n  \"a\": \"value\"\r\n}\r\n"},
+		{desc: "xml", fileType: general.XML, content: bom + "<a>\r\n  <b x=\"${FORMAT_TEST}\">${FORMAT_TEST}</b>\r\n</a>\r\n", want: bom + "<a>\r\n  <b x=\"value\">value</b>\r\n</a>\r\n"},
+		{desc: "properties", fileType: general.PROPERTIES, content: bom + "a=${FORMAT_TEST}\r\nb=2\r\n", want: bom + "a = value\r\nb = 2\r\n"},
+		{desc: "plain", fileType: general.PLAIN, content: bom + "a ${FORMAT_TEST}\r\nb\nc\r\n", want: bom + "a value\r\nb\nc\r\n"},
+		{desc: "lf", fileType: general.YAML, content: "a: ${FORMAT_TEST}\nb: 2\n", want: "a: value\nb: 2\n"},
+		{desc: "single line", fileType: general.YAML, content: "a: ${FORMAT_TEST}", want: "a: value\n"},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			assert.Equal(t, tC.want, processContent(t, tC.fileType, tC.content))
+		})
+	}
+}
+
+// TestProcessDetectsFormatOnEveryRead checks that a processor used again detects the format of the file anew
+func TestProcessDetectsFormatOnEveryRead(t *testing.T) {
+	file := path.Join(t.TempDir(), "config.yaml")
+	assert.NoError(t, os.WriteFile(file, []byte("\xEF\xBB\xBFa: 1\r\n"), 0o644))
+
+	var output bytes.Buffer
+	fp := NewFileProcessor(file, general.YAML, &output)
+	assert.NoError(t, fp.Process())
+	assert.Equal(t, "\xEF\xBB\xBFa: 1\r\n", output.String())
+
+	assert.NoError(t, os.WriteFile(file, []byte("a: 1"), 0o644))
+	output.Reset()
+	assert.NoError(t, fp.Process())
+	assert.Equal(t, "a: 1\n", output.String())
+}
+
+// TestProcessKeepsFormatWriteError checks that errors of the handler are returned when the format is restored
+func TestProcessKeepsFormatWriteError(t *testing.T) {
+	file := path.Join(t.TempDir(), "config.yaml")
+	assert.NoError(t, os.WriteFile(file, []byte("a: 1\r\n"), 0o644))
+
+	err := NewFileProcessor(file, general.YAML, failingWriter{}).Process()
+	assert.ErrorContains(t, err, "failed to write")
+}
+
+// TestProcessKeepsFormatHandlerWriteError checks that an error of the handler's Write is returned when the format is restored
+func TestProcessKeepsFormatHandlerWriteError(t *testing.T) {
+	file := path.Join(t.TempDir(), "config.yaml")
+	assert.NoError(t, os.WriteFile(file, []byte("a: 1\r\n"), 0o644))
+
+	var output bytes.Buffer
+	fp := NewFileProcessor(file, general.YAML, &output)
+	handler, _, err := fp.readWith(failingWriteHandler{NewYamlConfigFileHandler()})
+	assert.NoError(t, err)
+
+	assert.ErrorIs(t, fp.write(handler, &output), assert.AnError)
+	assert.Empty(t, output.String())
+}
+
+// TestTextFormatRestore checks restoring the BOM and line ending of written content
+func TestTextFormatRestore(t *testing.T) {
+	bom := "\xEF\xBB\xBF"
+
+	testCases := []struct {
+		desc    string
+		format  textFormat
+		written string
+		want    string
+	}{
+		{desc: "nothing to restore", format: textFormat{}, written: "a\nb\n", want: "a\nb\n"},
+		{desc: "crlf", format: textFormat{crlf: true}, written: "a\nb\n", want: "a\r\nb\r\n"},
+		{desc: "crlf kept", format: textFormat{crlf: true}, written: "a\r\nb\n", want: "a\r\nb\r\n"},
+		{desc: "leading newline", format: textFormat{crlf: true}, written: "\na", want: "\r\na"},
+		{desc: "bom", format: textFormat{bom: true}, written: "a\n", want: bom + "a\n"},
+		{desc: "bom kept", format: textFormat{bom: true, crlf: true}, written: bom + "a\n", want: bom + "a\r\n"},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			assert.Equal(t, tC.want, string(tC.format.restore([]byte(tC.written))))
+		})
+	}
+}
+
+// readFormat reads the content through a formatReader reading one byte at a time and returns the content read and its format
+func readFormat(t *testing.T, content string) (string, textFormat) {
+	t.Helper()
+
+	var format textFormat
+	read, err := io.ReadAll(iotest.OneByteReader(newFormatReader(io.NopCloser(strings.NewReader(content)), &format)))
+	assert.NoError(t, err)
+	return string(read), format
+}
+
+// TestFormatReader checks detecting the BOM and the line ending of the first line, also when split across reads
+func TestFormatReader(t *testing.T) {
+	testCases := []struct {
+		desc     string
+		content  string
+		wantRead string
+		want     textFormat
+	}{
+		{desc: "empty", content: "", wantRead: "", want: textFormat{}},
+		{desc: "no line break", content: "a\r", wantRead: "a\r", want: textFormat{}},
+		{desc: "lf", content: "a\nb\r\n", wantRead: "a\nb\r\n", want: textFormat{}},
+		{desc: "crlf", content: "a\r\nb\n", wantRead: "a\r\nb\n", want: textFormat{crlf: true}},
+		{desc: "leading lf", content: "\nb\r\n", wantRead: "\nb\r\n", want: textFormat{}},
+		{desc: "bom", content: "\xEF\xBB\xBFa\r\n", wantRead: "a\r\n", want: textFormat{bom: true, crlf: true}},
+		{desc: "bom only", content: "\xEF\xBB\xBF", wantRead: "", want: textFormat{bom: true}},
+		{desc: "shorter than a bom", content: "\xEF\xBB", wantRead: "\xEF\xBB", want: textFormat{}},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			read, format := readFormat(t, tC.content)
+			assert.Equal(t, tC.wantRead, read)
+			assert.Equal(t, tC.want, format)
+		})
+	}
 }

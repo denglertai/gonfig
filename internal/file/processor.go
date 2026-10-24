@@ -1,6 +1,7 @@
 package file
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
@@ -56,6 +57,8 @@ type FileProcessor struct {
 	report *CheckReport
 	// source is the content of the file as read, which is only kept for the diff
 	source []byte
+	// format is the BOM and line ending of the file, which are restored when writing, see restoreFormat
+	format textFormat
 }
 
 // NewFileProcessor creates a new file processor
@@ -97,7 +100,7 @@ func (fp *FileProcessor) Process() error {
 		}
 	}
 
-	if err := handler.Write(fp.Output); err != nil {
+	if err := fp.write(handler, fp.Output); err != nil {
 		return fmt.Errorf("failed to write %s: %w", fp.FileName, err)
 	}
 
@@ -115,7 +118,7 @@ func (fp *FileProcessor) read() (ConfigFileHandler, iter.Seq[ConfigEntry], error
 
 // readWith reads and parses the file with the given handler and returns the handler and its entries
 func (fp *FileProcessor) readWith(handler ConfigFileHandler) (ConfigFileHandler, iter.Seq[ConfigEntry], error) {
-	source, err := fp.open()
+	source, err := fp.open(handler)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -134,19 +137,125 @@ func (fp *FileProcessor) readWith(handler ConfigFileHandler) (ConfigFileHandler,
 	return handler, entries, nil
 }
 
-// open opens the file for reading. The diff needs the content after parsing, so it is read at once and kept then.
-// Otherwise the file is streamed, so handlers reading it line by line don't keep it in memory.
-func (fp *FileProcessor) open() (io.ReadCloser, error) {
-	if !fp.Diff {
-		return os.Open(fp.FileName)
+// open opens the file for reading with the handler. The diff needs the content after parsing, so it is read at once
+// and kept then. Otherwise the file is streamed, so handlers reading it line by line don't keep it in memory.
+// For handlers that don't keep the BOM and line endings, the format is detected while reading, see formatReader.
+func (fp *FileProcessor) open(handler ConfigFileHandler) (io.ReadCloser, error) {
+	// The format of a previous read must not apply if the processor is used again, e.g. after the file changed
+	fp.format = textFormat{}
+
+	var source io.ReadCloser
+	if fp.Diff {
+		content, err := os.ReadFile(fp.FileName)
+		if err != nil {
+			return nil, err
+		}
+		fp.source = content
+		source = io.NopCloser(bytes.NewReader(content))
+	} else {
+		file, err := os.Open(fp.FileName)
+		if err != nil {
+			return nil, err
+		}
+		source = file
 	}
 
-	source, err := os.ReadFile(fp.FileName)
-	if err != nil {
-		return nil, err
+	if keeper, ok := handler.(formatKeeper); ok && keeper.keepsFormat() {
+		return source, nil
 	}
-	fp.source = source
-	return io.NopCloser(bytes.NewReader(source)), nil
+	return newFormatReader(source, &fp.format), nil
+}
+
+// write writes the document of the handler to the target, with the BOM and line ending of the file restored
+func (fp *FileProcessor) write(handler ConfigFileHandler, target io.Writer) error {
+	if fp.format == (textFormat{}) {
+		return handler.Write(target)
+	}
+
+	var written bytes.Buffer
+	if err := handler.Write(&written); err != nil {
+		return err
+	}
+	_, err := target.Write(fp.format.restore(written.Bytes()))
+	return err
+}
+
+// formatKeeper is implemented by handlers that may write the BOM and line endings of the file as they were read,
+// e.g. as they process the file line by line, so FileProcessor doesn't restore them
+type formatKeeper interface {
+	// keepsFormat returns whether the handler writes the BOM and line endings as read
+	keepsFormat() bool
+}
+
+// utf8BOM is the byte order mark some editors write at the start of UTF-8 files
+var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
+
+// textFormat is the BOM and line ending of a file. The libraries parsing YAML, JSON, XML and properties write
+// LF line endings and drop the BOM, so they are restored after writing to keep the file as it was.
+type textFormat struct {
+	// bom is set if the file starts with a UTF-8 byte order mark
+	bom bool
+	// crlf is set if the first line of the file ends with CRLF. Files with mixed line endings get the first one.
+	crlf bool
+}
+
+// formatReader detects the format of the file it reads into format while it is read. It removes the BOM, which the
+// parsers of some file types reject, e.g. JSON, and passes everything else on unchanged.
+type formatReader struct {
+	io.Closer
+	reader *bufio.Reader
+	format *textFormat
+	// lineEnded is set once the end of the first line was read, which decides the line ending
+	lineEnded bool
+	// previous is the last byte of the first line read so far, to find the CR of a CRLF split across reads
+	previous byte
+}
+
+// newFormatReader returns a formatReader reading the source, which records the BOM before the first read
+func newFormatReader(source io.ReadCloser, format *textFormat) *formatReader {
+	reader := bufio.NewReader(source)
+	// Peek fails for files shorter than the BOM, which have none
+	if start, _ := reader.Peek(len(utf8BOM)); bytes.Equal(start, utf8BOM) {
+		format.bom = true
+		_, _ = reader.Discard(len(utf8BOM))
+	}
+	return &formatReader{Closer: source, reader: reader, format: format}
+}
+
+// Read reads from the source and records the line ending of the first line
+func (r *formatReader) Read(p []byte) (int, error) {
+	n, err := r.reader.Read(p)
+	for i := 0; i < n && !r.lineEnded; i++ {
+		if p[i] == '\n' {
+			r.format.crlf = r.previous == '\r'
+			r.lineEnded = true
+		}
+		r.previous = p[i]
+	}
+	return n, err
+}
+
+// restore returns the written content with the BOM and line ending of the format.
+// Line breaks written as CRLF already are kept, so they are not doubled.
+func (f textFormat) restore(written []byte) []byte {
+	var restored bytes.Buffer
+	restored.Grow(len(written) + len(utf8BOM) + bytes.Count(written, []byte{'\n'}))
+
+	if f.bom && !bytes.HasPrefix(written, utf8BOM) {
+		restored.Write(utf8BOM)
+	}
+	if !f.crlf {
+		restored.Write(written)
+		return restored.Bytes()
+	}
+
+	for i, c := range written {
+		if c == '\n' && (i == 0 || written[i-1] != '\r') {
+			restored.WriteByte('\r')
+		}
+		restored.WriteByte(c)
+	}
+	return restored.Bytes()
 }
 
 // fileGroup returns the attributes describing the file in log records
