@@ -32,6 +32,11 @@ type provider struct {
 	clients map[string]*azsecrets.Client
 }
 
+// Description describes the filter for gonfig plugin list
+func (p *provider) Description() string {
+	return "Reads a secret by reference, e.g. myvault/db-password"
+}
+
 // Params returns no params, since the reference names the vault, the secret and its version
 func (p *provider) Params() []string {
 	return nil

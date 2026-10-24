@@ -319,7 +319,8 @@ func TestFailOnceCredential(t *testing.T) {
 	assert.Equal(t, "token", token.Token)
 }
 
-// TestParams checks that the filter accepts no params
+// TestParams checks that the filter accepts no params, and its description
 func TestParams(t *testing.T) {
 	assert.Nil(t, (&provider{}).Params())
+	assert.Equal(t, "Reads a secret by reference, e.g. myvault/db-password", secret.NewFilter(&provider{}).Description())
 }
