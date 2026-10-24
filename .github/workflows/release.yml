@@ -39,29 +39,8 @@ jobs:
           cache: false
           # The toolchain of go.mod, so releases are built with the Go version CI tested
           go-version-file: go.mod
-      - name: Install Linux ARM64 cross-toolchain
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu
-      - name: Install Zig for CGO cross-compilation
-        env:
-          # Zig compiles the released binaries, so the archive is only used if it matches this checksum.
-          # Update both together: the checksum is in https://ziglang.org/download/index.json, verify the
-          # archive's minisign signature with the key on https://ziglang.org/download/ before taking it.
-          ZIG_VERSION: 0.15.2
-          ZIG_SHA256: 02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239
-        run: |
-          archive="zig-x86_64-linux-${ZIG_VERSION}.tar.xz"
-          wget -q "https://ziglang.org/download/${ZIG_VERSION}/${archive}"
-          echo "${ZIG_SHA256}  ${archive}" | sha256sum --check --strict
-          tar xf "${archive}"
-          sudo mv "zig-x86_64-linux-${ZIG_VERSION}" /usr/local/zig
-          rm "${archive}"
-          echo "/usr/local/zig" >> "$GITHUB_PATH"
-      - name: Verify Zig installation
-        run: zig version
-      - name: Set Zig version env var
-        run: echo "ZIG_VERSION=$(zig version)" >> $GITHUB_ENV
+      - name: Set up the cross toolchain
+        uses: ./.github/actions/setup-cross-toolchain
       - name: Check if release already exists
         id: release-check
         run: |
