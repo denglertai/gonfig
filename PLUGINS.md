@@ -253,6 +253,7 @@ To keep the key out of the file, read it from an environment variable in the plu
 This repository provides plugins for these secret managers:
 
 - [OpenBao and HashiCorp Vault](./plugins/openbao/): the filter `openbao`
+- [Azure Key Vault](./plugins/azure-keyvault/): the filter `azure_keyvault`
 
 Plugins reading secrets from secret managers build on [pkg/plugin/secret](./pkg/plugin/secret/), which provides a filter resolving references like `secret/app/db#password` with a `Provider` for the secret manager.
 The variable of a placeholder holds the reference, e.g. `${DB_PASSWORD | openbao}` with `DB_PASSWORD=secret/app/db#password`. The filter:
