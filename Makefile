@@ -178,7 +178,7 @@ profile:
 
 # Install goreleaser if not present, with the version of the release workflow (.github/workflows/release.yml)
 # renovate: datasource=github-releases depName=goreleaser/goreleaser
-GORELEASER_VERSION ?= v2.18.3
+GORELEASER_VERSION ?= v2.19.0
 install-goreleaser:
 	@if ! command -v goreleaser >/dev/null 2>&1; then \
 		echo "Installing goreleaser $(GORELEASER_VERSION)..."; \
