@@ -1,0 +1,5 @@
+# All settings not listed here keep Codecov's defaults
+ignore:
+  # The main functions of plugins only pass their filters to plugin.Serve. They run in the integration tests, which
+  # start the built plugins as separate processes, whose coverage isn't measured.
+  - "plugins/*/main.go"

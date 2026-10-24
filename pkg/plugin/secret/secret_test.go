@@ -60,7 +60,7 @@ func (p *fakeProvider) Params() []string {
 // newFake returns a filter with a fake provider serving the secrets
 func newFake(secrets map[string]any) (*Filter, *fakeProvider) {
 	provider := &fakeProvider{secrets: secrets, params: []string{"version"}}
-	return NewFilter("fake", provider), provider
+	return NewFilter(provider), provider
 }
 
 // process processes the value with a copy of the filter and the params, like plugin.Serve does for every request
@@ -96,15 +96,15 @@ func TestProcess(t *testing.T) {
 		{desc: "nested field as JSON with sorted keys", value: "kv#nested", want: `{"a":1,"b":2}`},
 		{desc: "whole secret as JSON", value: "kv", want: `{"nested":{"a":1,"b":2},"password":"pw","port":5432,"tls":true}`},
 		{desc: "field of a JSON string", value: "json#password", want: "from json"},
-		{desc: "missing field", value: "kv#user", wantErr: `filter fake: the secret "kv" has no field "user"`},
-		{desc: "field of a plain string", value: "plain#password", wantErr: `filter fake: the secret "plain" has no fields, since it doesn't contain a JSON object`},
-		{desc: "field of a JSON array", value: "array#password", wantErr: `filter fake: the secret "array" has no fields, since it doesn't contain a JSON object`},
-		{desc: "field of JSON null", value: "null#password", wantErr: `filter fake: the secret "null" has no fields, since it doesn't contain a JSON object`},
-		{desc: "field of invalid JSON", value: "broken#password", wantErr: `filter fake: the secret "broken" has no fields, since it doesn't contain a JSON object`},
-		{desc: "missing secret", value: "missing", wantErr: `filter fake: failed to read the secret "missing": not found`},
-		{desc: "empty reference", value: "", wantErr: "filter fake: the reference is empty, e.g. as its variable is not set"},
-		{desc: "field without secret", value: "#password", wantErr: `filter fake: the reference "#password" names no secret before the #`},
-		{desc: "reference of another type", value: 5, wantErr: "filter fake: the reference has to be a string, not int"},
+		{desc: "missing field", value: "kv#user", wantErr: `the secret "kv" has no field "user"`},
+		{desc: "field of a plain string", value: "plain#password", wantErr: `the secret "plain" has no fields, since it doesn't contain a JSON object`},
+		{desc: "field of a JSON array", value: "array#password", wantErr: `the secret "array" has no fields, since it doesn't contain a JSON object`},
+		{desc: "field of JSON null", value: "null#password", wantErr: `the secret "null" has no fields, since it doesn't contain a JSON object`},
+		{desc: "field of invalid JSON", value: "broken#password", wantErr: `the secret "broken" has no fields, since it doesn't contain a JSON object`},
+		{desc: "missing secret", value: "missing", wantErr: `failed to read the secret "missing": not found`},
+		{desc: "empty reference", value: "", wantErr: "the reference is empty, e.g. as its variable is not set"},
+		{desc: "field without secret", value: "#password", wantErr: `the reference "#password" names no secret before the #`},
+		{desc: "reference of another type", value: 5, wantErr: "the reference has to be a string, not int"},
 	}
 	for _, tC := range testCases {
 		t.Run(tC.desc, func(t *testing.T) {
@@ -156,7 +156,7 @@ func TestProcessConnectsLazilyOnce(t *testing.T) {
 
 	for range 2 {
 		_, err := process(f, nil, "a")
-		assert.EqualError(t, err, "filter fake: failed to connect: no token")
+		assert.EqualError(t, err, "failed to connect: no token")
 	}
 	assert.Equal(t, 1, provider.connects)
 	assert.Empty(t, provider.reads)
@@ -192,7 +192,7 @@ func TestProcessDoesNotCacheErrors(t *testing.T) {
 	provider.readErr = errors.New("unavailable")
 
 	_, err := process(f, nil, "a")
-	assert.EqualError(t, err, `filter fake: failed to read the secret "a": unavailable`)
+	assert.EqualError(t, err, `failed to read the secret "a": unavailable`)
 
 	provider.readErr = nil
 	result, err := process(f, nil, "a")
@@ -206,11 +206,11 @@ func TestProcessParams(t *testing.T) {
 	f, provider := newFake(map[string]any{"a": "1"})
 
 	_, err := process(f, map[string]string{"verison": "2"}, "a")
-	assert.EqualError(t, err, `filter fake has no param "verison", it accepts version`)
+	assert.EqualError(t, err, `unknown param "verison", it accepts version`)
 
 	provider.params = nil
 	_, err = process(f, map[string]string{"version": "2"}, "a")
-	assert.EqualError(t, err, `filter fake accepts no params, but got "version"`)
+	assert.EqualError(t, err, `unknown param "version", no params are accepted`)
 	assert.Empty(t, provider.reads)
 }
 
@@ -221,12 +221,12 @@ func TestProcessTimeout(t *testing.T) {
 	f, provider := newFake(map[string]any{"a": "1"})
 	provider.block = "read"
 	_, err := process(f, nil, "a")
-	assert.EqualError(t, err, `filter fake: reading the secret "a" took longer than 10ms`)
+	assert.EqualError(t, err, `reading the secret "a" took longer than 10ms`)
 
 	f, provider = newFake(map[string]any{"a": "1"})
 	provider.block = "connect"
 	_, err = process(f, nil, "a")
-	assert.EqualError(t, err, "filter fake: failed to connect: connecting took too long")
+	assert.EqualError(t, err, "failed to connect: connecting took too long")
 }
 
 // TestRequestTimeout checks the default and invalid values of TimeoutEnv
@@ -254,7 +254,7 @@ func TestRequestTimeout(t *testing.T) {
 
 	f, _ := newFake(map[string]any{"a": "1"})
 	_, err = process(f, nil, "a")
-	assert.EqualError(t, err, `filter fake: invalid GONFIG_SECRET_TIMEOUT "1m", use a positive duration below 30s like 10s`)
+	assert.EqualError(t, err, `invalid GONFIG_SECRET_TIMEOUT "1m", use a positive duration below 30s like 10s`)
 }
 
 // TestProcessInvalidSecrets checks the errors for secrets of unsupported types and secrets that cannot be encoded
@@ -262,8 +262,8 @@ func TestProcessInvalidSecrets(t *testing.T) {
 	f, _ := newFake(map[string]any{"int": 5, "func": map[string]any{"f": func() {}}})
 
 	_, err := process(f, nil, "int")
-	assert.EqualError(t, err, `filter fake: the provider returned a int for the secret "int" instead of a string or map`)
+	assert.EqualError(t, err, `the provider returned a int for the secret "int" instead of a string or map`)
 
 	_, err = process(f, nil, "func")
-	assert.EqualError(t, err, `filter fake: the secret "func" cannot be encoded as JSON`)
+	assert.EqualError(t, err, `the secret "func" cannot be encoded as JSON`)
 }

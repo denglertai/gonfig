@@ -85,6 +85,62 @@ jobs:
           (cd "$(dirname "$mod")" && go test -race ./...)
         done
 
+  # The OpenBao plugin against dev servers of OpenBao and Vault, which run in dev mode by default.
+  # Renovate updates the tags and digests of the images.
+  openbao-integration:
+    runs-on: ubuntu-latest
+    services:
+      openbao:
+        image: openbao/openbao:2.7.1@sha256:6d2b93856e3fcf7b18ad855a0b51eaba474dc8b79cf554379ea32034797d2acf
+        env:
+          BAO_DEV_ROOT_TOKEN_ID: root
+          BAO_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+        ports:
+          - 8200:8200
+      vault:
+        image: hashicorp/vault:2.2.1@sha256:962a92876e168d68eaaa24b0b8b49bbce1cb63024060a67bba95cd158a366fc2
+        env:
+          VAULT_DEV_ROOT_TOKEN_ID: root
+          VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+        ports:
+          - 8300:8200
+        options: --cap-add=IPC_LOCK
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - name: Set up Go
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version-file: go.mod
+
+    - name: Wait for the servers
+      run: |
+        for port in 8200 8300; do
+          for _ in $(seq 1 30); do
+            curl -sf "http://127.0.0.1:$port/v1/sys/health" >/dev/null && break
+            sleep 1
+          done
+          curl -sf "http://127.0.0.1:$port/v1/sys/health" >/dev/null
+        done
+
+    - name: Integration tests against OpenBao
+      working-directory: plugins/openbao
+      env:
+        TEST_OPENBAO_ADDR: http://127.0.0.1:8200
+        TEST_OPENBAO_TOKEN: root
+      run: go test -count=1 -run Integration -v ./...
+
+    - name: Integration tests against Vault
+      working-directory: plugins/openbao
+      env:
+        TEST_OPENBAO_ADDR: http://127.0.0.1:8300
+        TEST_OPENBAO_TOKEN: root
+      run: go test -count=1 -run Integration -v ./...
+
   lint:
     runs-on: ubuntu-latest
     env:
