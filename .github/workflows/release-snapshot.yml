@@ -100,8 +100,11 @@ jobs:
           image=$(docker images ghcr.io/denglertai/gonfig --format '{{.Repository}}:{{.Tag}}' | grep -- '-arm64$' | head -1)
           echo "Checking $image"
           container=$(docker create --platform linux/arm64 "$image")
+          docker cp "$container:/usr/bin/gonfig" "$RUNNER_TEMP/gonfig"
           docker cp "$container:/usr/libexec/gonfig/plugins" "$RUNNER_TEMP/plugins"
           docker rm "$container"
+          # gonfig is linked against glibc for cgo, the plugins are static
+          file "$RUNNER_TEMP/gonfig" | tee /dev/stderr | grep -q 'ARM aarch64.*dynamically linked'
           for plugin in gonfig-plugin-openbao gonfig-plugin-azure-keyvault; do
             file "$RUNNER_TEMP/plugins/$plugin" | tee /dev/stderr | grep -q 'ARM aarch64.*statically linked'
           done
