@@ -349,29 +349,39 @@ type chainStep struct {
 // If withSource is false, the content is a filter chain without an environment variable, e.g. the filters of a template.
 func scanChain(content string, withSource bool) []chainStep {
 	steps := make([]chainStep, 0)
+	// afterName is set while the last token is the name of a step, which params may follow
+	afterName := false
 
 	stream := filterParser.ParseString(content)
 	defer stream.Close()
 
 	for ; stream.IsValid(); stream.GoNext() {
 		token := stream.CurrentToken()
+		isParam := token.Is(tokenizer.TokenString) && token.StringSettings().Key == TokenParam
 
 		switch {
 		case token.Is(TokenFilterSeparator):
-			continue
-		case withSource && len(steps) == 0:
-			// The first token is always the name of the environment variable or placeholder template
-			steps = append(steps, chainStep{name: token.ValueString()})
-		case token.Is(tokenizer.TokenKeyword):
-			// Other tokens have to be filters or filter templates
-			steps = append(steps, chainStep{name: token.ValueString()})
-		case token.Is(tokenizer.TokenString) && token.StringSettings().Key == TokenParam && len(steps) > 0:
+			afterName = false
+		case isParam && !afterName:
+			// Params without a name in front of them, e.g. "${(a)}" or "${VAL | (a)}", would otherwise be read as the name
+			// of the variable or be ignored. They are a step of their own, so applying the chain fails.
+			steps = append(steps, chainStep{name: token.ValueString(), err: fmt.Errorf("params %q without a name in front of them", excerpt(token.ValueString()))})
+		case isParam:
 			// Params always follow the step they belong to
 			step := &steps[len(steps)-1]
 			if !paramsTerminated(token.ValueString()) {
 				step.err = unterminatedParamsError(step.name, token.ValueString())
 			}
 			step.params = parseParams(token.ValueString())
+			afterName = false
+		case withSource && len(steps) == 0:
+			// The first token is always the name of the environment variable or placeholder template
+			steps = append(steps, chainStep{name: token.ValueString()})
+			afterName = true
+		case token.Is(tokenizer.TokenKeyword):
+			// Other tokens have to be filters or filter templates
+			steps = append(steps, chainStep{name: token.ValueString()})
+			afterName = true
 		}
 	}
 

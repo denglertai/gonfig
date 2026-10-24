@@ -443,6 +443,35 @@ func TestProcessValueUnterminatedParams(t *testing.T) {
 	}
 }
 
+// TestProcessValueParamsWithoutName checks that params not directly following the name of a filter or variable fail,
+// instead of being read as the name of the variable or ignored
+func TestProcessValueParamsWithoutName(t *testing.T) {
+	t.Setenv("EDGE_TEST", "x")
+
+	testCases := []struct {
+		desc    string
+		value   string
+		wantErr string
+	}{
+		{desc: "instead of the variable", value: "${(a)}", wantErr: `params "(a)" without a name in front of them`},
+		{desc: "unterminated instead of the variable", value: "${(a}", wantErr: `params "(a" without a name in front of them`},
+		{desc: "after a separator", value: "${EDGE_TEST | (a)}", wantErr: `params "(a)" without a name in front of them`},
+		{desc: "unterminated after a separator", value: "${EDGE_TEST | upper | (a}", wantErr: `params "(a" without a name in front of them`},
+		{desc: "after params", value: "${EDGE_TEST | replace(x,y)(a)}", wantErr: `params "(a)" without a name in front of them`},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			_, err := ProcessValue(tC.value)
+			assert.EqualError(t, err, tC.wantErr)
+		})
+	}
+
+	// Params separated from their filter by spaces still belong to it
+	result, err := ProcessValue("${EDGE_TEST | replace (x,y)}")
+	assert.NoError(t, err)
+	assert.Equal(t, "y", result)
+}
+
 // TestProcessValueUnknownFilterWithUnterminatedParams checks that unterminated params fail even if unknown filters are allowed
 func TestProcessValueUnknownFilterWithUnterminatedParams(t *testing.T) {
 	filter.SetAllowUnknownFilters(true)

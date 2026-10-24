@@ -118,7 +118,7 @@ $ V='a,b' gonfig value '${V | replace(\,,;)}'
 a;b
 ```
 
-Params without a closing `)` are an error, like placeholders without a closing `}`.
+Params without a closing `)` are an error, like placeholders without a closing `}`, and so are params without a filter name in front of them, e.g. `${V | (foo)}`.
 Params cannot contain placeholders, since the placeholder ends at the first unescaped `}`:
 
 ```console

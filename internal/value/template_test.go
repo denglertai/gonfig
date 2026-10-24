@@ -202,6 +202,16 @@ func TestSetTemplatesValidation(t *testing.T) {
 			wantErr:   `placeholder template "url": unterminated params "(a" of X, the closing ) is missing in value`,
 		},
 		{
+			desc:      "params without a name in filter template",
+			templates: config.Templates{Filters: map[string]config.FilterTemplate{"secret": {Filters: "(a) | upper"}}},
+			wantErr:   `filter template "secret": params "(a)" without a name in front of them`,
+		},
+		{
+			desc:      "params without a name in value",
+			templates: config.Templates{Placeholders: map[string]config.PlaceholderTemplate{"url": {Value: "jdbc:${(a}"}}},
+			wantErr:   `placeholder template "url": params "(a" without a name in front of them in value`,
+		},
+		{
 			desc:      "unknown param in filter template",
 			templates: config.Templates{Filters: map[string]config.FilterTemplate{"secret": {Filters: "trim(both) | base64"}}},
 			wantErr:   `filter template "secret": filter trim accepts no params, but got 1`,
