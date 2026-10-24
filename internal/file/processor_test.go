@@ -203,6 +203,22 @@ func TestProcessKeepsFormat(t *testing.T) {
 	}
 }
 
+// TestProcessDetectsFormatOnEveryRead checks that a processor used again detects the format of the file anew
+func TestProcessDetectsFormatOnEveryRead(t *testing.T) {
+	file := path.Join(t.TempDir(), "config.yaml")
+	assert.NoError(t, os.WriteFile(file, []byte("\xEF\xBB\xBFa: 1\r\n"), 0o644))
+
+	var output bytes.Buffer
+	fp := NewFileProcessor(file, general.YAML, &output)
+	assert.NoError(t, fp.Process())
+	assert.Equal(t, "\xEF\xBB\xBFa: 1\r\n", output.String())
+
+	assert.NoError(t, os.WriteFile(file, []byte("a: 1"), 0o644))
+	output.Reset()
+	assert.NoError(t, fp.Process())
+	assert.Equal(t, "a: 1\n", output.String())
+}
+
 // TestProcessKeepsFormatWriteError checks that errors of the handler are returned when the format is restored
 func TestProcessKeepsFormatWriteError(t *testing.T) {
 	file := path.Join(t.TempDir(), "config.yaml")

@@ -141,6 +141,9 @@ func (fp *FileProcessor) readWith(handler ConfigFileHandler) (ConfigFileHandler,
 // and kept then. Otherwise the file is streamed, so handlers reading it line by line don't keep it in memory.
 // For handlers that don't keep the BOM and line endings, the format is detected while reading, see formatReader.
 func (fp *FileProcessor) open(handler ConfigFileHandler) (io.ReadCloser, error) {
+	// The format of a previous read must not apply if the processor is used again, e.g. after the file changed
+	fp.format = textFormat{}
+
 	var source io.ReadCloser
 	if fp.Diff {
 		content, err := os.ReadFile(fp.FileName)
