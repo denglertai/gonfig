@@ -135,7 +135,7 @@ The plugin is released with gonfig, see [installation](../../README.md#plugins-f
 - the apk `gonfig-plugin-openbao`, which installs gonfig as well
 - the container image `ghcr.io/denglertai/gonfig`, which contains the plugin
 
-The packages and the image install the plugin into `/usr/libexec/gonfig/plugins`, which gonfig searches by default. Binaries from the archives go there as well, or into a directory set with `--plugin-path`.
+The packages and the image install the plugin into `/usr/libexec/gonfig/plugins`, which gonfig searches by default on Linux and macOS. Put binaries from the archives there as well. On Windows, gonfig searches `.\plugins` in the working directory by default instead. Another directory can be set with `--plugin-path` on every system.
 
 To build the plugin from source, run within this directory:
 

@@ -116,7 +116,7 @@ $ gh attestation verify gonfig_Linux_x86_64.tar.gz --repo denglertai/gonfig
 
 The [plugins for secret managers](./PLUGINS.md#plugins-for-secret-managers) are released with gonfig:
 
-- **Release archives:** `gonfig-plugin-openbao` and `gonfig-plugin-azure-keyvault` for Linux, macOS and Windows, e.g. `gonfig-plugin-openbao_Linux_x86_64.tar.gz`. Unpack the binary into `/usr/libexec/gonfig/plugins`, which gonfig searches by default on Linux and macOS, or into another directory set with `--plugin-path`.
+- **Release archives:** `gonfig-plugin-openbao` and `gonfig-plugin-azure-keyvault` for Linux, macOS and Windows, e.g. `gonfig-plugin-openbao_Linux_x86_64.tar.gz`. Unpack the binary into `/usr/libexec/gonfig/plugins`, which gonfig searches by default on Linux and macOS. On Windows, gonfig searches `.\plugins` in the working directory by default instead. Another directory can be set with `--plugin-path` on every system.
 - **apk:** each plugin is a package of its own, which installs into `/usr/libexec/gonfig/plugins` and installs gonfig as well:
   ```bash
   $ apk add gonfig-plugin-openbao gonfig-plugin-azure-keyvault
