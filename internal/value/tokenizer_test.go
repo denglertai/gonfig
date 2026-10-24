@@ -276,7 +276,6 @@ func TestProcessValueEdgeCases(t *testing.T) {
 		{desc: "no placeholder", value: "plain value", want: "plain value"},
 		{desc: "leading separator", value: "${|EDGE_TEST}", want: "x"},
 		{desc: "repeated separators", value: "${EDGE_TEST || upper | | lower}", want: "x"},
-		{desc: "unclosed params", value: "${EDGE_TEST|upper(}", want: "X"},
 		{desc: "empty placeholder", value: "${}", want: "${}"},
 		{desc: "closing bracket after placeholder", value: "${EDGE_TEST}}", want: "x}"},
 		{desc: "dollar before placeholder", value: "$$${EDGE_TEST}", want: "$x"},
@@ -409,6 +408,61 @@ func TestProcessValueUnterminated(t *testing.T) {
 	for _, value := range []string{"a${EDGE_TEST", "${EDGE_TEST | upper", "${EDGE_TEST}${", "${", `${EDGE_TEST\}`, "${EDGE_TEST | upper\n"} {
 		_, err := ProcessValue(value)
 		assert.ErrorContains(t, err, "unterminated placeholder", value)
+	}
+}
+
+// TestProcessValueUnterminatedParams checks that params without a closing bracket fail instead of being applied,
+// for filters, filter templates and the source of a placeholder
+func TestProcessValueUnterminatedParams(t *testing.T) {
+	t.Setenv("EDGE_TEST", "x")
+
+	testCases := []struct {
+		desc    string
+		value   string
+		wantErr string
+	}{
+		{desc: "filter", value: "${EDGE_TEST | default(a}", wantErr: `unterminated params "(a" of default, the closing ) is missing`},
+		{desc: "empty", value: "${EDGE_TEST|upper(}", wantErr: `unterminated params "(" of upper, the closing ) is missing`},
+		{desc: "escaped bracket", value: `${EDGE_TEST | default(a\)}`, wantErr: `unterminated params "(a\\)" of default, the closing ) is missing`},
+		{desc: "three backslashes", value: `${EDGE_TEST | default(a\\\)}`, wantErr: `of default, the closing ) is missing`},
+		{desc: "embedded in text", value: "a ${EDGE_TEST | upper | replace(X,y}", wantErr: `unterminated params "(X,y" of replace, the closing ) is missing`},
+		{desc: "source", value: "${EDGE_TEST(a | upper}", wantErr: `unterminated params "(a | upper" of EDGE_TEST, the closing ) is missing`},
+		{desc: "filter template", value: "${EDGE_TEST | @clean(a}", wantErr: `unterminated params "(a" of @clean, the closing ) is missing`},
+		{desc: "unknown filter", value: "${EDGE_TEST | not_a_filter(a}", wantErr: `unterminated params "(a" of not_a_filter, the closing ) is missing`},
+		{
+			desc:    "placeholder within params",
+			value:   "${EDGE_TEST | default(${OTHER})}",
+			wantErr: `unterminated params "(${OTHER" of default, the closing ) is missing; params cannot contain placeholders, escape { and } with a backslash`,
+		},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			_, err := ProcessValue(tC.value)
+			assert.ErrorContains(t, err, tC.wantErr)
+		})
+	}
+}
+
+// TestProcessValueUnknownFilterWithUnterminatedParams checks that unterminated params fail even if unknown filters are allowed
+func TestProcessValueUnknownFilterWithUnterminatedParams(t *testing.T) {
+	filter.SetAllowUnknownFilters(true)
+	t.Cleanup(func() { filter.SetAllowUnknownFilters(false) })
+
+	_, err := ProcessValue("${EDGE_TEST | not_a_filter(a}")
+	assert.EqualError(t, err, `unterminated params "(a" of not_a_filter, the closing ) is missing`)
+}
+
+// TestProcessValueTerminatedParams checks params ending with escaped backslashes, whose closing bracket is not escaped
+func TestProcessValueTerminatedParams(t *testing.T) {
+	for value, want := range map[string]string{
+		`${TERMINATED_UNSET | default(a\\)}`:   `a\`,
+		`${TERMINATED_UNSET | default(a\\\\)}`: `a\\`,
+		`${TERMINATED_UNSET | default(\))}`:    `)`,
+		`${TERMINATED_UNSET | default()}`:      ``,
+	} {
+		result, err := ProcessValue(value)
+		assert.NoError(t, err, value)
+		assert.Equal(t, want, result, value)
 	}
 }
 

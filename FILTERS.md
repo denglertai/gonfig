@@ -118,6 +118,16 @@ $ V='a,b' gonfig value '${V | replace(\,,;)}'
 a;b
 ```
 
+Params without a closing `)` are an error, like placeholders without a closing `}`.
+Params cannot contain placeholders, since the placeholder ends at the first unescaped `}`:
+
+```console
+$ V=foo gonfig value '${V | replace(foo,bar}'
+Error: unterminated params "(foo,bar" of replace, the closing ) is missing
+$ V=foo gonfig value '${V | default(${OTHER})}'
+Error: unterminated params "(${OTHER" of default, the closing ) is missing; params cannot contain placeholders, escape { and } with a backslash
+```
+
 Params a filter does not accept are an error, e.g. a typo in a param name or params of a filter without any, so they are not silently ignored.
 The params of each filter are listed in the [table below](#built-in-filters):
 

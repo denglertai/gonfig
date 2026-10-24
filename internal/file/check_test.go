@@ -92,6 +92,21 @@ func TestCheckEscapes(t *testing.T) {
 		checkDiff(t, general.YAML, content))
 }
 
+// TestCheckUnterminatedParams checks that params without a closing bracket are reported as errors of their entries
+func TestCheckUnterminatedParams(t *testing.T) {
+	t.Setenv("CHECK_SET", "value")
+
+	report := checkFile(t, general.YAML, "filter: ${CHECK_SET | default(a}\nnested: ${CHECK_SET | default(${CHECK_OTHER})}\n")
+	assert.Equal(t, []EntryReport{
+		{Path: "filter", Variables: []VariableReport{{Name: "CHECK_SET", Status: VariableSet, HasDefault: true}},
+			Error: `unterminated params "(a" of default, the closing ) is missing`},
+		{Path: "nested", Variables: []VariableReport{{Name: "CHECK_SET", Status: VariableSet, HasDefault: true}},
+			Error: `unterminated params "(${CHECK_OTHER" of default, the closing ) is missing; params cannot contain placeholders, escape { and } with a backslash`},
+	}, report.Entries)
+	assert.Equal(t, 2, report.Errors())
+	assert.True(t, report.Failed())
+}
+
 // TestCheckFragments checks that the entries of fragments are reported and errors of fragments are collected
 func TestCheckFragments(t *testing.T) {
 	t.Setenv("CHECK_FRAGMENT", "inner: ${CHECK_INNER}\nnested: ${CHECK_NESTED | fragment}")
