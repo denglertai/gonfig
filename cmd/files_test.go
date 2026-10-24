@@ -119,7 +119,7 @@ func TestProcessSeveralFilesInline(t *testing.T) {
 
 	assert.Equal(t, "a: value\n", readFile(t, paths[0]))
 	assert.JSONEq(t, `{"b": "value"}`, readFile(t, paths[1]))
-	assert.Equal(t, "s = value\n", readFile(t, paths[2]))
+	assert.Equal(t, "s=value\n", readFile(t, paths[2]))
 	if runtime.GOOS != "windows" {
 		assert.Equal(t, os.FileMode(0o644), fileMode(t, paths[0]))
 		assert.Equal(t, os.FileMode(0o600), fileMode(t, paths[2]), "each file keeps its mode")

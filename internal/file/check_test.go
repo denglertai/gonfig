@@ -266,7 +266,7 @@ func TestCheckDiffMasksValues(t *testing.T) {
 			fileType: general.PROPERTIES,
 			content:  "host=${DIFF_HOST}\nport=5432\n",
 			// The properties writer separates keys and values by " = ", which the diff shows as well
-			want: "@@ -1,2 +1,2 @@\n-host=${DIFF_HOST}\n-port=5432\n+host = ***\n+port = 5432\n",
+			want: "@@ -1,2 +1,2 @@\n-host=${DIFF_HOST}\n+host=***\n port=5432\n",
 		},
 		{
 			name:     "without changes",

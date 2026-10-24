@@ -141,6 +141,23 @@ func FuzzProperties(f *testing.F) {
 	})
 }
 
+// FuzzPropertiesRoundTrip checks that values and keys written to properties files are read as they were,
+// so escaping never changes them
+func FuzzPropertiesRoundTrip(f *testing.F) {
+	for _, seed := range []string{"", " lead", "\\", "a\nb\r\tc\fd", "=:# !", "\\u00e4", "trail \\", "\xff\x00", "!0", "#k"} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, text string) {
+		lines, err := parsePropertiesLines(encodePropertiesKey(text) + "=" + encodePropertiesValue(text) + "\n")
+		if err != nil {
+			t.Fatalf("cannot read the encoded %q: %v", text, err)
+		}
+		if len(lines) != 1 || lines[0].entry == nil || lines[0].entry.key != text || lines[0].entry.val != text {
+			t.Fatalf("encoded %q is read differently: %+v", text, lines)
+		}
+	})
+}
+
 // FuzzPlain checks processing plain text files, see fuzzHandler
 func FuzzPlain(f *testing.F) {
 	fuzzHandler(f, general.PLAIN, "plain", func(value string) string {

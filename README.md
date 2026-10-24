@@ -32,9 +32,9 @@ czNjciZ0
 | Placeholders in values | ✅ | ✅ | ✅ element text, CDATA and attributes | ✅ | ✅ every line | |
 | Placeholders in keys | ✅ | ✅ | ❌ | ❌ | ✅ | |
 | [Filters](./FILTERS.md) and [plugins](./PLUGINS.md) | ✅ | ✅ | ✅ | ✅ | ✅ | |
-| Comments preserved | ✅ | – | ✅ | ✅ written as `#` | ✅ | |
+| Comments preserved | ✅ | – | ✅ | ✅ | ✅ | |
 | Key order preserved | ✅ | ✅ | ✅ | ✅ | ✅ | |
-| Formatting preserved | ✅ including multiple documents | ❌ indented with 2 spaces | ✅ | ❌ written as `key = value` | ✅ | |
+| Formatting preserved | ✅ including multiple documents | ❌ indented with 2 spaces | ✅ | ✅ except values with placeholders spanning several lines | ✅ | |
 | Line endings and BOM preserved | ✅ | ✅ | ✅ | ✅ | ✅ | |
 | [Fragments](./FILTERS.md#fragments) | ✅ values and keys | ✅ values and keys | ✅ element content | ❌ | ❌ | |
 | [Typed values](./FILTERS.md#types) | ✅ with `to_int`, `to_float`, `to_bool` | ✅ with `to_int`, `to_float`, `to_bool` | ❌ text | ❌ text | ❌ text | |
@@ -197,8 +197,8 @@ db.password=${DB_PASSWORD | base64}
 ```console
 $ DB_HOST=db.internal DB_PASSWORD=s3cret gonfig config process -f app.properties
 # Database settings
-db.host = db.internal
-db.password = czNjcmV0
+db.host=db.internal
+db.password=czNjcmV0
 ```
 
 ### Plain text
@@ -291,7 +291,8 @@ In general, process takes the given input file and creates a flat list of all gi
 Afterwards every entry in that list is being processed individually by applying the filters.
 
 Only the processed values are changed, the rest of the file is preserved as far as the format allows: comments and key order are kept for YAML, JSON and properties files, and YAML files may contain multiple documents.
-CRLF line endings and a UTF-8 byte order mark are kept for every file type. Other than plain text files, which keep every line as it is, files with mixed line endings are written with the line ending of their first line.
+Properties files are written line by line as they were read, so separators, blank lines, continuation lines and duplicate keys are kept as well. Only lines whose value changes are rewritten, after the key and separator as they were, with the value on a single line.
+CRLF line endings and a UTF-8 byte order mark are kept for every file type. Other than plain text and properties files, which keep the line ending of every line, files with mixed line endings are written with the line ending of their first line.
 
 Usage:
 
