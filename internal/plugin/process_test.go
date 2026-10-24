@@ -48,6 +48,23 @@ func (f *testFilter) AcceptParams(params map[string]string) {
 	f.params = params
 }
 
+// describedFilter is a filter of the test plugin with a description and declared params
+type describedFilter struct {
+	testFilter
+	description string
+	params      []string
+}
+
+// Description describes the filter
+func (f *describedFilter) Description() string {
+	return f.description
+}
+
+// Params returns the declared params
+func (f *describedFilter) Params() []string {
+	return f.params
+}
+
 // runTestPlugin acts as a plugin behaving as described by the mode and returns its exit code
 func runTestPlugin(mode string, prefix string) int {
 	handshake := func(filters ...string) {
@@ -76,6 +93,18 @@ func runTestPlugin(mode string, prefix string) int {
 				return nil, errors.New("the value is not encrypted")
 			}},
 		})
+		if err != nil {
+			return 1
+		}
+	case "described":
+		err := pkgplugin.Serve(map[string]any{
+			prefix + "declared": &describedFilter{testFilter: testFilter{fn: func(_ any, params map[string]string) (any, error) {
+				return fmt.Sprint(params), nil
+			}}, description: "Shows its params", params: []string{"first", "second"}},
+			prefix + "any": &testFilter{fn: func(_ any, params map[string]string) (any, error) {
+				return fmt.Sprint(params), nil
+			}},
+		}, pkgplugin.WithVersion("1.2.3"), pkgplugin.WithDescription("A described test plugin"))
 		if err != nil {
 			return 1
 		}
@@ -427,4 +456,90 @@ func TestInitPluginsConfiguredPathOnly(t *testing.T) {
 
 	assert.Empty(t, running)
 	assert.False(t, filter.IsKnown(prefix+"upper"))
+}
+
+// TestPluginInfo checks the version, description and filter info of a plugin providing them, and that declared params
+// are validated by gonfig while filters without declared params receive any params
+func TestPluginInfo(t *testing.T) {
+	dir, prefix := installTestPlugin(t, "described")
+
+	InitPlugins(dir)
+	t.Cleanup(ClosePlugins)
+
+	assert.Equal(t, []string{dir}, SearchedPaths())
+	assert.Equal(t, []Info{{
+		Path:        filepath.Join(dir, executablePrefix+"test"),
+		Type:        TypeExecutable,
+		Version:     "1.2.3",
+		Description: "A described test plugin",
+		Filters: []FilterInfo{
+			{Name: prefix + "any"},
+			{Name: prefix + "declared", Description: "Shows its params", Params: []string{"first", "second"}},
+		},
+	}}, Plugins())
+
+	declared := filter.NewFilter(prefix + "declared")
+	assert.EqualError(t, filter.ValidateParams(prefix+"declared", declared, map[string]string{"thrid": "x"}),
+		`filter `+prefix+`declared has no param "thrid", it accepts first, second`)
+	assert.NoError(t, filter.ValidateParams(prefix+"declared", declared, map[string]string{"0": "a", "second": "b"}))
+	assert.NoError(t, filter.ValidateParams(prefix+"any", filter.NewFilter(prefix+"any"), map[string]string{"anything": "x"}))
+
+	result, err := process(prefix+"declared", map[string]string{"first": "a"}, "v")
+	assert.NoError(t, err)
+	assert.Equal(t, "map[first:a]", result)
+}
+
+// TestPluginInfoWithoutOptionalFields checks plugins without version, description and filter info, like plugins built
+// before these fields existed
+func TestPluginInfoWithoutOptionalFields(t *testing.T) {
+	dir, prefix := installTestPlugin(t, "serve")
+
+	InitPlugins(dir)
+	t.Cleanup(ClosePlugins)
+
+	if assert.Len(t, Plugins(), 1) {
+		info := Plugins()[0]
+		assert.Empty(t, info.Version)
+		assert.Empty(t, info.Description)
+		assert.Contains(t, info.Filters, FilterInfo{Name: prefix + "upper"})
+	}
+}
+
+// TestPluginInfoFailures checks that plugins failing to start are listed with their error, and that filters whose name
+// is taken are marked as skipped
+func TestPluginInfoFailures(t *testing.T) {
+	shortenTimeouts(t)
+	dir, prefix := installTestPlugin(t, "serve")
+	executable, err := os.Executable()
+	assert.NoError(t, err)
+	// A second link starts the same plugin again, whose filters are registered already
+	assert.NoError(t, os.Symlink(executable, filepath.Join(dir, executablePrefix+"twice")))
+	broken := filepath.Join(dir, executablePrefix+"broken")
+	assert.NoError(t, os.WriteFile(broken, []byte("#!/bin/sh\nexit 3\n"), 0o755))
+
+	InitPlugins(dir)
+	t.Cleanup(ClosePlugins)
+
+	plugins := Plugins()
+	if assert.Len(t, plugins, 3) {
+		assert.Equal(t, broken, plugins[0].Path)
+		assert.Equal(t, "no handshake: the plugin exited", plugins[0].Error)
+		assert.Empty(t, plugins[0].Filters)
+		assert.Contains(t, plugins[1].Filters, FilterInfo{Name: prefix + "upper"})
+		assert.Contains(t, plugins[2].Filters, FilterInfo{Name: prefix + "upper", Skipped: true})
+	}
+}
+
+// TestPluginInfoGoPlugin checks that a Go plugin failing to load is listed with its error
+func TestPluginInfoGoPlugin(t *testing.T) {
+	dir := t.TempDir()
+	assert.NoError(t, os.WriteFile(filepath.Join(dir, "broken.so"), []byte("not a plugin"), 0o644))
+
+	InitPlugins(dir)
+	t.Cleanup(ClosePlugins)
+
+	if assert.Len(t, Plugins(), 1) {
+		assert.Equal(t, TypeGo, Plugins()[0].Type)
+		assert.NotEmpty(t, Plugins()[0].Error)
+	}
 }

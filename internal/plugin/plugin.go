@@ -4,10 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"plugin"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/denglertai/gonfig/internal/filter"
@@ -44,6 +46,7 @@ func InitPlugins(pluginPath string) {
 	if pluginPath == "" {
 		paths = defaultPluginPaths(runtime.GOOS)
 	}
+	searched = paths
 	for _, path := range paths {
 		loadPluginDir(path)
 	}
@@ -67,6 +70,7 @@ func loadPluginDir(pluginPath string) {
 			logging.Debug("Loading deprecated Go plugin, see PLUGINS.md for migrating to an executable plugin", "path", path)
 			if err := loadPlugin(path); err != nil {
 				logging.Error("Failed to load plugin", "path", path, "error", err)
+				found = append(found, Info{Path: path, Type: TypeGo, Filters: []FilterInfo{}, Error: err.Error()})
 			}
 		case strings.HasPrefix(d.Name(), executablePrefix):
 			// Stat follows symbolic links, so linked plugins are started as well
@@ -100,23 +104,37 @@ func ClosePlugins() {
 		p.close()
 	}
 	running = nil
+	found = nil
+	searched = nil
 }
 
-// runPlugin starts an executable plugin and registers the filters it provides
+// runPlugin starts an executable plugin and registers the filters it provides. Filters with declared params get
+// their params validated by gonfig.
 func runPlugin(path string) error {
-	p, names, err := startPlugin(path)
+	p, handshake, err := startPlugin(path)
 	if err != nil {
+		found = append(found, Info{Path: path, Type: TypeExecutable, Filters: []FilterInfo{}, Error: err.Error()})
 		return err
 	}
 	running = append(running, p)
 
-	filters := make(map[string]any, len(names))
-	for _, name := range names {
-		filters[name] = &remoteFilter{plugin: p, name: name}
+	filters := make(map[string]any, len(handshake.Filters))
+	for _, name := range handshake.Filters {
+		remote := remoteFilter{plugin: p, name: name}
+		if info, ok := handshake.FilterInfo[name]; ok && info.Params != nil {
+			filters[name] = &declaredRemoteFilter{remoteFilter: remote, declared: info.Params}
+		} else {
+			filters[name] = &remote
+		}
 	}
 	p.filters = filter.AddPluginFilters(filters)
 	logging.Debug("Started filter plugin", "plugin", path, "filters", len(p.filters))
 
+	info := Info{Path: path, Type: TypeExecutable, Version: handshake.Version, Description: handshake.Description}
+	info.Filters = filterInfos(handshake.Filters, p.filters, func(name string) FilterInfo {
+		return FilterInfo{Description: handshake.FilterInfo[name].Description, Params: handshake.FilterInfo[name].Params}
+	})
+	found = append(found, info)
 	return nil
 }
 
@@ -136,9 +154,11 @@ func loadPlugin(path string) error {
 	}
 
 	filters := pf.Filters()
-	filter.AddPluginFilters(filters)
+	added := filter.AddPluginFilters(filters)
 	logging.Debug("Loaded filter plugin", "plugin", path, "filters", len(filters))
 
+	names := slices.Sorted(maps.Keys(filters))
+	found = append(found, Info{Path: path, Type: TypeGo, Filters: filterInfos(names, added, func(string) FilterInfo { return FilterInfo{} })})
 	return nil
 }
 

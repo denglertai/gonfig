@@ -66,21 +66,21 @@ type processPlugin struct {
 }
 
 // startPlugin starts the executable plugin and reads its handshake
-func startPlugin(path string) (*processPlugin, []string, error) {
+func startPlugin(path string) (*processPlugin, pkgplugin.Handshake, error) {
 	cmd := exec.Command(path)
 	// Plugin logs stay visible, and the environment is inherited, e.g. for keys
 	cmd.Stderr = os.Stderr
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return nil, nil, err
+		return nil, pkgplugin.Handshake{}, err
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, nil, err
+		return nil, pkgplugin.Handshake{}, err
 	}
 	if err := cmd.Start(); err != nil {
-		return nil, nil, err
+		return nil, pkgplugin.Handshake{}, err
 	}
 
 	p := &processPlugin{
@@ -96,9 +96,9 @@ func startPlugin(path string) (*processPlugin, []string, error) {
 	handshake, err := p.handshake()
 	if err != nil {
 		p.close()
-		return nil, nil, err
+		return nil, handshake, err
 	}
-	return p, handshake.Filters, nil
+	return p, handshake, nil
 }
 
 // read passes every line the plugin writes to messages, until the output ends, and waits for the plugin to exit
@@ -269,4 +269,16 @@ func (f *remoteFilter) Process(value any) (any, error) {
 // AcceptParams keeps the params of the usage, which are sent with every request
 func (f *remoteFilter) AcceptParams(params map[string]string) {
 	f.params = params
+}
+
+// declaredRemoteFilter is a filter of an executable plugin declaring its params, which gonfig validates before sending
+// a request, like the params of its built-in filters, see filter.ValidateParams
+type declaredRemoteFilter struct {
+	remoteFilter
+	declared []string
+}
+
+// DeclaredParams returns the params the plugin declared for the filter
+func (f *declaredRemoteFilter) DeclaredParams() []string {
+	return f.declared
 }
