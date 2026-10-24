@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestIsolateFromEnvironment checks that GONFIG_* variables are removed, HOME and the config path point to
-// empty directories, and that everything is restored afterwards
+// TestIsolateFromEnvironment checks that GONFIG_* variables are removed, HOME, the config path and the plugin path
+// point to empty directories, and that everything is restored afterwards
 func TestIsolateFromEnvironment(t *testing.T) {
 	t.Setenv("GONFIG_LOG_LEVEL", "debug")
 	t.Setenv("GONFIG_SOME_FUTURE_OPTION", "true")
@@ -17,6 +17,7 @@ func TestIsolateFromEnvironment(t *testing.T) {
 	// t.Setenv restores the variable after the test, which os.Unsetenv alone would not
 	t.Setenv("GONFIG_CONFIG_PATH", "")
 	assert.NoError(t, os.Unsetenv("GONFIG_CONFIG_PATH"))
+	t.Setenv("GONFIG_PLUGIN_PATH", "/original/plugins")
 
 	restore, err := IsolateFromEnvironment()
 	assert.NoError(t, err)
@@ -26,7 +27,7 @@ func TestIsolateFromEnvironment(t *testing.T) {
 	_, found = os.LookupEnv("GONFIG_SOME_FUTURE_OPTION")
 	assert.False(t, found)
 
-	for _, key := range []string{"HOME", "GONFIG_CONFIG_PATH"} {
+	for _, key := range []string{"HOME", "GONFIG_CONFIG_PATH", "GONFIG_PLUGIN_PATH"} {
 		dir := os.Getenv(key)
 		entries, err := os.ReadDir(dir)
 		assert.NoError(t, err, key)
@@ -41,6 +42,7 @@ func TestIsolateFromEnvironment(t *testing.T) {
 	assert.Equal(t, "/original/home", os.Getenv("HOME"))
 	_, found = os.LookupEnv("GONFIG_CONFIG_PATH")
 	assert.False(t, found)
+	assert.Equal(t, "/original/plugins", os.Getenv("GONFIG_PLUGIN_PATH"))
 	_, err = os.Stat(home)
 	assert.True(t, os.IsNotExist(err))
 }

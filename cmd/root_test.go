@@ -33,16 +33,17 @@ func TestLogLevelFlagIsApplied(t *testing.T) {
 func TestDefaultAppConfig(t *testing.T) {
 	testutil.SetHome(t, t.TempDir())
 	t.Chdir(t.TempDir())
-	// TestMain removes all other GONFIG_* variables, but points the config path to an empty directory,
-	// which this test clears to check the default search paths. Viper ignores empty environment variables.
+	// TestMain removes all other GONFIG_* variables, but points the config and plugin paths to an empty directory,
+	// which this test clears to check the defaults. Viper ignores empty environment variables.
 	t.Setenv("GONFIG_CONFIG_PATH", "")
+	t.Setenv("GONFIG_PLUGIN_PATH", "")
 	resetFlags(t)
 
 	want := &config.AppConfig{
 		LogLevel:            "info",
 		LogSource:           false,
 		ConfigPath:          "",
-		PluginPath:          "./plugins",
+		PluginPath:          "",
 		AllowUnknownFilters: false,
 		LogValues:           false,
 		FailOnMissing:       false,
@@ -65,7 +66,7 @@ func TestDefaultAppConfig(t *testing.T) {
 		"log-level":             "info",
 		"log-source":            "false",
 		"config-path":           "",
-		"plugin-path":           "./plugins",
+		"plugin-path":           "",
 		"allow-unknown-filters": "false",
 		"log-values":            "false",
 		"fail-on-missing":       "false",

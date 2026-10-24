@@ -15,6 +15,9 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+	// This package doesn't start plugins, and its tests check where the plugin path is read from,
+	// so the plugin path set by IsolateFromEnvironment is removed. Restoring the environment covers it.
+	_ = os.Unsetenv("GONFIG_PLUGIN_PATH")
 
 	code := m.Run()
 	restore()

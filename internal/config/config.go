@@ -60,6 +60,7 @@ type AppConfig struct {
 	LogLevel   string
 	LogSource  bool
 	ConfigPath string
+	// PluginPath is the plugin directory. If empty, the default plugin paths are searched, see plugin.InitPlugins.
 	PluginPath string
 	// AllowUnknownFilters makes unknown filters pass values on unchanged instead of failing
 	AllowUnknownFilters bool
@@ -109,7 +110,8 @@ func SetupViper(flags *pflag.FlagSet) (*viper.Viper, error) {
 	v.SetDefault("log-level", "info")
 	v.SetDefault("log-source", false)
 	v.SetDefault("config-path", "")
-	v.SetDefault("plugin-path", "./plugins")
+	// Empty, so the default plugin paths are searched, see plugin.InitPlugins
+	v.SetDefault("plugin-path", "")
 	v.SetDefault("allow-unknown-filters", false)
 	v.SetDefault("log-values", false)
 	v.SetDefault("fail-on-missing", false)

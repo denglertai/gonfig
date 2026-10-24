@@ -42,6 +42,8 @@ func SetHome(t testing.TB, dir string) {
 //   - all GONFIG_* environment variables are removed, including ones of options added later
 //   - the home directory (HOME, and on Windows USERPROFILE) and GONFIG_CONFIG_PATH point to the same empty directory,
 //     so neither a config file in the home directory nor one in the working directory or /etc/gonfig is used
+//   - GONFIG_PLUGIN_PATH points to that directory as well, so no plugins installed on the machine are started,
+//     e.g. in /usr/libexec/gonfig/plugins, which is searched by default
 //
 // Tests may still set environment variables with t.Setenv. The returned function restores the environment
 // and removes the directory.
@@ -72,6 +74,7 @@ func IsolateFromEnvironment() (restore func(), err error) {
 		_ = os.Setenv(key, homeValue(key, dir))
 	}
 	_ = os.Setenv(envPrefix+"CONFIG_PATH", dir)
+	_ = os.Setenv(envPrefix+"PLUGIN_PATH", dir)
 
 	return func() {
 		for _, key := range homeVariables() {

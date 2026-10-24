@@ -34,12 +34,14 @@ func mustLoadAppConfig(t *testing.T, v *viper.Viper) *AppConfig {
 	return cfg
 }
 
+// TestLoadAppConfig_DefaultPluginPath checks that the plugin path is empty by default, so the default plugin paths are searched
 func TestLoadAppConfig_DefaultPluginPath(t *testing.T) {
 	v := mustSetupViper(t, nil)
 	cfg := mustLoadAppConfig(t, v)
 
-	if cfg.PluginPath != "./plugins" {
-		t.Fatalf("expected default plugin path %q, got %q", "./plugins", cfg.PluginPath)
+	// Empty, so the default plugin paths are searched
+	if cfg.PluginPath != "" {
+		t.Fatalf("expected an empty default plugin path, got %q", cfg.PluginPath)
 	}
 }
 
@@ -54,6 +56,7 @@ func TestLoadAppConfig_PluginPathFromEnv(t *testing.T) {
 	}
 }
 
+// TestSetupViper_ConfigPathFromFlag checks that --config-path selects the directory of the config file
 func TestSetupViper_ConfigPathFromFlag(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, ".gonfig.yaml"), []byte("plugin-path: /from/config-file\n"), 0o644); err != nil {
@@ -62,7 +65,7 @@ func TestSetupViper_ConfigPathFromFlag(t *testing.T) {
 
 	flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	flags.String("config-path", "", "")
-	flags.String("plugin-path", "./plugins", "")
+	flags.String("plugin-path", "", "")
 	if err := flags.Parse([]string{"--config-path", dir}); err != nil {
 		t.Fatal(err)
 	}
@@ -74,11 +77,12 @@ func TestSetupViper_ConfigPathFromFlag(t *testing.T) {
 	}
 }
 
+// TestSetupViper_FlagOverridesEnv checks that a flag takes precedence over an environment variable
 func TestSetupViper_FlagOverridesEnv(t *testing.T) {
 	t.Setenv("GONFIG_PLUGIN_PATH", "/from/env")
 
 	flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
-	flags.String("plugin-path", "./plugins", "")
+	flags.String("plugin-path", "", "")
 	if err := flags.Parse([]string{"--plugin-path", "/from/flag"}); err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +156,7 @@ func TestLoadAppConfig_Defaults(t *testing.T) {
 		LogLevel:            "info",
 		LogSource:           false,
 		ConfigPath:          "",
-		PluginPath:          "./plugins",
+		PluginPath:          "",
 		AllowUnknownFilters: false,
 		LogValues:           false,
 		FailOnMissing:       false,
