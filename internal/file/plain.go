@@ -43,8 +43,10 @@ func NewPlainFileProcessor() *PlainFileProcessor {
 	return &PlainFileProcessor{}
 }
 
-// keepsFormat marks plain text files as keeping their BOM and line endings, since each line is written as read
-func (p *PlainFileProcessor) keepsFormat() {}
+// keepsFormat returns true, since plain text files keep their BOM and line endings, as each line is written as read
+func (p *PlainFileProcessor) keepsFormat() bool {
+	return true
+}
 
 // Read reads the content of the plain text file and stores it in the processor, treating each line as a separate entry with the line content as the key and value.
 func (p *PlainFileProcessor) Read(source io.Reader) error {

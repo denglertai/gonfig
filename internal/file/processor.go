@@ -157,7 +157,7 @@ func (fp *FileProcessor) open(handler ConfigFileHandler) (io.ReadCloser, error) 
 		source = file
 	}
 
-	if _, keepsFormat := handler.(formatKeeper); keepsFormat {
+	if keeper, ok := handler.(formatKeeper); ok && keeper.keepsFormat() {
 		return source, nil
 	}
 	return newFormatReader(source, &fp.format), nil
@@ -177,10 +177,11 @@ func (fp *FileProcessor) write(handler ConfigFileHandler, target io.Writer) erro
 	return err
 }
 
-// formatKeeper is implemented by handlers that write the BOM and line endings of the file as they were read,
+// formatKeeper is implemented by handlers that may write the BOM and line endings of the file as they were read,
 // e.g. as they process the file line by line, so FileProcessor doesn't restore them
 type formatKeeper interface {
-	keepsFormat()
+	// keepsFormat returns whether the handler writes the BOM and line endings as read
+	keepsFormat() bool
 }
 
 // utf8BOM is the byte order mark some editors write at the start of UTF-8 files
