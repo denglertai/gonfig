@@ -64,11 +64,12 @@ jobs:
           for archive in dist/gonfig_Linux_x86_64.tar.gz dist/gonfig_Linux_arm64.tar.gz; do
             test "$(tar tzf "$archive" | sort | tr '\n' ' ')" = "LICENSE gonfig "
           done
+          test "$(unzip -Z1 dist/gonfig_Windows_x86_64.zip | sort | tr '\n' ' ')" = "LICENSE gonfig.exe "
           for plugin in gonfig-plugin-openbao gonfig-plugin-azure-keyvault; do
             for platform in Linux_x86_64 Linux_arm64 Darwin_x86_64 Darwin_arm64; do
               test "$(tar tzf "dist/${plugin}_${platform}.tar.gz" | sort | tr '\n' ' ')" = "LICENSE ${plugin} "
             done
-            test -f "dist/${plugin}_Windows_x86_64.zip"
+            test "$(unzip -Z1 "dist/${plugin}_Windows_x86_64.zip" | sort | tr '\n' ' ')" = "LICENSE ${plugin}.exe "
           done
 
       # The image has to run gonfig without credentials, with both plugins started and their filters known
