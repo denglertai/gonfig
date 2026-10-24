@@ -72,6 +72,7 @@ def main():
     parser.add_argument("--config")
     parser.add_argument("--config-from")
     parser.add_argument("--replace", action="append", default=[])
+    parser.add_argument("--plugin-path", help="directory of plugins used by the examples, e.g. of the secret plugins")
     args = parser.parse_args()
 
     workdir = args.workdir or tempfile.mkdtemp(prefix="check-docs-")
@@ -91,7 +92,8 @@ def main():
         PATH=os.path.abspath(args.bin) + os.pathsep + os.environ["PATH"],
         # Logs go to stderr and would be compared as output, plugins of the work directory must not be loaded
         GONFIG_LOG_LEVEL="error",
-        GONFIG_PLUGIN_PATH=os.path.join(workdir, "no-plugins"),
+        # Plugins are only loaded from --plugin-path, e.g. to check the examples of the secret plugins
+        GONFIG_PLUGIN_PATH=os.path.abspath(args.plugin_path) if args.plugin_path else os.path.join(workdir, "no-plugins"),
     )
 
     count = failures = written = 0
