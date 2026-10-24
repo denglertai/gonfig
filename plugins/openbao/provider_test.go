@@ -138,9 +138,9 @@ func TestRead(t *testing.T) {
 		{desc: "raw error of a proxy", ref: "secret/proxy-error", wantErr: "status 502"},
 		// Other errors of the client are returned as they are
 		{desc: "invalid response", ref: "secret/invalid-json", wantErr: "error encountered while reading secret at secret/data/invalid-json: invalid character 'o' in literal null (expecting 'u')"},
-		{desc: "no path", ref: "secret", wantErr: `the reference "secret" has no path after the mount, e.g. secret/app/db`},
-		{desc: "reference outside the mount", ref: "secret/app/db", params: map[string]string{"mount": "kv/team"}, wantErr: `the reference "secret/app/db" has to start with the mount "kv/team", followed by the path`},
-		{desc: "reference equal to the mount", ref: "kv/team", params: map[string]string{"mount": "kv/team"}, wantErr: `the reference "kv/team" has to start with the mount "kv/team", followed by the path`},
+		{desc: "no path", ref: "secret", wantErr: "no path after the mount, e.g. secret/app/db"},
+		{desc: "reference outside the mount", ref: "secret/app/db", params: map[string]string{"mount": "kv/team"}, wantErr: `the reference has to start with the mount "kv/team", followed by the path`},
+		{desc: "reference equal to the mount", ref: "kv/team", params: map[string]string{"mount": "kv/team"}, wantErr: `the reference has to start with the mount "kv/team", followed by the path`},
 		{desc: "invalid kv", ref: "secret/app/db", params: map[string]string{"kv": "3"}, wantErr: `invalid KV version "3", use 1 or 2`},
 		{desc: "invalid version", ref: "secret/app/db", params: map[string]string{"version": "latest"}, wantErr: `invalid version "latest", use a positive number`},
 		{desc: "version zero", ref: "secret/app/db", params: map[string]string{"version": "0"}, wantErr: `invalid version "0", use a positive number`},
