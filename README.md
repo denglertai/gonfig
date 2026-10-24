@@ -259,6 +259,8 @@ gonfig expands the pattern itself, so it works in exec-form entrypoints of image
 
 **Secrets mounted as files:** Docker and Kubernetes mount secrets as files. Point a variable to the file with `@` instead of copying the secret into the environment, e.g. `DB_PASSWORD=@/run/secrets/db_password` with `${DB_PASSWORD | trim}`. See [recipes](./FILTERS.md#read-secrets-from-files).
 
+**Secrets from secret managers:** Read secrets from OpenBao, HashiCorp Vault or Azure Key Vault with the plugins of this repository, e.g. `${DB_PASSWORD | openbao}` with `DB_PASSWORD=secret/app/db#password`. See [plugins for secret managers](./PLUGINS.md#plugins-for-secret-managers).
+
 **Values with special characters:** Passwords or URLs containing `&`, `<`, `"` or `:` are escaped as required by XML, JSON or YAML, which plain text replacement tools like `envsubst` do not do.
 
 **Password hashes:** Generate bcrypt hashes at deploy time instead of storing them, e.g. `${ADMIN_PASSWORD | bcrypt}`. See [recipes](./FILTERS.md#generate-password-hashes).
@@ -674,6 +676,11 @@ Plugins add custom filters. They are separate executables named `gonfig-plugin-*
 
 Plugins don't depend on the Go version or build flags of the gonfig binary and may be written in any language. Go plugins (`.so` files) are still loaded, but deprecated.
 See [PLUGINS.md](./PLUGINS.md) for how plugins work, a step-by-step guide, examples and the migration from Go plugins, and [plugins/dummy](./plugins/dummy/) for a minimal plugin.
+
+This repository provides plugins for secret managers, see [plugins for secret managers](./PLUGINS.md#plugins-for-secret-managers):
+
+- [OpenBao and HashiCorp Vault](./plugins/openbao/): the filter `openbao`, e.g. `${DB_PASSWORD | openbao}` with `DB_PASSWORD=secret/app/db#password`
+- [Azure Key Vault](./plugins/azure-keyvault/): the filter `azure_keyvault`, e.g. `${DB_PASSWORD | azure_keyvault}` with `DB_PASSWORD=myvault/db-password`
 
 ## Benchmarks
 

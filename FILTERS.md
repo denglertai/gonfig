@@ -718,6 +718,41 @@ Error: failed to read the file referenced with @: open /run/secrets/missing: no 
 
 Use an absolute path or one starting with `./` or `../` (or `.\` or `..\` on Windows) to ensure processing fails for missing files.
 
+### Read secrets from secret managers
+
+The [plugins for secret managers](./PLUGINS.md#plugins-for-secret-managers) read secrets from OpenBao, HashiCorp Vault and Azure Key Vault. The variable holds the reference to the secret.
+This example uses a local dev server (`bao server -dev -dev-root-token-id=root`), whose root token and plain HTTP are only meant for development. Use an `https://` address and a token with a policy limited to the secrets needed, or AppRole or Kubernetes authentication, for real servers, see the [OpenBao plugin](./plugins/openbao/#authentication):
+
+```console
+$ export BAO_ADDR=http://127.0.0.1:8200 BAO_TOKEN=root
+$ bao kv put secret/app/db user=app password=s3cret
+$ DB_PASSWORD='secret/app/db#password' gonfig value 'password=${DB_PASSWORD | openbao}'
+password=s3cret
+```
+
+A placeholder template provides the reference by default, so config files only use `${@db_password}`:
+
+```yaml
+# .gonfig.yaml
+templates:
+  placeholders:
+    db_password:
+      env: DB_PASSWORD_REF
+      default: "secret/app/db#password"
+      filters: "openbao"
+```
+
+Without plugins, an agent of the secret manager can write the secrets to files, which gonfig reads as [files](#read-secrets-from-files), e.g. the agents of OpenBao and Vault, or the [Secrets Store CSI driver](https://secrets-store-csi-driver.sigs.k8s.io/) in Kubernetes, which mounts secrets of Vault, Azure Key Vault, AWS and GCP into pods:
+
+```yaml
+# Pod with a volume of the CSI driver mounted at /mnt/secrets
+env:
+  - name: DB_PASSWORD
+    value: "@/mnt/secrets/db-password"
+```
+
+The plugins need no agent, sidecar or volume and read every secret when gonfig runs; the files need no credentials in gonfig's environment and work with any secret manager the agent supports.
+
 ### Generate password hashes
 
 Store a bcrypt hash instead of the plain password, e.g. for an htpasswd file processed with `-t plain`:

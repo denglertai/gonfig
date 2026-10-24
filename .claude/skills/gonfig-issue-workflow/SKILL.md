@@ -107,6 +107,8 @@ python3 $SKILL/scripts/check_links.py . README.md FILTERS.md PLUGINS.md cmd/benc
 sh $SKILL/scripts/render_tables.sh README.md FILTERS.md     # tables with escaped pipes must render with consistent columns
 ```
 
+Examples of plugins, e.g. the secret plugins, need the built plugins and the secret manager: pass `--plugin-path <dir>` with the built plugins, and start a dev server first, e.g. `bao server -dev -dev-root-token-id=root` with `BAO_ADDR` and `BAO_TOKEN` exported. Without `--plugin-path`, no plugins are loaded.
+
 To make an example checkable, introduce its file with a line like `` `app.yaml`: `` directly before the code block; the checker writes it before running the following commands. Expected README failures: examples with placeholder paths (`/path/to/...`, `config.template.yaml`), the repo-relative `cmd/testdata` example, and the `nginx.conf` example whose file name sits mid-sentence.
 
 Write doc examples from real output, never from expectations. When an example fails, check whether the doc or the code is wrong before "fixing" either.

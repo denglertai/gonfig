@@ -250,19 +250,58 @@ To keep the key out of the file, read it from an environment variable in the plu
 
 ## Plugins for secret managers
 
-This repository provides plugins for these secret managers:
+This repository provides plugins that read secrets from secret managers:
 
-- [OpenBao and HashiCorp Vault](./plugins/openbao/): the filter `openbao`
-- [Azure Key Vault](./plugins/azure-keyvault/): the filter `azure_keyvault`
+| Plugin | Filter | Reference | Authentication |
+| --- | --- | --- | --- |
+| [OpenBao and HashiCorp Vault](./plugins/openbao/) | `openbao` | `secret/app/db#password` | token, AppRole, Kubernetes |
+| [Azure Key Vault](./plugins/azure-keyvault/) | `azure_keyvault` | `myvault/db-password` | `DefaultAzureCredential`: environment, workload identity, managed identity, Azure CLI |
 
-Plugins reading secrets from secret managers build on [pkg/plugin/secret](./pkg/plugin/secret/), which provides a filter resolving references like `secret/app/db#password` with a `Provider` for the secret manager.
-The variable of a placeholder holds the reference, e.g. `${DB_PASSWORD | openbao}` with `DB_PASSWORD=secret/app/db#password`. The filter:
+The variable of a placeholder holds the reference to the secret, and the filter returns the secret, e.g. `${DB_PASSWORD | openbao}` with `DB_PASSWORD=secret/app/db#password`.
+A [placeholder template](./FILTERS.md#templates) can keep the reference out of the config files. See the README of each plugin for its references, configuration and examples.
 
-- connects to the secret manager on its first request, so the plugin starts without credentials and only fails the values using it
-- reads every secret once per run, also if several of its fields are used
-- selects the field after `#`, also of secrets containing a JSON object. Without a field, secrets with fields are returned as a JSON object, e.g. for [fragments](./FILTERS.md#fragments)
-- limits every request to 20 s, or the duration in `GONFIG_SECRET_TIMEOUT`, e.g. `10s`, which has to be shorter than the 30 s gonfig waits for an answer
-- keeps secrets out of its errors, which the `Provider` has to do as well
+### Shared behavior
+
+The plugins build on [pkg/plugin/secret](./pkg/plugin/secret/), so they behave the same:
+
+- **Fields:** `#` selects a field of the secret, also of secrets containing a JSON object. Without a field, a secret with fields is returned as a JSON object, which the [`fragment`](./FILTERS.md#fragments) filter inserts as a structure. Fields that aren't strings are returned as JSON, e.g. `5432`.
+- **Caching:** every secret is read once per run, also if several of its fields are used.
+- **Lazy authentication:** a plugin authenticates on the first placeholder using it. gonfig starts every plugin of the plugin directory on every run, so gonfig works without credentials for secret managers that no placeholder uses. If authentication fails, every placeholder using the plugin fails with the same error, without trying again.
+- **Timeouts:** a request may take 20 s including authentication, or the duration in `GONFIG_SECRET_TIMEOUT`, e.g. `10s`, which has to be shorter than the 30 s gonfig waits for an answer of a plugin.
+- **Errors** name the reference and what the secret manager reported, but never the secret, e.g. `filter openbao: failed to read the secret "secret/app/db": status 403: permission denied`. An empty reference, e.g. of a variable that is not set, fails instead of requesting an empty path.
+- **Configuration:** plugins inherit gonfig's environment, so they are configured with the usual variables of the secret manager, e.g. `BAO_ADDR` or `AZURE_CLIENT_ID`, and `GONFIG_<PLUGIN>_*` variables for settings of gonfig, e.g. `GONFIG_OPENBAO_AUTH`.
+
+`gonfig config check` runs the filters as well, so it authenticates, reads the secrets and reports errors like a missing permission for every entry, while the [diff](./README.md#showing-the-changes) shows the secrets as `***`.
+
+### Security
+
+- **Don't use `allow-unknown-filters` with secret plugins.** If a plugin fails to start, its filter is unknown. gonfig then fails by default, but with `allow-unknown-filters` it writes the reference instead of the secret, with exit code `0`:
+
+  ```console
+  $ DB_PASSWORD=secret/app/db#password gonfig --allow-unknown-filters value 'password=${DB_PASSWORD | openbao}'
+  {"time":"...","level":"WARN","msg":"Unknown filter, passing the value on unchanged","filter":"openbao"}
+  password=secret/app/db#password
+  ```
+- **Prefer files or workload identities to credentials in the environment**, which other processes of the same user may read: e.g. `GONFIG_OPENBAO_TOKEN_FILE` or Kubernetes authentication for OpenBao, and workload or managed identity for Azure.
+- **Secrets travel only through the pipe** between gonfig and the plugin. The plugins never put them into errors, and gonfig leaves processed values out of its logs unless [`log-values`](./README.md#configuration) is enabled for debugging.
+- **gonfig starts every plugin it finds**, so installed plugins run even if no placeholder uses them. They don't contact a secret manager before a placeholder uses them.
+
+### Writing a plugin for another secret manager
+
+A plugin for another secret manager implements the `Provider` of [pkg/plugin/secret](./pkg/plugin/secret/): `Connect` creates the client and authenticates on the first request, `Read` returns a secret as a string or a map of fields, and `Params` declares the params of the filter.
+`secret.NewFilter` adds the shared behavior, and `plugin.Serve` serves the filter:
+
+```go
+func main() {
+	filter := secret.NewFilter(&provider{})
+	if err := plugin.Serve(map[string]any{"mysecrets": filter}); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+```
+
+Errors of a `Provider` must not contain secrets, tokens or response bodies that may contain them. gonfig prefixes them with the name of the filter.
 
 ## Packaging with melange and apko
 
