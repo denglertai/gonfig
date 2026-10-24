@@ -95,14 +95,14 @@ func splitReference(ref string, mount string) (string, string, error) {
 	if mount == "" {
 		mount, path, _ := strings.Cut(ref, "/")
 		if path == "" {
-			return "", "", fmt.Errorf("the reference %q has no path after the mount, e.g. secret/app/db", ref)
+			return "", "", errors.New("no path after the mount, e.g. secret/app/db")
 		}
 		return mount, path, nil
 	}
 
 	path, found := strings.CutPrefix(ref, mount+"/")
 	if !found || path == "" {
-		return "", "", fmt.Errorf("the reference %q has to start with the mount %q, followed by the path", ref, mount)
+		return "", "", fmt.Errorf("the reference has to start with the mount %q, followed by the path", mount)
 	}
 	return mount, path, nil
 }
