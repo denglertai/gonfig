@@ -6,7 +6,7 @@
 // A plugin serves the filter with plugin.Serve:
 //
 //	func main() {
-//		filter := secret.NewFilter("openbao", &provider{})
+//		filter := secret.NewFilter(&provider{})
 //		if err := plugin.Serve(map[string]any{"openbao": filter}); err != nil {
 //			fmt.Fprintln(os.Stderr, err)
 //			os.Exit(1)
@@ -14,7 +14,9 @@
 //	}
 //
 // The variable of a placeholder holds the reference, e.g. ${DB_PASSWORD | openbao} with
-// DB_PASSWORD=secret/app/db#password. See PLUGINS.md for how plugins work.
+// DB_PASSWORD=secret/app/db#password. Errors of the filter don't name it, since gonfig prefixes the errors of plugins
+// with the name of the filter, e.g. "filter openbao: failed to read the secret ...". See PLUGINS.md for how plugins
+// work.
 package secret
 
 import (
@@ -65,7 +67,6 @@ type Filter struct {
 
 // state is shared by all copies of a Filter
 type state struct {
-	name     string
 	provider Provider
 
 	mu         sync.Mutex
@@ -75,9 +76,9 @@ type state struct {
 	cache map[string]any
 }
 
-// NewFilter returns a filter named name, which is used in errors, reading secrets with the provider
-func NewFilter(name string, provider Provider) *Filter {
-	return &Filter{state: &state{name: name, provider: provider, cache: map[string]any{}}}
+// NewFilter returns a filter reading secrets with the provider
+func NewFilter(provider Provider) *Filter {
+	return &Filter{state: &state{provider: provider, cache: map[string]any{}}}
 }
 
 // AcceptParams keeps the params of the usage
@@ -91,10 +92,10 @@ func (f *Filter) AcceptParams(params map[string]string) {
 func (f *Filter) Process(value any) (any, error) {
 	reference, ok := value.(string)
 	if !ok {
-		return nil, fmt.Errorf("filter %s: the reference has to be a string, not %T", f.name, value)
+		return nil, fmt.Errorf("the reference has to be a string, not %T", value)
 	}
 	if reference == "" {
-		return nil, fmt.Errorf("filter %s: the reference is empty, e.g. as its variable is not set", f.name)
+		return nil, errors.New("the reference is empty, e.g. as its variable is not set")
 	}
 	if err := f.validateParams(); err != nil {
 		return nil, err
@@ -102,7 +103,7 @@ func (f *Filter) Process(value any) (any, error) {
 
 	ref, field, hasField := strings.Cut(reference, "#")
 	if ref == "" {
-		return nil, fmt.Errorf("filter %s: the reference %q names no secret before the #", f.name, reference)
+		return nil, fmt.Errorf("the reference %q names no secret before the #", reference)
 	}
 	secret, err := f.read(ref)
 	if err != nil {
@@ -117,7 +118,7 @@ func (f *Filter) Process(value any) (any, error) {
 	}
 	formatted, err := format(result)
 	if err != nil {
-		return nil, fmt.Errorf("filter %s: the secret %q %w", f.name, ref, err)
+		return nil, fmt.Errorf("the secret %q %w", ref, err)
 	}
 	return formatted, nil
 }
@@ -128,9 +129,9 @@ func (f *Filter) validateParams() error {
 	for _, name := range slices.Sorted(maps.Keys(f.params)) {
 		if !slices.Contains(accepted, name) {
 			if len(accepted) == 0 {
-				return fmt.Errorf("filter %s accepts no params, but got %q", f.name, name)
+				return fmt.Errorf("unknown param %q, no params are accepted", name)
 			}
-			return fmt.Errorf("filter %s has no param %q, it accepts %s", f.name, name, strings.Join(accepted, ", "))
+			return fmt.Errorf("unknown param %q, it accepts %s", name, strings.Join(accepted, ", "))
 		}
 	}
 	return nil
@@ -148,7 +149,7 @@ func (f *Filter) read(ref string) (any, error) {
 
 	timeout, err := requestTimeout()
 	if err != nil {
-		return nil, fmt.Errorf("filter %s: %w", f.name, err)
+		return nil, err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -159,15 +160,15 @@ func (f *Filter) read(ref string) (any, error) {
 
 	secret, err := f.provider.Read(ctx, ref, f.params)
 	if errors.Is(err, context.DeadlineExceeded) {
-		return nil, fmt.Errorf("filter %s: reading the secret %q took longer than %s", f.name, ref, timeout)
+		return nil, fmt.Errorf("reading the secret %q took longer than %s", ref, timeout)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("filter %s: failed to read the secret %q: %w", f.name, ref, err)
+		return nil, fmt.Errorf("failed to read the secret %q: %w", ref, err)
 	}
 	switch secret.(type) {
 	case string, map[string]any:
 	default:
-		return nil, fmt.Errorf("filter %s: the provider returned a %T for the secret %q instead of a string or map", f.name, secret, ref)
+		return nil, fmt.Errorf("the provider returned a %T for the secret %q instead of a string or map", secret, ref)
 	}
 
 	f.cache[key] = secret
@@ -185,7 +186,7 @@ func (f *Filter) connect(ctx context.Context) error {
 		if errors.Is(err, context.DeadlineExceeded) {
 			err = errors.New("connecting took too long")
 		}
-		f.connectErr = fmt.Errorf("filter %s: failed to connect: %w", f.name, err)
+		f.connectErr = fmt.Errorf("failed to connect: %w", err)
 	}
 	return f.connectErr
 }
@@ -196,13 +197,13 @@ func (f *Filter) selectField(ref string, secret any, field string) (any, error) 
 	if !ok {
 		// The parser's error is not included, since it may quote the secret
 		if err := json.Unmarshal([]byte(secret.(string)), &fields); err != nil || fields == nil {
-			return nil, fmt.Errorf("filter %s: the secret %q has no fields, since it doesn't contain a JSON object", f.name, ref)
+			return nil, fmt.Errorf("the secret %q has no fields, since it doesn't contain a JSON object", ref)
 		}
 	}
 
 	value, found := fields[field]
 	if !found {
-		return nil, fmt.Errorf("filter %s: the secret %q has no field %q", f.name, ref, field)
+		return nil, fmt.Errorf("the secret %q has no field %q", ref, field)
 	}
 	return value, nil
 }
