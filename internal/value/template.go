@@ -167,6 +167,9 @@ func validateTemplates(templates config.Templates) error {
 				continue
 			}
 
+			if steps[0].err != nil {
+				fail("placeholder", name, "%v in value", steps[0].err)
+			}
 			if ref, isTemplate := templateName(steps[0].name); isTemplate {
 				if _, found := templates.Placeholders[ref]; found {
 					placeholderRefs[name] = append(placeholderRefs[name], ref)
@@ -200,6 +203,8 @@ func validateChain(steps []chainStep, templates config.Templates) ([]string, []e
 	for _, step := range steps {
 		ref, isTemplate := templateName(step.name)
 		switch {
+		case step.err != nil:
+			errs = append(errs, step.err)
 		case isTemplate:
 			if _, found := templates.Filters[ref]; found {
 				refs = append(refs, ref)
