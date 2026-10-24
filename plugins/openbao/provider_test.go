@@ -76,6 +76,9 @@ func fakeOpenBao(t *testing.T) *httptest.Server {
 		case !tokens[r.Header.Get("X-Vault-Token")]:
 			// OpenBao wraps the messages in a list like this
 			reply(http.StatusForbidden, map[string]any{"errors": []string{"1 error occurred:\n\t* permission denied\n\n"}})
+		case strings.HasSuffix(key, "/invalid-json"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("not json"))
 		case strings.HasSuffix(key, "/proxy-error"):
 			w.WriteHeader(http.StatusBadGateway)
 			_, _ = w.Write([]byte("<html>bad gateway</html>"))
@@ -133,6 +136,8 @@ func TestRead(t *testing.T) {
 		{desc: "missing version", ref: "secret/app/db", params: map[string]string{"version": "7"}, wantErr: "not found"},
 		{desc: "deleted secret", ref: "secret/deleted", wantErr: "the secret is deleted"},
 		{desc: "raw error of a proxy", ref: "secret/proxy-error", wantErr: "status 502"},
+		// Other errors of the client are returned as they are
+		{desc: "invalid response", ref: "secret/invalid-json", wantErr: "error encountered while reading secret at secret/data/invalid-json: invalid character 'o' in literal null (expecting 'u')"},
 		{desc: "no path", ref: "secret", wantErr: `the reference "secret" has no path after the mount, e.g. secret/app/db`},
 		{desc: "reference outside the mount", ref: "secret/app/db", params: map[string]string{"mount": "kv/team"}, wantErr: `the reference "secret/app/db" has to start with the mount "kv/team", followed by the path`},
 		{desc: "reference equal to the mount", ref: "kv/team", params: map[string]string{"mount": "kv/team"}, wantErr: `the reference "kv/team" has to start with the mount "kv/team", followed by the path`},
@@ -268,16 +273,29 @@ func TestConnectInvalidAddress(t *testing.T) {
 	assert.ErrorContains(t, (&provider{}).Connect(context.Background()), "invalid configuration: ")
 }
 
-// TestReadUnreachable checks that errors other than responses of OpenBao are returned as they are, e.g. a closed port
+// TestReadUnreachable checks that errors of requests without a response, e.g. to a closed port, name the method and
+// URL without the path the KV client adds, and without a password of the address
 func TestReadUnreachable(t *testing.T) {
 	server := fakeOpenBao(t)
+	t.Setenv("BAO_ADDR", strings.Replace(server.URL, "http://", "http://user:hunter2@", 1))
+	t.Setenv("BAO_MAX_RETRIES", "0")
 	t.Setenv("BAO_TOKEN", "root")
-	p, err := connect(t, server)
-	assert.NoError(t, err)
+	p := &provider{}
+	assert.NoError(t, p.Connect(context.Background()))
 	server.Close()
 
-	_, err = p.Read(context.Background(), "secret/app/db", nil)
-	assert.ErrorContains(t, err, server.URL)
+	_, err := p.Read(context.Background(), "secret/app/db", nil)
+	redacted := strings.Replace(server.URL, "http://", "http://user:***@", 1)
+	assert.ErrorContains(t, err, `Get "`+redacted+`/v1/secret/data/app/db": `)
+	assert.NotContains(t, err.Error(), "hunter2")
+	assert.NotContains(t, err.Error(), "error encountered")
+
+	t.Setenv("GONFIG_OPENBAO_AUTH", "approle")
+	t.Setenv("GONFIG_OPENBAO_ROLE_ID", "role")
+	t.Setenv("GONFIG_OPENBAO_SECRET_ID", "id")
+	err = (&provider{}).Connect(context.Background())
+	assert.ErrorContains(t, err, `failed to log in with approle: Put "`+redacted+`/v1/auth/approle/login": `)
+	assert.NotContains(t, err.Error(), "hunter2")
 }
 
 // TestUnwrapMessages checks unwrapping the messages of OpenBao from its lists of errors

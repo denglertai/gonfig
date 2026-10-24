@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -106,8 +107,11 @@ func splitReference(ref string, mount string) (string, string, error) {
 	return mount, path, nil
 }
 
-// describe returns the error without the URL and response bodies of the client's errors, which may be long or contain
-// anything a proxy returns, keeping the status code and the messages of OpenBao
+// describe returns the error without the URL and response bodies of the client's response errors, which may be long
+// or contain anything a proxy returns, keeping the status code and the messages of OpenBao. Errors of requests without
+// a response, e.g. a refused connection, are reduced to the error of net/http, which names the method and the URL of
+// the request, since the address helps to find the cause. net/http replaces a password in the URL by ***, and tokens
+// are sent in a header, so the URL contains no secrets.
 func describe(err error) error {
 	if errors.Is(err, api.ErrSecretNotFound) {
 		return errors.New("not found")
@@ -123,6 +127,12 @@ func describe(err error) error {
 			messages = append(messages, unwrapMessages(message)...)
 		}
 		return fmt.Errorf("status %d: %s", response.StatusCode, strings.Join(messages, "; "))
+	}
+
+	// The KV client wraps these errors with the path, which the reference in the error of the filter names already
+	var request *url.Error
+	if errors.As(err, &request) {
+		return request
 	}
 	return err
 }
