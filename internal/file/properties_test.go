@@ -110,6 +110,9 @@ func TestPropertiesKeepsFormatting(t *testing.T) {
 		{desc: "keys without values", content: "empty\nempty2=\na=${PROPS_VALUE}\n", want: "empty\nempty2=\na=value\n"},
 		{desc: "escapes kept in unchanged lines", content: "k\\:x=\\u00e4\\t\na=${PROPS_VALUE}\n", want: "k\\:x=\\u00e4\\t\na=value\n"},
 		{desc: "escapes decoded in changed lines", content: "a=\\u00e4 ${PROPS_VALUE}\n", want: "a=ä value\n"},
+		{desc: "surrogate pair", content: "a=\\ud83d\\uDE00 ${PROPS_VALUE}\n", want: "a=😀 value\n"},
+		// Unpaired surrogates cannot be written as UTF-8, like before
+		{desc: "unpaired surrogates", content: "a=\\ud83d\\u0041 \\ude00\\ud83d ${PROPS_VALUE}\n", want: "a=\uFFFDA \uFFFD\uFFFD value\n"},
 		{desc: "special characters escaped", content: "a=${PROPS_SPECIAL}\n", want: "a=\\ lead\\\\ing\\n\\ttab=x:y #z ä\n"},
 		{desc: "no line ending at the end", content: "a=${PROPS_VALUE}", want: "a=value"},
 		{desc: "mixed line endings", content: "a=${PROPS_VALUE}\r\nb=2\nc=${PROPS_VALUE}\rd=4", want: "a=value\r\nb=2\nc=value\rd=4"},
@@ -157,6 +160,7 @@ func TestPropertiesReadErrors(t *testing.T) {
 	for content, wantErr := range map[string]string{
 		"a=1\nb=\\u00g0\n":    `line 2: invalid value of b: invalid unicode escape "\\u00g0"`,
 		"a=\\u12":             `line 1: invalid value of a: invalid unicode escape "\\u12"`,
+		"a=\\ud83d\\uzz00":    `line 1: invalid value of a: invalid unicode escape "\\uzz00"`,
 		"\\uxyz=1\n":          `line 1: invalid key: invalid unicode escape "\\uxyz"`,
 		"a=1\nb=2\\":          "line 2 ends with an escape character at the end of the file",
 		"a=1\\\n  2\\\n  3\\": "line 3 ends with an escape character at the end of the file",

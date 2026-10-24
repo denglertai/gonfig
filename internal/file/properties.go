@@ -7,6 +7,8 @@ import (
 	"iter"
 	"strconv"
 	"strings"
+	"unicode/utf16"
+	"unicode/utf8"
 )
 
 // PropertiesFileHandler is a handler for properties files. It parses the file line by line, like Java's Properties,
@@ -269,8 +271,18 @@ func decodeProperties(text string) (string, error) {
 			if err != nil || i+5 > len(text) {
 				return "", fmt.Errorf("invalid unicode escape %q", text[i-1:min(i+5, len(text))])
 			}
-			decoded.WriteRune(rune(code))
 			i += 4
+			r := rune(code)
+			// Characters outside the BMP, e.g. emoji, are written as two escapes of a UTF-16 surrogate pair
+			if utf16.IsSurrogate(r) && strings.HasPrefix(text[i+1:], `\u`) {
+				if low, err := strconv.ParseUint(text[i+3:min(i+7, len(text))], 16, 16); err == nil && i+7 <= len(text) {
+					if combined := utf16.DecodeRune(r, rune(low)); combined != utf8.RuneError {
+						r = combined
+						i += 6
+					}
+				}
+			}
+			decoded.WriteRune(r)
 		default:
 			decoded.WriteByte(text[i])
 		}

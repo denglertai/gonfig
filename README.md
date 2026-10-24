@@ -292,7 +292,7 @@ Afterwards every entry in that list is being processed individually by applying 
 
 Only the processed values are changed, the rest of the file is preserved as far as the format allows: comments and key order are kept for YAML, JSON and properties files, and YAML files may contain multiple documents.
 Properties files are written line by line as they were read, so separators, blank lines, continuation lines and duplicate keys are kept as well. Only lines whose value changes are rewritten, after the key and separator as they were, with the value on a single line.
-CRLF line endings and a UTF-8 byte order mark are kept for every file type. Other than plain text files, which keep every line as it is, files with mixed line endings are written with the line ending of their first line.
+CRLF line endings and a UTF-8 byte order mark are kept for every file type. Other than plain text and properties files, which keep the line ending of every line, files with mixed line endings are written with the line ending of their first line.
 
 Usage:
 
