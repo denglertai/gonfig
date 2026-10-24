@@ -156,14 +156,18 @@ install-zig:
 	fi
 
 # Test
+# Plugins are separate modules, which go test ./... of the root module doesn't include
+PLUGIN_MODULES := $(patsubst %/go.mod,%,$(wildcard plugins/*/go.mod))
 test:
 	go test ./...
+	@for dir in $(PLUGIN_MODULES); do (cd $$dir && go test ./...) || exit 1; done
 
 # Run the linters configured in .golangci.yml with the version used in CI (.github/workflows/go.yml)
 # renovate: datasource=github-releases depName=golangci/golangci-lint
 GOLANGCI_LINT_VERSION ?= v2.15.0
 lint:
 	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) run ./...
+	@for dir in $(PLUGIN_MODULES); do (cd $$dir && go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) run ./...) || exit 1; done
 
 # Run the benchmarks, e.g. make bench BENCH=ProcessFile/yaml
 BENCH ?= .
