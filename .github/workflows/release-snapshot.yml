@@ -76,7 +76,9 @@ jobs:
       - name: Check the image for linux/amd64
         run: |
           set -euo pipefail
-          image=$(docker images ghcr.io/denglertai/gonfig --format '{{.Repository}}:{{.Tag}}' | grep -- '-amd64$' | head -1)
+          # The image of this snapshot, tagged with its version and the platform, see dockers_v2 in .goreleaser.yaml
+          image="ghcr.io/denglertai/gonfig:$(jq -r .version dist/metadata.json)-amd64"
+          docker image inspect "$image" >/dev/null
           echo "Checking $image"
           # The result goes to stdout without a newline, the logs to stderr, so they are captured separately
           result=$(docker run --rm "$image" --log-level debug value ok 2>"$RUNNER_TEMP/logs")
@@ -91,19 +93,26 @@ jobs:
             echo "The image logged errors"
             exit 1
           fi
-          # Unconfigured placeholders fail with the errors of the plugins, so their filters are known
-          out=$(docker run --rm -e DB=secret/app/db "$image" value '${DB | openbao}' 2>&1 || true)
-          echo "$out"
-          grep -q 'filter openbao: failed to connect: no address, set BAO_ADDR or VAULT_ADDR' <<<"$out"
-          out=$(docker run --rm -e DB=myvault "$image" value '${DB | azure_keyvault}' 2>&1 || true)
-          echo "$out"
-          grep -q 'filter azure_keyvault: failed to read the secret "myvault": invalid reference' <<<"$out"
+          # Unconfigured placeholders fail with exit code 1 and the errors of the plugins, so their filters are known
+          expect_error() {
+            local message=$1 out status=0
+            shift
+            out=$("$@" 2>&1) || status=$?
+            echo "$out"
+            test "$status" -eq 1
+            grep -qF "$message" <<<"$out"
+          }
+          expect_error 'filter openbao: failed to connect: no address, set BAO_ADDR or VAULT_ADDR' \
+            docker run --rm -e DB=secret/app/db "$image" value '${DB | openbao}'
+          expect_error 'filter azure_keyvault: failed to read the secret "myvault": invalid reference' \
+            docker run --rm -e DB=myvault "$image" value '${DB | azure_keyvault}'
 
       # Running the arm64 image would need QEMU, so its files are checked instead
       - name: Check the image for linux/arm64
         run: |
           set -euo pipefail
-          image=$(docker images ghcr.io/denglertai/gonfig --format '{{.Repository}}:{{.Tag}}' | grep -- '-arm64$' | head -1)
+          image="ghcr.io/denglertai/gonfig:$(jq -r .version dist/metadata.json)-arm64"
+          docker image inspect "$image" >/dev/null
           echo "Checking $image"
           container=$(docker create --platform linux/arm64 "$image")
           docker cp "$container:/usr/bin/gonfig" "$RUNNER_TEMP/gonfig"
