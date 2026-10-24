@@ -29,6 +29,4 @@ runs:
         echo "/usr/local/zig" >> "$GITHUB_PATH"
     - name: Verify Zig installation
       shell: bash
-      run: |
-        /usr/local/zig/zig version
-        echo "ZIG_VERSION=$(/usr/local/zig/zig version)" >> "$GITHUB_ENV"
+      run: /usr/local/zig/zig version

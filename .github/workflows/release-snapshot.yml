@@ -38,9 +38,12 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
+          # Like the release, built without the cache, which a poisoned cache entry could alter
+          cache: false
           go-version-file: go.mod
       - name: Set up the cross toolchain
-        uses: ./.github/actions/setup-cross-toolchain
+        # actionlint does not support the self-repository syntax $/ yet
+        uses: ./.github/actions/setup-cross-toolchain # zizmor: ignore[self-repository]
       - name: Setup syft
         uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
       # The image only copies binaries, so building it for arm64 needs no QEMU

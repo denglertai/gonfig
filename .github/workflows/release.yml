@@ -40,7 +40,8 @@ jobs:
           # The toolchain of go.mod, so releases are built with the Go version CI tested
           go-version-file: go.mod
       - name: Set up the cross toolchain
-        uses: ./.github/actions/setup-cross-toolchain
+        # actionlint does not support the self-repository syntax $/ yet
+        uses: ./.github/actions/setup-cross-toolchain # zizmor: ignore[self-repository]
       - name: Check if release already exists
         id: release-check
         run: |
