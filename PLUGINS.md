@@ -7,6 +7,7 @@ Plugins add custom [filters](./FILTERS.md) to gonfig without changing gonfig its
 - [Values and params](#values-and-params)
 - [The dummy plugin](#the-dummy-plugin)
 - [Example: hash filters](#example-hash-filters)
+- [Plugins for secret managers](#plugins-for-secret-managers)
 - [Packaging with melange and apko](#packaging-with-melange-and-apko)
 - [The protocol](#the-protocol)
 - [Migrating from Go plugins](#migrating-from-go-plugins)
@@ -19,7 +20,12 @@ Plugins and gonfig don't have to be built with the same Go version, and plugins 
 
 On startup gonfig walks the plugin directory recursively and starts every executable whose name starts with `gonfig-plugin-`, e.g. `gonfig-plugin-crypto` (`gonfig-plugin-crypto.exe` on Windows).
 Other files are ignored, so build scripts next to the sources of a plugin are never started. The exception are deprecated Go plugins (`.so` files), which are still loaded, see [migrating from Go plugins](#migrating-from-go-plugins).
-The plugin directory defaults to `./plugins`, relative to the current working directory, and may be changed by:
+By default, gonfig searches two plugin directories:
+1. `/usr/libexec/gonfig/plugins`, where plugin packages install their plugins, see [packaging](#packaging-with-melange-and-apko). Windows has no such directory.
+1. `./plugins`, relative to the current working directory
+
+Directories that don't exist are skipped. The system directory is searched first, so a plugin in `./plugins` cannot replace a filter of an installed plugin, since filter names are unique (see below).
+Another plugin directory may be set, which is then the only one searched, by:
 1. the CLI flag `--plugin-path`
 1. the environment variable `GONFIG_PLUGIN_PATH`
 1. the key `plugin-path` in `.gonfig.yaml`
@@ -242,11 +248,23 @@ Error: filter hmac_sha256: the param key is required
 Since the key is a param, it may contain [escaped](./FILTERS.md#filter-params) special characters, but it is part of the config file.
 To keep the key out of the file, read it from an environment variable in the plugin instead, since plugins inherit gonfig's environment.
 
+## Plugins for secret managers
+
+Plugins reading secrets from secret managers build on [pkg/plugin/secret](./pkg/plugin/secret/), which provides a filter resolving references like `secret/app/db#password` with a `Provider` for the secret manager.
+The variable of a placeholder holds the reference, e.g. `${DB_PASSWORD | openbao}` with `DB_PASSWORD=secret/app/db#password`. The filter:
+
+- connects to the secret manager on its first request, so the plugin starts without credentials and only fails the values using it
+- reads every secret once per run, also if several of its fields are used
+- selects the field after `#`, also of secrets containing a JSON object. Without a field, secrets with fields are returned as a JSON object, e.g. for [fragments](./FILTERS.md#fragments)
+- limits every request to 20 s, or the duration in `GONFIG_SECRET_TIMEOUT`, e.g. `10s`, which has to be shorter than the 30 s gonfig waits for an answer
+- keeps secrets out of its errors, which the `Provider` has to do as well
+
 ## Packaging with melange and apko
 
 Plugins don't depend on the Go version gonfig was built with, so a plugin package can be built independently of the gonfig package and combined with it in an image.
 
-A [melange](https://github.com/chainguard-dev/melange) package for the plugin builds it with the `go/build` pipeline and installs it into a plugin directory, e.g. `/usr/libexec/gonfig/plugins`:
+A [melange](https://github.com/chainguard-dev/melange) package for the plugin builds it with the `go/build` pipeline and installs it into `/usr/libexec/gonfig/plugins`, which gonfig searches by default.
+`install-dir` sets the directory below `/usr` the binary is installed to, and the runtime dependency installs gonfig together with the plugin:
 
 ```yaml
 package:
@@ -254,6 +272,9 @@ package:
   version: 1.0.0
   epoch: 0
   description: Filters for gonfig
+  dependencies:
+    runtime:
+      - gonfig
 
 environment:
   contents:
@@ -269,12 +290,12 @@ pipeline:
     with:
       packages: .
       output: gonfig-plugin-crypto
-  - runs: |
-      mkdir -p ${{targets.destdir}}/usr/libexec/gonfig/plugins
-      mv ${{targets.destdir}}/usr/bin/gonfig-plugin-crypto ${{targets.destdir}}/usr/libexec/gonfig/plugins/
+      install-dir: libexec/gonfig/plugins
 ```
 
-The [apko](https://github.com/chainguard-dev/apko) configuration of the image adds both packages from the repositories they are published to, and points gonfig to the plugin directory.
+The runtime dependency doesn't pin a gonfig version, since plugins and gonfig only share the versioned [protocol](#the-protocol).
+
+The [apko](https://github.com/chainguard-dev/apko) configuration of the image adds the plugin package from the repository it is published to, which installs gonfig as well.
 These are the relevant parts of the configuration, e.g. for packages built with melange into its output directory `./packages`:
 
 ```yaml
@@ -288,12 +309,10 @@ contents:
     # The public key of the key melange signed the packages with
     - ./melange.rsa.pub
   packages:
-    - gonfig
     - gonfig-plugin-crypto
-
-environment:
-  GONFIG_PLUGIN_PATH: /usr/libexec/gonfig/plugins
 ```
+
+gonfig finds the plugin in `/usr/libexec/gonfig/plugins` without further configuration. Versions of gonfig before the default search paths need `GONFIG_PLUGIN_PATH: /usr/libexec/gonfig/plugins` in the `environment` of the image.
 
 ## The protocol
 

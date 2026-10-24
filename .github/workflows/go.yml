@@ -42,6 +42,18 @@ jobs:
       shell: bash
       run: go test ./... -coverprofile=coverage.txt
 
+    - name: Test plugin modules
+      # Plugins are separate modules, which go test ./... of the root module doesn't include.
+      # Each module writes its own coverage report, which Codecov finds and merges.
+      shell: bash
+      run: |
+        for mod in plugins/*/go.mod; do
+          dir=$(dirname "$mod")
+          echo "::group::$dir"
+          (cd "$dir" && go test ./... -coverprofile=coverage.txt)
+          echo "::endgroup::"
+        done
+
     - name: Upload coverage reports to Codecov
       # Codecov merges the reports of all systems, so platform specific code is covered as well
       uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
@@ -67,6 +79,12 @@ jobs:
     - name: Run tests with the race detector
       run: go test -race ./...
 
+    - name: Run tests of plugin modules with the race detector
+      run: |
+        for mod in plugins/*/go.mod; do
+          (cd "$(dirname "$mod")" && go test -race ./...)
+        done
+
   lint:
     runs-on: ubuntu-latest
     env:
@@ -89,6 +107,13 @@ jobs:
       uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
       with:
         version: ${{ env.GOLANGCI_LINT_VERSION }}
+
+    # Plugins are separate modules; golangci-lint finds the .golangci.yml of the repository root from their directories
+    - name: Run golangci-lint for plugin modules
+      run: |
+        for mod in plugins/*/go.mod; do
+          (cd "$(dirname "$mod")" && go run "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}" run ./...)
+        done
 
   trivy-scan:
     runs-on: ubuntu-latest

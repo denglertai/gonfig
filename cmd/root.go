@@ -92,7 +92,7 @@ func GetAppConfig(cmd *cobra.Command) *config.AppConfig {
 		LogLevel:   "info",
 		LogSource:  false,
 		ConfigPath: "",
-		PluginPath: "./plugins",
+		PluginPath: "",
 
 		AllowUnknownFilters: false,
 		LogValues:           false,
@@ -120,7 +120,8 @@ func init() {
 	rootCmd.PersistentFlags().StringP("log-level", "l", "info", "Log level (trace, debug, info, warn, error, fatal)")
 	rootCmd.PersistentFlags().BoolP("log-source", "s", false, "Whether to include source location in log output or not")
 	rootCmd.PersistentFlags().String("config-path", "", "Path to the directory containing .gonfig config file (env var: GONFIG_CONFIG_PATH)")
-	rootCmd.PersistentFlags().String("plugin-path", "./plugins", "Path to plugin directory (env var: GONFIG_PLUGIN_PATH)")
+	// Empty by default, so the default plugin paths are searched, see plugin.InitPlugins
+	rootCmd.PersistentFlags().String("plugin-path", "", "Path to the plugin directory; by default /usr/libexec/gonfig/plugins (except on Windows) and ./plugins are searched (env var: GONFIG_PLUGIN_PATH)")
 	rootCmd.PersistentFlags().Bool("log-values", false, "Include processed values in debug logs and error messages, which may expose secrets (env var: GONFIG_LOG_VALUES)")
 	rootCmd.PersistentFlags().Bool("fail-on-missing", false, "Fail for environment variables that are not set instead of using empty strings, unless a default is provided (env var: GONFIG_FAIL_ON_MISSING)")
 	rootCmd.PersistentFlags().Bool("allow-unknown-filters", false, "Pass values on unchanged instead of failing for unknown filters, which may write secrets unhashed (env var: GONFIG_ALLOW_UNKNOWN_FILTERS)")

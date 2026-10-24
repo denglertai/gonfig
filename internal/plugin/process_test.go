@@ -377,3 +377,54 @@ func BenchmarkExecutablePlugin(b *testing.B) {
 		}
 	})
 }
+
+// TestDefaultPluginPaths checks that the system directory is searched before the local one, except on Windows
+func TestDefaultPluginPaths(t *testing.T) {
+	assert.Equal(t, []string{"/usr/libexec/gonfig/plugins", "./plugins"}, defaultPluginPaths("linux"))
+	assert.Equal(t, []string{"/usr/libexec/gonfig/plugins", "./plugins"}, defaultPluginPaths("darwin"))
+	assert.Equal(t, []string{"./plugins"}, defaultPluginPaths("windows"))
+}
+
+// useSystemPluginDir makes the directory the system plugin directory for the test
+func useSystemPluginDir(t *testing.T, dir string) {
+	t.Helper()
+	previous := systemPluginDir
+	systemPluginDir = dir
+	t.Cleanup(func() { systemPluginDir = previous })
+}
+
+// TestInitPluginsSearchesDefaultPaths checks that both default directories are searched without a plugin path, and
+// that the plugin of the system directory keeps its filters if a plugin in ./plugins provides the same ones
+func TestInitPluginsSearchesDefaultPaths(t *testing.T) {
+	systemDir, prefix := installTestPlugin(t, "serve")
+	useSystemPluginDir(t, systemDir)
+
+	executable, err := os.Executable()
+	assert.NoError(t, err)
+	workDir := t.TempDir()
+	assert.NoError(t, os.Mkdir(filepath.Join(workDir, "plugins"), 0o755))
+	assert.NoError(t, os.Symlink(executable, filepath.Join(workDir, "plugins", executablePrefix+"local")))
+	t.Chdir(workDir)
+
+	InitPlugins("")
+	t.Cleanup(ClosePlugins)
+
+	if assert.Len(t, running, 2) {
+		assert.Equal(t, filepath.Join(systemDir, executablePrefix+"test"), running[0].path)
+		assert.Contains(t, running[0].filters, prefix+"upper")
+		assert.Equal(t, filepath.Join("plugins", executablePrefix+"local"), running[1].path)
+		assert.Empty(t, running[1].filters)
+	}
+}
+
+// TestInitPluginsConfiguredPathOnly checks that a configured plugin path replaces the default ones
+func TestInitPluginsConfiguredPathOnly(t *testing.T) {
+	systemDir, prefix := installTestPlugin(t, "serve")
+	useSystemPluginDir(t, systemDir)
+
+	InitPlugins(t.TempDir())
+	t.Cleanup(ClosePlugins)
+
+	assert.Empty(t, running)
+	assert.False(t, filter.IsKnown(prefix+"upper"))
+}

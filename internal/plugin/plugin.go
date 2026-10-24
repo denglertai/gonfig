@@ -18,14 +18,40 @@ import (
 // running are the executable plugins started by InitPlugins, which ClosePlugins stops
 var running []*processPlugin
 
-// InitPlugins starts all executable plugins (gonfig-plugin-*) and loads all Go plugins (.so files) found in the
-// plugin path. Plugins that fail to start or load are logged and skipped, so they don't prevent other plugins from
-// loading. ClosePlugins stops the executable plugins again.
-func InitPlugins(pluginPath string) {
-	if pluginPath == "" {
-		pluginPath = "./plugins"
-	}
+// systemPluginDir is the plugin directory of installed packages, e.g. the apk packages of the plugins of this
+// repository. It is a variable, so tests can use another directory.
+var systemPluginDir = "/usr/libexec/gonfig/plugins"
 
+// localPluginDir is the plugin directory relative to the working directory
+const localPluginDir = "./plugins"
+
+// defaultPluginPaths returns the directories searched for plugins if no plugin path is configured. The system directory
+// comes first, so plugins in the working directory cannot replace the filters of installed plugins, since the plugin
+// registering a filter name first wins. Windows has no system directory.
+func defaultPluginPaths(goos string) []string {
+	if goos == "windows" {
+		return []string{localPluginDir}
+	}
+	return []string{systemPluginDir, localPluginDir}
+}
+
+// InitPlugins starts all executable plugins (gonfig-plugin-*) and loads all Go plugins (.so files) found in the
+// plugin path, or in the default plugin paths if it is empty, see defaultPluginPaths. Plugins that fail to start or
+// load are logged and skipped, so they don't prevent other plugins from loading. ClosePlugins stops the executable
+// plugins again.
+func InitPlugins(pluginPath string) {
+	paths := []string{pluginPath}
+	if pluginPath == "" {
+		paths = defaultPluginPaths(runtime.GOOS)
+	}
+	for _, path := range paths {
+		loadPluginDir(path)
+	}
+}
+
+// loadPluginDir starts and loads the plugins of a plugin directory and its subdirectories.
+// A directory that does not exist is skipped, since no plugins may be installed.
+func loadPluginDir(pluginPath string) {
 	logging.Trace("Starting loading plugins", "pluginPath", pluginPath)
 
 	err := filepath.WalkDir(pluginPath, func(path string, d fs.DirEntry, err error) error {

@@ -585,7 +585,7 @@ Order of precedence (highest to lowest):
 | Log level | `--log-level`, `-l` | `GONFIG_LOG_LEVEL` | `info` | Logging verbosity (`trace`, `debug`, `info`, `warn`, `error`, `fatal`) |
 | Include source location | `--log-source`, `-s` | `GONFIG_LOG_SOURCE` | `false` | Includes source location in log output |
 | Config directory | `--config-path` | `GONFIG_CONFIG_PATH` | empty | Directory that contains `.gonfig.yaml` |
-| Plugin directory | `--plugin-path` | `GONFIG_PLUGIN_PATH` | `./plugins` | Directory scanned recursively for executable plugins (`gonfig-plugin-*`) and deprecated Go plugins (`.so` files) |
+| Plugin directory | `--plugin-path` | `GONFIG_PLUGIN_PATH` | `/usr/libexec/gonfig/plugins` (except on Windows) and `./plugins` | Directory scanned recursively for executable plugins (`gonfig-plugin-*`) and deprecated Go plugins (`.so` files). If set, only this directory is scanned |
 | Log values | `--log-values` | `GONFIG_LOG_VALUES` | `false` | Includes processed values in debug logs, error messages of filters, the parser messages of invalid fragments and the diff of `config check --diff`. Values may contain secrets, so only use it for debugging; gonfig warns on startup while it is enabled |
 | Fail on missing variables | `--fail-on-missing` | `GONFIG_FAIL_ON_MISSING` | `false` | Fails for [environment variables that are not set](./FILTERS.md#missing-variables) instead of using empty strings, unless the placeholder provides a default |
 | Allow unknown filters | `--allow-unknown-filters` | `GONFIG_ALLOW_UNKNOWN_FILTERS` | `false` | Passes values on unchanged with a warning instead of failing for [unknown filters](./FILTERS.md#order-of-operations). This may write secrets that were meant to be hashed or encrypted |
@@ -604,7 +604,8 @@ Example config file:
 ```yaml
 log-level: debug
 log-source: true
-plugin-path: ./plugins
+# Only this plugin directory instead of the default ones
+plugin-path: /opt/gonfig/plugins
 # Keep processed values, which may contain secrets, out of debug logs (default)
 log-values: false
 # Replace environment variables that are not set by empty strings (default)
@@ -669,7 +670,7 @@ To include the values for debugging, enable `log-values` with `--log-values`, `G
 
 ## Plugins
 
-Plugins add custom filters. They are separate executables named `gonfig-plugin-*`, which gonfig starts from the plugin directory and talks to over stdin and stdout. The plugin directory defaults to `./plugins` and may be changed with `--plugin-path`, `GONFIG_PLUGIN_PATH` or `plugin-path` in `.gonfig.yaml`.
+Plugins add custom filters. They are separate executables named `gonfig-plugin-*`, which gonfig starts from the plugin directory and talks to over stdin and stdout. By default, gonfig searches `/usr/libexec/gonfig/plugins` (except on Windows), where plugin packages install them, and `./plugins`. Another directory may be set with `--plugin-path`, `GONFIG_PLUGIN_PATH` or `plugin-path` in `.gonfig.yaml`.
 
 Plugins don't depend on the Go version or build flags of the gonfig binary and may be written in any language. Go plugins (`.so` files) are still loaded, but deprecated.
 See [PLUGINS.md](./PLUGINS.md) for how plugins work, a step-by-step guide, examples and the migration from Go plugins, and [plugins/dummy](./plugins/dummy/) for a minimal plugin.

@@ -40,6 +40,13 @@ jobs:
     - name: Run govulncheck
       run: go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...
 
+    # Plugins are separate modules with their own dependencies, e.g. the SDKs of secret managers
+    - name: Run govulncheck for plugin modules
+      run: |
+        for mod in plugins/*/go.mod; do
+          (cd "$(dirname "$mod")" && go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...)
+        done
+
   # The latest release keeps the standard library and modules it was built with, so new vulnerabilities in them
   # aren't found by scanning main. Its source is scanned instead of the binary, since -mode=binary has no call
   # graph and also reports vulnerable symbols that aren't called.
