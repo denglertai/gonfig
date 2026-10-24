@@ -37,7 +37,8 @@ jobs:
         with:
           # A poisoned cache could alter the released binaries
           cache: false
-          go-version: stable
+          # The toolchain of go.mod, so releases are built with the Go version CI tested
+          go-version-file: go.mod
       - name: Install Linux ARM64 cross-toolchain
         run: |
           sudo apt-get update
@@ -166,7 +167,8 @@ jobs:
         with:
           # A poisoned cache could alter the released binaries
           cache: false
-          go-version: stable
+          # The toolchain of go.mod, so releases are built with the Go version CI tested
+          go-version-file: go.mod
       - name: Build Darwin binary with CGO
         run: |
           mkdir -p dist/darwin-${{ matrix.goarch }}
