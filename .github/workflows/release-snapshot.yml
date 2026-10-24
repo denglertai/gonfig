@@ -77,9 +77,11 @@ jobs:
           set -euo pipefail
           image=$(docker images ghcr.io/denglertai/gonfig --format '{{.Repository}}:{{.Tag}}' | grep -- '-amd64$' | head -1)
           echo "Checking $image"
-          logs=$(docker run --rm "$image" --log-level debug value ok 2>&1)
+          # The result goes to stdout without a newline, the logs to stderr, so they are captured separately
+          result=$(docker run --rm "$image" --log-level debug value ok 2>"$RUNNER_TEMP/logs")
+          logs=$(cat "$RUNNER_TEMP/logs")
           echo "$logs"
-          test "$(tail -1 <<<"$logs")" = "ok"
+          test "$result" = "ok"
           for plugin in gonfig-plugin-openbao gonfig-plugin-azure-keyvault; do
             grep -q "\"msg\":\"Started filter plugin\",\"plugin\":\"/usr/libexec/gonfig/plugins/${plugin}\"" <<<"$logs"
           done
