@@ -85,6 +85,9 @@ func (p *provider) client(vaultURL string) *azsecrets.Client {
 func parseReference(ref string, suffix string) (vaultURL string, name string, version string, err error) {
 	if strings.Contains(ref, "://") {
 		u, err := url.Parse(ref)
+		if err == nil && u.User != nil {
+			return "", "", "", errors.New("the secret URL must not contain credentials")
+		}
 		if err != nil || u.Scheme != "https" || u.Host == "" || u.RawQuery != "" {
 			return "", "", "", errors.New("invalid secret URL, use https://<vault host>/secrets/<secret>[/<version>]")
 		}

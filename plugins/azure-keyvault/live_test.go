@@ -37,7 +37,8 @@ func TestLive(t *testing.T) {
 		}
 	}
 
+	// Errors of the filter never contain the secret, but a failed comparison would print it, so only its result is shown
 	result, err := secret.NewFilter(&provider{}).Process(ref)
 	assert.NoError(t, err)
-	assert.Equal(t, want, result)
+	assert.True(t, result == want, "the value read differs from %s", liveValueEnv)
 }

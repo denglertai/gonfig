@@ -126,6 +126,7 @@ func TestParseReference(t *testing.T) {
 		{ref: "https://myvault.vault.azure.net/secrets/db/v1/x", wantErr: `invalid secret URL, use https://<vault host>/secrets/<secret>[/<version>]`},
 		{ref: "my_vault/db", wantErr: `invalid vault "my_vault"`},
 		{ref: "https://my_vault.vault.azure.net/secrets/db", wantErr: `invalid vault "my_vault.vault.azure.net"`},
+		{ref: "https://user:pass@myvault.vault.azure.net/secrets/db", wantErr: "the secret URL must not contain credentials"},
 		{ref: "https://%zz/secrets/db", wantErr: `invalid secret URL, use https://<vault host>/secrets/<secret>[/<version>]`},
 	}
 	for _, tC := range testCases {
@@ -267,15 +268,19 @@ func TestConnectDefaultCredential(t *testing.T) {
 	assert.NotNil(t, p.credential)
 }
 
-// countingCredential fails every request with err and counts them
+// countingCredential fails every request with err and counts them. Requests with a context that ended fail with its
+// error, like a credential waiting for a response.
 type countingCredential struct {
 	err   error
 	calls int
 }
 
-// GetToken counts the call and returns a token, or err if set
-func (c *countingCredential) GetToken(context.Context, policy.TokenRequestOptions) (azcore.AccessToken, error) {
+// GetToken counts the call and returns a token, or the error of an ended context, or err if set
+func (c *countingCredential) GetToken(ctx context.Context, _ policy.TokenRequestOptions) (azcore.AccessToken, error) {
 	c.calls++
+	if ctx.Err() != nil {
+		return azcore.AccessToken{}, ctx.Err()
+	}
 	if c.err != nil {
 		return azcore.AccessToken{}, c.err
 	}
@@ -301,6 +306,17 @@ func TestFailOnceCredential(t *testing.T) {
 		assert.EqualError(t, err, "no credential")
 	}
 	assert.Equal(t, 1, failing.calls)
+
+	// A request whose context ended, e.g. by the timeout of a read, is tried again by the next read
+	succeeding = &countingCredential{}
+	credential = &failOnceCredential{credential: succeeding}
+	ended, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := credential.GetToken(ended, policy.TokenRequestOptions{})
+	assert.ErrorIs(t, err, context.Canceled)
+	token, err := credential.GetToken(context.Background(), policy.TokenRequestOptions{})
+	assert.NoError(t, err)
+	assert.Equal(t, "token", token.Token)
 }
 
 // TestParams checks that the filter accepts no params
