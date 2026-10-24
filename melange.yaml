@@ -42,3 +42,39 @@ pipeline:
         -X github.com/denglertai/gonfig/internal/version.version=${{package.version}}
         -X github.com/denglertai/gonfig/internal/version.commit=${{vars.commit}}
         -X github.com/denglertai/gonfig/internal/version.date=${{vars.commit-date}}
+
+# The plugins for secret managers, released with gonfig. Subpackages get the version of gonfig and are built in the
+# same run. They install into /usr/libexec/gonfig/plugins, which gonfig searches by default, and need no cgo.
+# The dependency on gonfig isn't pinned to a version, since plugins and gonfig only share the versioned plugin protocol.
+subpackages:
+  - name: gonfig-plugin-openbao
+    description: gonfig plugin reading secrets from OpenBao and HashiCorp Vault
+    dependencies:
+      runtime:
+        - gonfig
+    pipeline:
+      - uses: go/build
+        environment:
+          CGO_ENABLED: "0"
+          GOFLAGS: "-buildvcs=false"
+        with:
+          modroot: plugins/openbao
+          packages: .
+          output: gonfig-plugin-openbao
+          install-dir: libexec/gonfig/plugins
+
+  - name: gonfig-plugin-azure-keyvault
+    description: gonfig plugin reading secrets from Azure Key Vault
+    dependencies:
+      runtime:
+        - gonfig
+    pipeline:
+      - uses: go/build
+        environment:
+          CGO_ENABLED: "0"
+          GOFLAGS: "-buildvcs=false"
+        with:
+          modroot: plugins/azure-keyvault
+          packages: .
+          output: gonfig-plugin-azure-keyvault
+          install-dir: libexec/gonfig/plugins

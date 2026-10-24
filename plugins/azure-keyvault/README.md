@@ -7,7 +7,7 @@ See [PLUGINS.md](../../PLUGINS.md) for how plugins work.
 - [References](#references)
 - [Authentication](#authentication)
 - [Errors](#errors)
-- [Build](#build)
+- [Installation](#installation)
 
 ## Usage
 
@@ -100,15 +100,21 @@ Errors of Key Vault look like `status 404 SecretNotFound: ...` or `status 403 Fo
 
 `gonfig config check` runs the filter as well, so it reads the secrets and reports these errors, while the [diff](../../README.md#showing-the-changes) masks the secrets.
 
-## Build
+## Installation
 
-Within this directory:
+The plugin is released with gonfig, see [installation](../../README.md#plugins-for-secret-managers):
+
+- the release archives `gonfig-plugin-azure-keyvault_<OS>_<arch>`, e.g. `gonfig-plugin-azure-keyvault_Linux_x86_64.tar.gz`
+- the apk `gonfig-plugin-azure-keyvault`, which installs gonfig as well
+- the container image `ghcr.io/denglertai/gonfig`, which contains the plugin
+
+The packages and the image install the plugin into `/usr/libexec/gonfig/plugins`, which gonfig searches by default on Linux and macOS. Put binaries from the archives there as well. On Windows, gonfig searches `.\plugins` in the working directory by default instead. Another directory can be set with `--plugin-path` on every system.
+
+To build the plugin from source, run within this directory:
 
 ```console
 $ go build -o gonfig-plugin-azure-keyvault .
 ```
-
-Copy the binary into a plugin directory, e.g. `/usr/libexec/gonfig/plugins`, which gonfig searches by default.
 
 The unit tests use the fake server of the Azure SDK. A live test reads a secret of a real vault if `TEST_AZURE_KEYVAULT_REF` and `TEST_AZURE_KEYVAULT_VALUE` are set, with the Azure CLI credential after `az login`, or with `TEST_AZURE_TENANT_ID`, `TEST_AZURE_CLIENT_ID` and `TEST_AZURE_CLIENT_SECRET` of a service principal:
 

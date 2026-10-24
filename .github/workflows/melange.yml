@@ -68,20 +68,27 @@ jobs:
     - name: Run melange
       run: melange build melange.yaml --out-dir ./apk --arch=x86_64 --signing-key ${{ runner.temp }}/melange.rsa --vars-file ${{ runner.temp }}/melange-vars.yaml
 
-    # The apk repository contains the packages of previous releases as well, so only the built one is attested
-    - name: Find the built apk
+    # The apk repository contains the packages of previous releases as well, so only the built ones are attested:
+    # gonfig and the plugins of its subpackages
+    - name: Find the built apks
       id: apk
       run: |
         version=$(awk '/^  version:/ {print $2; exit}' melange.yaml)
         epoch=$(awk '/^  epoch:/ {print $2; exit}' melange.yaml)
-        path="apk/x86_64/gonfig-${version}-r${epoch}.apk"
-        test -f "$path"
-        echo "path=$path" >> "$GITHUB_OUTPUT"
+        {
+          echo "paths<<EOF"
+          for name in gonfig gonfig-plugin-openbao gonfig-plugin-azure-keyvault; do
+            path="apk/x86_64/${name}-${version}-r${epoch}.apk"
+            test -f "$path"
+            echo "$path"
+          done
+          echo "EOF"
+        } >> "$GITHUB_OUTPUT"
 
-    - name: Attest the build provenance of the apk
+    - name: Attest the build provenance of the apks
       uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
       with:
-        subject-path: ${{ steps.apk.outputs.path }}
+        subject-path: ${{ steps.apk.outputs.paths }}
     
     - name: Commit changes
       run: |

@@ -8,6 +8,9 @@ FROM cgr.dev/chainguard/glibc-dynamic:latest@sha256:2827063c9efb4ba971d8621eb75f
 ARG TARGETPLATFORM
 
 COPY $TARGETPLATFORM/gonfig /usr/bin/gonfig
+# The plugins for secret managers, in the directory gonfig searches by default. They authenticate on the first
+# placeholder using them, so gonfig runs without credentials for secret managers that aren't used.
+COPY $TARGETPLATFORM/gonfig-plugin-openbao $TARGETPLATFORM/gonfig-plugin-azure-keyvault /usr/libexec/gonfig/plugins/
 COPY LICENSE /usr/share/licenses/gonfig/LICENSE
 
 # The base image runs as the nonroot user (uid 65532)
