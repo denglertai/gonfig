@@ -629,11 +629,12 @@ Order of precedence (highest to lowest):
 
 ### Config File
 
-By default, `gonfig` searches for a `.gonfig.yaml` file in these directories:
+By default, `gonfig` searches for a `.gonfig.yaml` file in these directories, from the most specific one:
+1. Current working directory (`.`), e.g. of a project
 1. `$HOME`
-1. Current working directory (`.`)
 1. `/etc/gonfig`
 
+Only the first config file found is used, so a project's config file applies instead of the one in the home directory, and the files are not merged. The debug log shows which file is used (`"msg":"Using config file"`).
 If `--config-path` (or `GONFIG_CONFIG_PATH`) is set, only that directory is used.
 
 Example config file:

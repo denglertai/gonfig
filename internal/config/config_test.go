@@ -146,6 +146,49 @@ func isolateConfig(t *testing.T) {
 	t.Setenv("GONFIG_CONFIG_PATH", "")
 }
 
+// TestSetupViper_SearchOrder checks that the config file of the current directory is used before the one in the home
+// directory, which is used if the current directory has none. Only one config file is used, so they aren't merged.
+func TestSetupViper_SearchOrder(t *testing.T) {
+	isolateConfig(t)
+	home := t.TempDir()
+	testutil.SetHome(t, home)
+	work := t.TempDir()
+	t.Chdir(work)
+
+	write := func(dir string, content string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, ".gonfig.yaml"), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(home, "log-level: warn\nlog-source: true\n")
+	write(work, "log-level: debug\n")
+
+	cfg := mustLoadAppConfig(t, mustSetupViper(t, nil))
+	if cfg.LogLevel != "debug" || cfg.LogSource {
+		t.Fatalf("expected the config file of the current directory only, got log level %q and log source %v", cfg.LogLevel, cfg.LogSource)
+	}
+	if want := filepath.Join(work, ".gonfig.yaml"); !sameFile(t, cfg.ConfigFile, want) {
+		t.Fatalf("expected the config file %q, got %q", want, cfg.ConfigFile)
+	}
+
+	if err := os.Remove(filepath.Join(work, ".gonfig.yaml")); err != nil {
+		t.Fatal(err)
+	}
+	cfg = mustLoadAppConfig(t, mustSetupViper(t, nil))
+	if cfg.LogLevel != "warn" || !sameFile(t, cfg.ConfigFile, filepath.Join(home, ".gonfig.yaml")) {
+		t.Fatalf("expected the config file of the home directory, got log level %q from %q", cfg.LogLevel, cfg.ConfigFile)
+	}
+}
+
+// sameFile returns whether the paths refer to the same file, e.g. a relative and an absolute path
+func sameFile(t *testing.T, a string, b string) bool {
+	t.Helper()
+	infoA, errA := os.Stat(a)
+	infoB, errB := os.Stat(b)
+	return errA == nil && errB == nil && os.SameFile(infoA, infoB)
+}
+
 // TestLoadAppConfig_Defaults checks the complete default config without any config file or environment variables
 func TestLoadAppConfig_Defaults(t *testing.T) {
 	isolateConfig(t)

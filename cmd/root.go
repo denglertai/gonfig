@@ -56,6 +56,10 @@ It provides a flexible plugin system for extending functionality and a filtering
 		if err := logging.InitLogging(cfg.LogLevel, cfg.LogSource); err != nil {
 			return err
 		}
+		// Only one config file is used, the first one found, so the log shows which one
+		if cfg.ConfigFile != "" {
+			pkglogging.Debug("Using config file", "file", cfg.ConfigFile)
+		}
 
 		// Initialize the Plugin system
 		plugin.InitPlugins(cfg.PluginPath)
