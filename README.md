@@ -23,6 +23,7 @@ czNjciZ0
 - [Plugins](#plugins)
 - [Benchmarks](#benchmarks)
 - [Releasing](#releasing)
+- [Roadmap](#roadmap)
 
 ## Features
 
@@ -41,9 +42,11 @@ czNjciZ0
 
 ## Installation
 
-Installing `gonfig` can currently be done by downloading the latest release from [https://github.com/denglertai/gonfig/releases/latest](https://github.com/denglertai/gonfig/releases/latest) 
+gonfig is available as release archives, an apk package and a container image.
 
-Installing the apk from [https://denglertai.github.io/apk/](https://denglertai.github.io/apk/).
+Download the archive for your system from the [latest release](https://github.com/denglertai/gonfig/releases/latest) and put the `gonfig` binary into a directory of your `PATH`.
+
+Install the apk from [https://denglertai.github.io/apk/](https://denglertai.github.io/apk/), e.g. in images based on Wolfi:
 ```bash
 # Add the repository to the list of apk repositories
 $ echo "https://denglertai.github.io/apk/" >> /etc/apk/repositories
@@ -303,21 +306,19 @@ $ gonfig config process -f config.template.yaml -o config.yaml -w
 
 ## Usage
 
-`gonfig` may just be used as any other CLI by simply invoking it.
-
 `gonfig --version` (or `-v`) prints the version, e.g. `gonfig version 0.1.0 (commit 0274352, 2026-10-18T08:05:01Z)` for a release, followed by the commit and its date if they are known.
 Binaries installed with `go install` print the version only, and the commit is marked with `-dirty` for binaries built from modified sources.
 
 ### config
 
-`gonfig config` is intended to interact with various kinds of config file types including `.json`, `.xml`, `.yaml` and `.properties` files, as well as plain text files (`-t plain`).
+`gonfig config` works with JSON, YAML, XML and properties files, as well as plain text files (`-t plain`).
 
 It has two subcommands: `process` processes the given config files and is described below, while [`check`](#check) reports missing variables and errors without writing anything.
 
-In general, process takes the given input file and creates a flat list of all given keys, nodes and attributes depending on the file type.
-Afterwards every entry in that list is being processed individually by applying the filters.
+`process` parses each file in its format and collects the entries that may contain placeholders: depending on the file type, values and keys, the text and attributes of XML elements, or lines.
+Each entry is then processed on its own, by replacing its placeholders and applying their filters.
 
-Only the processed values are changed, the rest of the file is preserved as far as the format allows: comments and key order are kept for YAML, JSON and properties files, and YAML files may contain multiple documents.
+Only the processed values are changed, the rest of the file is preserved as far as the format allows: comments are kept for YAML, XML and properties files, the order of keys for every file type, and YAML files may contain multiple documents.
 Properties files are written line by line as they were read, so separators, blank lines, continuation lines and duplicate keys are kept as well. Only lines whose value changes are rewritten, after the key and separator as they were, with the value on a single line.
 CRLF line endings and a UTF-8 byte order mark are kept for every file type. Other than plain text and properties files, which keep the line ending of every line, files with mixed line endings are written with the line ending of their first line.
 
@@ -327,22 +328,20 @@ Usage:
     ```console
     $ gonfig config process -f /path/to/file.xml
     ```
-   This will take the given file as an input, read it, apply filters and print the result to stdout.
-   Because no file extension is given, the type will be inferred from the file's extension (xml).
+   This reads the file, processes its placeholders and prints the result to stdout.
+   Since `-t` is not given, the type is inferred from the file's extension (xml).
 
 1. Process a file and directly write the changes back to the given input file (`-i` / `--inline` flag)
     ```console
     $ gonfig config process -i -f /path/to/file.xml
     ```
-   This will take the given file as an input, read it, apply filters and write back to `/path/to/file.xml`.
-   Because no file extension is given, the type will be inferred from the file's extension (xml).
+   This reads the file, processes its placeholders and writes the result back to `/path/to/file.xml`.
    `-i` cannot be combined with `-o`, which fails before anything is processed.
 
 1. Process a file with a custom extension that does not allow inferring the file's type (`-t` / `--file-type` flag)
     ```console
     $ gonfig config process -f /path/to/file.abc -t xml
     ```
-   This will take the given file as an input, read it, apply filters and print the result to stdout.
    Without `-t`, files of unsupported types fail with the supported types and a hint to use `-t plain`, which
    processes any text file line by line. Unknown extensions are not processed as plain text automatically, so a typo
    like `-f config.yam` fails instead of skipping the YAML handling.
@@ -534,13 +533,13 @@ Entries of the file that cannot be processed keep their placeholders, while valu
 
 ### value
 
-`gonfig value` basically does the same as `gonfig config process` but expects an input string instead. This may be useful if any transformation has to be done in scripts or other places where no file is directly involved.
+`gonfig value` processes the strings given as arguments like the values of a config file, e.g. to transform values in scripts where no file is involved.
 
 The output is always echoed to stdout. At least one value is required, so a variable of a script expanding to nothing, e.g. `gonfig value $TEMPLATE`, fails instead of printing nothing; an empty value (`gonfig value ''`) is allowed.
 
 Usage:
 
-1. Echo the value of an environment variable (but why?)
+1. Print the value of an environment variable
     ```console
     $ ABC=123 gonfig value "\${ABC}"
     123
@@ -799,16 +798,7 @@ Optional:
 
 After the tag is pushed, monitor the workflow runs in GitHub Actions and verify the generated release assets and APK publication.
 
-## Future goals
+## Roadmap
 
-Stability:
-* Improve error handling
-* More tests
-* More useful logging
-
-Filters:
-* Datatype conversion: Write the values back to the file with the correct datatypes applied (int, string, bool, ...) while respecting the possibilities of the given file type
-* Validation: 
-  * Ensure that a value is filled (required values)
-  * Ensure that the input can be converted to a datatype (int, bool, float, ...)
-  * Ensure that the input is in a list of expected values (enum)
+Planned features and known limitations are tracked as [GitHub issues](https://github.com/denglertai/gonfig/issues), e.g. the [planned features](https://github.com/denglertai/gonfig/issues?q=is%3Aissue%20is%3Aopen%20label%3Atype%2Ffeature) like TOML support ([#161](https://github.com/denglertai/gonfig/issues/161)).
+Feature requests and bug reports are welcome as issues as well.
