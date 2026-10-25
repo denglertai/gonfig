@@ -1,0 +1,28 @@
+name: Feature request
+description: Suggest a new filter, option or file type
+labels: ["type/feature"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do, and why doesn't gonfig support it today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: How it could work, ideally with the placeholder, config file or command you have in mind
+      placeholder: |
+        ```console
+        $ LEVEL=verbose gonfig value '${LEVEL | one_of(debug|info)}'
+        Error: ...
+        ```
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Workarounds you use today, or other ways to solve the problem

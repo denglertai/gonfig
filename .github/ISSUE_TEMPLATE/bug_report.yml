@@ -1,0 +1,63 @@
+name: Bug report
+description: Something doesn't work as documented
+labels: ["type/bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Please use made-up secrets in all examples.
+        Vulnerabilities, e.g. secrets appearing in logs, must not be reported here, see the [security policy](https://github.com/denglertai/gonfig/security/policy).
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The output of `gonfig --version`
+      placeholder: gonfig version 0.3.0 (commit abc1234, 2026-10-25T12:00:00Z)
+    validations:
+      required: true
+  - type: dropdown
+    id: installation
+    attributes:
+      label: Installation
+      options:
+        - Container image
+        - apk
+        - Release archive
+        - go install / built from source
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: The command, a minimal input file and the environment variables needed, and `.gonfig.yaml` if used
+      placeholder: |
+        `app.yaml`:
+        ```yaml
+        port: ${PORT | to_int}
+        ```
+
+        ```console
+        $ PORT=8080 gonfig config process -f app.yaml
+        ```
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: The output, error message or log, e.g. with `--log-level debug`
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Operating system, plugins in use (`gonfig plugin list`), or anything else that might help
