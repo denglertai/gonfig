@@ -128,11 +128,21 @@ func unknownKeys(file string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file %s: %w", file, err)
 	}
-	var settings map[string]any
-	if err := yaml.Unmarshal(content, &settings); err != nil {
+	var parsed map[string]any
+	if err := yaml.Unmarshal(content, &parsed); err != nil {
 		return nil, fmt.Errorf("failed to read config file %s: %w", file, err)
 	}
-	settings = lowerKeys(settings)
+	// Keys differing only in case are the same key for viper, which keeps one of them, so the other one would not be
+	// checked. They are rejected at every level checked here.
+	var duplicates []error
+	lower := func(path string, value any) map[string]any {
+		lowered, duplicate := lowerKeys(value)
+		if duplicate != "" {
+			duplicates = append(duplicates, fmt.Errorf("%s contains keys differing only in case, e.g. %s", path, duplicate))
+		}
+		return lowered
+	}
+	settings := lower("the file", parsed)
 
 	var unknown []string
 	for _, key := range slices.Sorted(maps.Keys(settings)) {
@@ -142,7 +152,7 @@ func unknownKeys(file string) ([]string, error) {
 	}
 
 	// Values that are no maps are reported by decoding the templates, which names the expected type
-	templates := lowerKeys(settings["templates"])
+	templates := lower("templates", settings["templates"])
 	var errs []error
 	check := func(path string, values map[string]any, known []string) {
 		for _, key := range slices.Sorted(maps.Keys(values)) {
@@ -154,10 +164,14 @@ func unknownKeys(file string) ([]string, error) {
 	check("templates", templates, fieldKeys(Templates{}))
 	kinds := map[string][]string{"filters": fieldKeys(FilterTemplate{}), "placeholders": fieldKeys(PlaceholderTemplate{})}
 	for _, kind := range slices.Sorted(maps.Keys(kinds)) {
-		named := lowerKeys(templates[kind])
+		named := lower("templates."+kind, templates[kind])
 		for _, name := range slices.Sorted(maps.Keys(named)) {
-			check("templates."+kind+"."+name, lowerKeys(named[name]), kinds[kind])
+			path := "templates." + kind + "." + name
+			check(path, lower(path, named[name]), kinds[kind])
 		}
+	}
+	if len(duplicates) > 0 {
+		return nil, fmt.Errorf("invalid config file %s: %w", file, errors.Join(duplicates...))
 	}
 	if len(errs) > 0 {
 		return nil, fmt.Errorf("invalid templates in config file %s: %w", file, errors.Join(errs...))
@@ -165,17 +179,25 @@ func unknownKeys(file string) ([]string, error) {
 	return unknown, nil
 }
 
-// lowerKeys returns the map with lower case keys, like viper reads them, or nil if the value is no map
-func lowerKeys(value any) map[string]any {
+// lowerKeys returns the map with lower case keys, like viper reads them, or nil if the value is no map.
+// If keys differ only in case, the first two of them in sorted order are returned as well, e.g. "Templates" and "templates".
+func lowerKeys(value any) (lowered map[string]any, duplicate string) {
 	values, ok := value.(map[string]any)
 	if !ok {
-		return nil
+		return nil, ""
 	}
-	lowered := make(map[string]any, len(values))
-	for key, v := range values {
-		lowered[strings.ToLower(key)] = v
+	lowered = make(map[string]any, len(values))
+	original := make(map[string]string, len(values))
+	// Sorted, so the reported keys are the same on every run
+	for _, key := range slices.Sorted(maps.Keys(values)) {
+		lower := strings.ToLower(key)
+		if other, found := original[lower]; found && duplicate == "" {
+			duplicate = fmt.Sprintf("%q and %q", other, key)
+		}
+		original[lower] = key
+		lowered[lower] = values[key]
 	}
-	return lowered
+	return lowered, duplicate
 }
 
 // fieldKeys returns the config file keys of the fields of a struct, i.e. their mapstructure tags, sorted

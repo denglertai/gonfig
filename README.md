@@ -681,6 +681,7 @@ Unknown keys, e.g. typos like `log-levl`, are logged as warnings and ignored, so
 ```
 
 Unknown keys within `templates` fail instead, like other invalid templates, since a typo like `filter:` instead of `filters:` would drop a template silently.
+Keys are case-insensitive, so keys differing only in case, like `templates` and `Templates`, fail as well, since only one of them would be used.
 
 ### Examples
 

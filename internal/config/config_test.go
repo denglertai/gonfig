@@ -470,3 +470,31 @@ func TestLoadAppConfig_ConfigFileRemoved(t *testing.T) {
 		t.Fatalf("expected an error naming the config file, got %v", err)
 	}
 }
+
+// TestLoadAppConfig_KeysDifferingInCase checks that keys differing only in case fail at every level checked, since
+// viper keeps only one of them, which would leave the other one unchecked
+func TestLoadAppConfig_KeysDifferingInCase(t *testing.T) {
+	testCases := []struct {
+		content string
+		want    string
+	}{
+		{"log-level: info\nLog-Level: debug\n", `the file contains keys differing only in case, e.g. "Log-Level" and "log-level"`},
+		{"templates: {}\nTemplates:\n  filters:\n    a:\n      filter: x\n", `the file contains keys differing only in case, e.g. "Templates" and "templates"`},
+		{"templates:\n  filters: {}\n  Filters: {}\n", `templates contains keys differing only in case, e.g. "Filters" and "filters"`},
+		{"templates:\n  filters:\n    a: {}\n    A: {}\n", `templates.filters contains keys differing only in case, e.g. "A" and "a"`},
+		{"templates:\n  placeholders:\n    a:\n      env: A\n      ENV: B\n", `templates.placeholders.a contains keys differing only in case, e.g. "ENV" and "env"`},
+	}
+	for _, tC := range testCases {
+		dir := t.TempDir()
+		file := filepath.Join(dir, ".gonfig.yaml")
+		if err := os.WriteFile(file, []byte(tC.content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("GONFIG_CONFIG_PATH", dir)
+
+		_, err := LoadAppConfig(mustSetupViper(t, nil))
+		if want := "invalid config file " + file + ": " + tC.want; err == nil || err.Error() != want {
+			t.Errorf("expected error\n%s\ngot\n%v", want, err)
+		}
+	}
+}
