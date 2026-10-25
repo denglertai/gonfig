@@ -674,6 +674,14 @@ templates:
 
 `templates` can only be configured in `.gonfig.yaml`, see [templates](./FILTERS.md#templates).
 
+Unknown keys, e.g. typos like `log-levl`, are logged as warnings and ignored, so config files shared between gonfig versions keep working when a newer version adds options:
+
+```json
+{"time":"...","level":"WARN","msg":"Unknown key in the config file, ignoring it","key":"log-levl","file":"/home/user/.gonfig.yaml"}
+```
+
+Unknown keys within `templates` fail instead, like other invalid templates, since a typo like `filter:` instead of `filters:` would drop a template silently.
+
 ### Examples
 
 Set options via environment variables:

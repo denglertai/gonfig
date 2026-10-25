@@ -485,6 +485,7 @@ func TestInvalidTemplatesKeepFileUnchanged(t *testing.T) {
 	assert.Equal(t, content, string(result))
 }
 
+// TestInvalidConfigFile checks that invalid config files fail before anything is processed
 func TestInvalidConfigFile(t *testing.T) {
 	testCases := []struct {
 		desc    string
@@ -493,6 +494,7 @@ func TestInvalidConfigFile(t *testing.T) {
 	}{
 		{desc: "invalid YAML", content: "templates:\n  filters:\n    a:\n      filters: @b\n", wantErr: "failed to read config file"},
 		{desc: "invalid templates", content: "templates:\n  filters: not a map\n", wantErr: "invalid templates in config file"},
+		{desc: "unknown template key", content: "templates:\n  filter: {}\n", wantErr: `unknown key "templates.filter"`},
 	}
 	for _, tC := range testCases {
 		t.Run(tC.desc, func(t *testing.T) {
@@ -504,6 +506,20 @@ func TestInvalidConfigFile(t *testing.T) {
 			assert.ErrorContains(t, rootCmd.Execute(), tC.wantErr)
 		})
 	}
+}
+
+// TestUnknownConfigKeysWarn checks that unknown top level keys of the config file are logged as warnings and ignored
+func TestUnknownConfigKeysWarn(t *testing.T) {
+	configDir := t.TempDir()
+	assert.NoError(t, os.WriteFile(path.Join(configDir, ".gonfig.yaml"), []byte("log-levl: debug\n"), 0o644))
+
+	stderr := captureStderr(t, func() {
+		resetFlags(t)
+		rootCmd.SetArgs([]string{"--config-path", configDir, "value", "x"})
+		assert.NoError(t, rootCmd.Execute())
+	})
+	assert.Contains(t, stderr, `"level":"WARN","msg":"Unknown key in the config file, ignoring it","key":"log-levl","file":"`+
+		path.Join(configDir, ".gonfig.yaml")+`"`)
 }
 
 // TestFragmentFromTemplate checks that a placeholder template can read a fragment from a file referenced by its default

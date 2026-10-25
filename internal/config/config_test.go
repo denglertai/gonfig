@@ -1,9 +1,11 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -356,5 +358,106 @@ func TestLoadAppConfig_FailOnMissing(t *testing.T) {
 				t.Fatalf("expected FailOnMissing %v, got %v", tC.want, cfg.FailOnMissing)
 			}
 		})
+	}
+}
+
+// TestLoadAppConfig_UnknownKeys checks that unknown top level keys of the config file are returned sorted, while
+// options and templates are known, including keys of nested maps like a.b
+func TestLoadAppConfig_UnknownKeys(t *testing.T) {
+	dir := t.TempDir()
+	content := "log-levl: debug\nlog-level: warn\nfail-on-missing: true\nA.b: 1\ntemplates:\n  filters:\n    s:\n      filters: trim\n"
+	if err := os.WriteFile(filepath.Join(dir, ".gonfig.yaml"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GONFIG_CONFIG_PATH", dir)
+
+	cfg := mustLoadAppConfig(t, mustSetupViper(t, nil))
+	if want := []string{"a", "log-levl"}; !reflect.DeepEqual(cfg.UnknownKeys, want) {
+		t.Fatalf("expected unknown keys %v, got %v", want, cfg.UnknownKeys)
+	}
+	if cfg.LogLevel != "warn" {
+		t.Fatalf("expected the known options to be read, got log level %q", cfg.LogLevel)
+	}
+}
+
+// TestLoadAppConfig_NoUnknownKeys checks that no keys are unknown without a config file and with every option set,
+// which fails if an option is added without adding it to optionKeys
+func TestLoadAppConfig_NoUnknownKeys(t *testing.T) {
+	cfg := mustLoadAppConfig(t, mustSetupViper(t, nil))
+	if cfg.UnknownKeys != nil {
+		t.Fatalf("expected no unknown keys without a config file, got %v", cfg.UnknownKeys)
+	}
+
+	// The defaults name every option, so a config file setting each of them has no unknown keys
+	var content strings.Builder
+	for key, value := range mustSetupViper(t, nil).AllSettings() {
+		content.WriteString(key + ": " + fmtValue(value) + "\n")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".gonfig.yaml"), []byte(content.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GONFIG_CONFIG_PATH", dir)
+
+	cfg = mustLoadAppConfig(t, mustSetupViper(t, nil))
+	if cfg.UnknownKeys != nil {
+		t.Fatalf("expected the options to be known, got unknown keys %v", cfg.UnknownKeys)
+	}
+}
+
+// fmtValue formats a default value as a YAML value
+func fmtValue(value any) string {
+	if s, ok := value.(string); ok {
+		return strconv.Quote(s)
+	}
+	return fmt.Sprint(value)
+}
+
+// TestLoadAppConfig_UnknownTemplateKeys checks that unknown keys within the templates fail, naming each key with its
+// path, the config file and the expected keys
+func TestLoadAppConfig_UnknownTemplateKeys(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, ".gonfig.yaml")
+	content := `templates:
+  filter:
+    secret:
+      filters: trim
+  filters:
+    a:
+      filter: trim
+      description: ok
+  placeholders:
+    b:
+      envv: B
+`
+	if err := os.WriteFile(file, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GONFIG_CONFIG_PATH", dir)
+
+	_, err := LoadAppConfig(mustSetupViper(t, nil))
+	want := "invalid templates in config file " + file + `: unknown key "templates.filter", expected filters or placeholders
+unknown key "templates.filters.a.filter", expected description or filters
+unknown key "templates.placeholders.b.envv", expected default or description or env or filters or value`
+	if err == nil || err.Error() != want {
+		t.Fatalf("expected error\n%s\ngot\n%v", want, err)
+	}
+}
+
+// TestLoadAppConfig_ConfigFileRemoved checks that a config file removed after it was found fails to be read
+func TestLoadAppConfig_ConfigFileRemoved(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, ".gonfig.yaml")
+	if err := os.WriteFile(file, []byte("log-level: info\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GONFIG_CONFIG_PATH", dir)
+	v := mustSetupViper(t, nil)
+	if err := os.Remove(file); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := LoadAppConfig(v); err == nil || !strings.Contains(err.Error(), "failed to read config file "+file) {
+		t.Fatalf("expected an error naming the config file, got %v", err)
 	}
 }

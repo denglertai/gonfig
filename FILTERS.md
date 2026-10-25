@@ -480,7 +480,8 @@ Placeholder templates may be embedded into other text like any placeholder, and 
 - **Names** consist of lower case letters, digits and underscores, and are unique across filter and placeholder templates.
   Since the config file is read case-insensitively, names are converted to lower case.
 - **Validation:** All templates are checked when gonfig starts. Unknown filters, unknown or misused references, cycles and invalid definitions
-  fail before any file is processed, with an error naming the template.
+  fail before any file is processed, with an error naming the template. Unknown keys within `templates`, e.g. `filter:`
+  instead of `filters:`, fail as well, naming the key like `templates.filters.secret.filter` and the expected keys.
 - **References within config files** to templates that are not defined fail processing, even with `allow-unknown-filters`.
 - **Chaining:** Filter templates can be chained with each other and with filters, in placeholders as well as in the `filters` of templates, e.g. `${VAR | @clean | @encode | upper}`.
 - **Quoting:** Quote values in `.gonfig.yaml` that start with a template reference, e.g. `filters: "@clean | upper"`, since `@` cannot start an unquoted YAML value.

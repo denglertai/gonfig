@@ -64,6 +64,9 @@ It provides a flexible plugin system for extending functionality and a filtering
 		if cfg.ConfigFile != "" {
 			pkglogging.Debug("Using config file", "file", cfg.ConfigFile)
 		}
+		for _, key := range cfg.UnknownKeys {
+			pkglogging.Warn("Unknown key in the config file, ignoring it", "key", key, "file", cfg.ConfigFile)
+		}
 
 		// Initialize the Plugin system
 		plugin.InitPlugins(cfg.PluginPath)
