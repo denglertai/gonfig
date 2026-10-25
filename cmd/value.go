@@ -4,6 +4,7 @@ Copyright © 2024 Daniel Englert
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -19,6 +20,7 @@ var valueCmd = &cobra.Command{
 	Long: `The value command allows you to extract and process individual configuration values.
 It supports various filters for transforming the output, such as uppercasing, lowercasing,
 trimming whitespace, or applying cryptographic functions like bcrypt or md5.`,
+	Args: requireValues,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// The flag is defined in init, so reading it cannot fail
 		newline, _ := cmd.Flags().GetBool("newline")
@@ -44,6 +46,16 @@ trimming whitespace, or applying cryptographic functions like bcrypt or md5.`,
 		_, err := io.WriteString(cmd.OutOrStdout(), output.String())
 		return err
 	},
+}
+
+// requireValues requires at least one value. Without one, nothing was printed with exit code 0, e.g. for a variable of
+// a script that expanded to nothing (gonfig value $TEMPLATE), so a script would go on with an empty result.
+// An empty value (gonfig value ”) is still allowed.
+func requireValues(_ *cobra.Command, args []string) error {
+	if len(args) == 0 {
+		return errors.New("no value given; pass the values to process, e.g. gonfig value '${VAR}'")
+	}
+	return nil
 }
 
 // init registers the value command and its flags
