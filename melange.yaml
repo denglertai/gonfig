@@ -4,7 +4,7 @@ package:
   version: 0.3.0
   epoch: 0
   description: |
-    A simple configuration library for Go. It supports JSON, YAML, XML and PROPERTIES files.
+    Fills config files (YAML, JSON, XML, properties, plain text) with environment variables and secrets, escaped as each format requires.
   target-architecture:
     - amd64
     - x86_64
