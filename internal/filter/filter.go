@@ -450,6 +450,57 @@ func bcryptCost(filter string, params map[string]string) (int, error) {
 	return cost, nil
 }
 
+// multiply multiplies the value by the multiplier. The result is an int if both are integers, so integer results keep
+// their type, and a float64 otherwise. Integer overflow fails instead of wrapping around. filter names the filter in errors.
+func multiply(filter string, value any, multiplier string) (any, error) {
+	// The multiplier is part of the config file, not a secret, so it is included in the error
+	m, mErr := strconv.Atoi(multiplier)
+	// Integers out of range would lose precision as floats, e.g. 9223372036854775809 would become 9223372036854775808
+	if errors.Is(mErr, strconv.ErrRange) {
+		return nil, fmt.Errorf("filter %s: invalid param m %q, the integer is out of range", filter, multiplier)
+	}
+	if mErr != nil {
+		f, err := strconv.ParseFloat(multiplier, 64)
+		if err != nil || math.IsInf(f, 0) || math.IsNaN(f) {
+			return nil, fmt.Errorf("filter %s: invalid param m %q, expected a number", filter, multiplier)
+		}
+		return multiplyFloat(filter, value, f)
+	}
+
+	v, ok := value.(int)
+	if s, isString := value.(string); isString {
+		var err error
+		v, err = strconv.Atoi(s)
+		if errors.Is(err, strconv.ErrRange) {
+			return nil, valueError(filter, "the value is an integer out of range", value)
+		}
+		ok = err == nil
+	}
+	if !ok {
+		return multiplyFloat(filter, value, float64(m))
+	}
+
+	product := v * m
+	// The product overflowed if dividing it doesn't give the value back; MinInt * -1 overflows to MinInt itself
+	if v != 0 && (product/v != m || (v == -1 && m == math.MinInt) || (m == -1 && v == math.MinInt)) {
+		return nil, valueError(filter, "the result does not fit into an integer", value)
+	}
+	return product, nil
+}
+
+// multiplyFloat multiplies the value, converted to a float64, by the multiplier
+func multiplyFloat(filter string, value any, multiplier float64) (any, error) {
+	v, err := toFloat(filter, value)
+	if err != nil {
+		return nil, err
+	}
+	product := v * multiplier
+	if math.IsInf(product, 0) {
+		return nil, valueError(filter, "the result is not a finite number", value)
+	}
+	return product, nil
+}
+
 // stringFunc creates a filter function applying fn to the string value, or to each element of a list created by split
 func stringFunc(fn func(string, map[string]string) (string, error)) func(any, map[string]string) (any, error) {
 	return func(value any, params map[string]string) (any, error) {
@@ -675,18 +726,7 @@ func init() {
 				if !found {
 					multiplier = "1"
 				}
-
-				m, err := strconv.Atoi(multiplier)
-				if err != nil {
-					return "", err
-				}
-
-				v, err := toInt(token, value)
-				if err != nil {
-					return "", err
-				}
-
-				return v * m, nil
+				return multiply(token, value, multiplier)
 			},
 		}
 	}
