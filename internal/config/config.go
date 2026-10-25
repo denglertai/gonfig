@@ -86,7 +86,7 @@ type AppConfig struct {
 
 // optionKeys are the keys of the options, which the config file may set besides the templates
 var optionKeys = []string{
-	"log-level", "log-source", "config-path", "plugin-path", "allow-unknown-filters", "log-values", "fail-on-missing",
+	"log-level", "log-format", "log-source", "config-path", "plugin-path", "allow-unknown-filters", "log-values", "fail-on-missing",
 }
 
 // LoadAppConfig loads configuration from multiple sources
