@@ -834,4 +834,4 @@ After the tag is pushed, monitor the workflow runs in GitHub Actions and verify 
 ## Roadmap
 
 Planned features and known limitations are tracked as [GitHub issues](https://github.com/denglertai/gonfig/issues), e.g. the [planned features](https://github.com/denglertai/gonfig/issues?q=is%3Aissue%20is%3Aopen%20label%3Atype%2Ffeature) like TOML support ([#161](https://github.com/denglertai/gonfig/issues/161)).
-Feature requests and bug reports are welcome as issues as well.
+Feature requests and bug reports are welcome as issues as well. See [CONTRIBUTING.md](./CONTRIBUTING.md) for how to report them and how to contribute changes.
