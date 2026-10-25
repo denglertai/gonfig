@@ -35,7 +35,7 @@ func keepOwner(name string, existing fs.FileInfo) error {
 // syncDir syncs the directory, so the rename of a file within it is on disk as well.
 // Errors are ignored, since the file has been replaced already and not all file systems support it.
 func syncDir(dir string) {
-	if d, err := os.Open(dir); err == nil {
+	if d, err := os.Open(dir); err == nil { //nolint:gosec // the directory of an output file given by the user
 		_ = d.Sync()
 		_ = d.Close()
 	}

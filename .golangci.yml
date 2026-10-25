@@ -12,8 +12,17 @@ linters:
     - gocritic
     # Spelling in comments, messages and strings
     - misspell
+    # Security problems like file permissions, command execution of plugins and weak crypto
+    - gosec
     # Errors that are checked but nil is returned
     - nilerr
+
+  exclusions:
+    rules:
+      # Tests write temporary files, start test plugins and use fake secrets
+      - path: _test\.go
+        linters:
+          - gosec
 
 issues:
   # Report every finding instead of only the first ones of each kind
