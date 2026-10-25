@@ -57,6 +57,8 @@ type processPlugin struct {
 	exited chan struct{}
 	// filters are the names of the filters registered for the plugin
 	filters []string
+	// handshake is the handshake of the plugin, with its optional version, description and filter info
+	handshake pkgplugin.Handshake
 
 	// mu serializes requests, since responses are read in the order of the requests
 	mu     sync.Mutex
@@ -66,21 +68,21 @@ type processPlugin struct {
 }
 
 // startPlugin starts the executable plugin and reads its handshake
-func startPlugin(path string) (*processPlugin, pkgplugin.Handshake, error) {
+func startPlugin(path string) (*processPlugin, []string, error) {
 	cmd := exec.Command(path)
 	// Plugin logs stay visible, and the environment is inherited, e.g. for keys
 	cmd.Stderr = os.Stderr
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return nil, pkgplugin.Handshake{}, err
+		return nil, nil, err
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, pkgplugin.Handshake{}, err
+		return nil, nil, err
 	}
 	if err := cmd.Start(); err != nil {
-		return nil, pkgplugin.Handshake{}, err
+		return nil, nil, err
 	}
 
 	p := &processPlugin{
@@ -93,12 +95,13 @@ func startPlugin(path string) (*processPlugin, pkgplugin.Handshake, error) {
 	}
 	go p.read(stdout)
 
-	handshake, err := p.handshake()
+	handshake, err := p.readHandshake()
 	if err != nil {
 		p.close()
-		return nil, handshake, err
+		return nil, nil, err
 	}
-	return p, handshake, nil
+	p.handshake = handshake
+	return p, handshake.Filters, nil
 }
 
 // read passes every line the plugin writes to messages, until the output ends, and waits for the plugin to exit
@@ -135,8 +138,8 @@ func (p *processPlugin) receive(deadline <-chan time.Time, timeout time.Duration
 	}
 }
 
-// handshake reads and checks the handshake of the plugin
-func (p *processPlugin) handshake() (pkgplugin.Handshake, error) {
+// readHandshake reads and checks the handshake of the plugin
+func (p *processPlugin) readHandshake() (pkgplugin.Handshake, error) {
 	var handshake pkgplugin.Handshake
 
 	timer := time.NewTimer(handshakeTimeout)

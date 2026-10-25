@@ -113,15 +113,16 @@ func ClosePlugins() {
 // runPlugin starts an executable plugin and registers the filters it provides. Filters with declared params get
 // their params validated by gonfig.
 func runPlugin(path string) error {
-	p, handshake, err := startPlugin(path)
+	p, names, err := startPlugin(path)
 	if err != nil {
 		found = append(found, Info{Path: path, Type: TypeExecutable, Filters: []FilterInfo{}, Error: err.Error()})
 		return err
 	}
 	running = append(running, p)
+	handshake := p.handshake
 
-	filters := make(map[string]any, len(handshake.Filters))
-	for _, name := range handshake.Filters {
+	filters := make(map[string]any, len(names))
+	for _, name := range names {
 		remote := remoteFilter{plugin: p, name: name}
 		if info, ok := handshake.FilterInfo[name]; ok && info.Params != nil {
 			filters[name] = &declaredRemoteFilter{remoteFilter: remote, declared: info.Params}
@@ -133,7 +134,7 @@ func runPlugin(path string) error {
 	logging.Debug("Started filter plugin", "plugin", path, "filters", len(p.filters))
 
 	info := Info{Path: path, Type: TypeExecutable, Version: handshake.Version, Description: handshake.Description}
-	info.Filters = filterInfos(handshake.Filters, p.filters, func(name string) FilterInfo {
+	info.Filters = filterInfos(names, p.filters, func(name string) FilterInfo {
 		return FilterInfo{Description: handshake.FilterInfo[name].Description, Params: handshake.FilterInfo[name].Params}
 	})
 	found = append(found, info)
@@ -155,13 +156,18 @@ func loadPlugin(path string) error {
 		return err
 	}
 
-	filters := pf.Filters()
+	registerGoPlugin(path, pf.Filters())
+	return nil
+}
+
+// registerGoPlugin registers the filters of a loaded Go plugin and records the plugin for Plugins.
+// Go plugins have no version, descriptions or declared params.
+func registerGoPlugin(path string, filters map[string]any) {
 	added := filter.AddPluginFilters(filters)
 	logging.Debug("Loaded filter plugin", "plugin", path, "filters", len(filters))
 
 	names := slices.Sorted(maps.Keys(filters))
 	found = append(found, Info{Path: path, Type: TypeGo, Filters: filterInfos(names, added, func(string) FilterInfo { return FilterInfo{} })})
-	return nil
 }
 
 // lookUpSymbol looks up the symbol in the plugin and ensures it is of the expected type

@@ -544,6 +544,30 @@ func TestPluginInfoReset(t *testing.T) {
 	assert.Equal(t, []string{empty}, SearchedPaths())
 }
 
+// goPluginFilter is a filter of a fake Go plugin
+type goPluginFilter struct{}
+
+// Process returns the value unchanged
+func (goPluginFilter) Process(value any) (any, error) {
+	return value, nil
+}
+
+// TestRegisterGoPlugin checks that the filters of a loaded Go plugin are registered and recorded, with filters whose
+// name is taken marked as skipped. Loading a real Go plugin needs cgo and the same Go version, so registering is tested
+// on its own.
+func TestRegisterGoPlugin(t *testing.T) {
+	t.Cleanup(ClosePlugins)
+	t.Cleanup(func() { filter.RemovePluginFilters([]string{"test_register_go_plugin"}) })
+
+	registerGoPlugin("plugins/old.so", map[string]any{"test_register_go_plugin": goPluginFilter{}, "upper": goPluginFilter{}})
+
+	assert.True(t, filter.IsKnown("test_register_go_plugin"))
+	assert.Equal(t, []Info{{Path: "plugins/old.so", Type: TypeGo, Filters: []FilterInfo{
+		{Name: "test_register_go_plugin"},
+		{Name: "upper", Skipped: true},
+	}}}, Plugins())
+}
+
 // TestPluginInfoGoPlugin checks that a Go plugin failing to load is listed with its error
 func TestPluginInfoGoPlugin(t *testing.T) {
 	dir := t.TempDir()
