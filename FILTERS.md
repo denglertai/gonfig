@@ -420,7 +420,8 @@ $ PATHS='/a:/b' gonfig value '${PATHS | split(:) | join(;)}'
 ## Lists
 
 `split` produces a list instead of a single value. The following filters are applied to each element of a list:
-`upper`, `lower`, `trim`, `trimleft`, `trimright`, `base64`, `base64_decode`, `replace` and `regex`.
+`upper`, `lower`, `trim`, `trimleft`, `trimright`, `sha256`, `sha512`, `base64`, `base64_decode`, `hex`, `hex_decode`,
+`url_encode`, `url_decode`, `replace` and `regex`. `one_of` checks each element and passes the list on unchanged.
 
 ```console
 $ LIST='a, b ,c' gonfig value '${LIST | split | trim | upper | join(;)}'
