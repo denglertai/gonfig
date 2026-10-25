@@ -141,7 +141,7 @@ The plugin archives and apks have a build provenance like gonfig's, e.g. `gh att
 
 1. [Install](#installation) gonfig.
 1. Add placeholders like `${ENV_VAR}` to a config file, optionally with [filters](./FILTERS.md) like `${ENV_VAR | trim}`.
-1. Run `gonfig config process -f <file>`. The file type is inferred from the extension, or set with `-t`.
+1. Run `gonfig config process -f <file>`. The file type is inferred from the extension, ignoring case, or set with `-t`.
 
 The result is printed to stdout, while logs are written to stderr.
 Use `-i` to update the file in place or `-o` to write to another file, see [config](#config).
@@ -343,6 +343,9 @@ Usage:
     $ gonfig config process -f /path/to/file.abc -t xml
     ```
    This will take the given file as an input, read it, apply filters and print the result to stdout.
+   Without `-t`, files of unsupported types fail with the supported types and a hint to use `-t plain`, which
+   processes any text file line by line. Unknown extensions are not processed as plain text automatically, so a typo
+   like `-f config.yam` fails instead of skipping the YAML handling.
 
 1. Process a file and write the result to another file (`-o` / `--output` flag)
     ```console
