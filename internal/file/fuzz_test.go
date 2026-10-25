@@ -2,6 +2,7 @@ package file
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
+	"github.com/denglertai/gonfig/internal/filter"
 	"github.com/denglertai/gonfig/internal/general"
 )
 
@@ -198,6 +200,44 @@ func FuzzTomlRoundTrip(f *testing.F) {
 			if keys, _ := document["keys"].(map[string]any); keys[text] == nil {
 				t.Fatalf("key %q is read differently: %v", text, document)
 			}
+		}
+	})
+}
+
+// FuzzTomlFragment checks that a fragment accepted as a value is valid wherever a string is: as the value of a pair,
+// within an array and within an inline table, and that it is read as it was parsed on its own
+func FuzzTomlFragment(f *testing.F) {
+	for _, seed := range []string{`"s"`, "[1, 2]", "{ a = 1 }", "[\n  1, # c\n  2,\n]", "1979-05-27", `"""a"""`, "'b' # c", "1\nx = 2", ""} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, text string) {
+		var want map[string]any
+		if toml.Unmarshal([]byte("v = "+text+"\n"), &want) != nil {
+			t.Skip("not a valid value")
+		}
+
+		handler := NewTomlConfigFileHandler()
+		if err := handler.Read(strings.NewReader("a = \"${X}\" # c\nb = [\"${X}\", 1]\nc = { d = \"${X}\" }\n")); err != nil {
+			t.Fatal(err)
+		}
+		entries, _ := handler.Process()
+		for entry := range entries {
+			if _, err := entry.(FragmentConfigEntry).SetFragment(filter.Fragment{Text: text}); err != nil {
+				t.Skip("rejected: ", err)
+			}
+		}
+
+		var output bytes.Buffer
+		if err := handler.Write(&output); err != nil {
+			t.Fatal(err)
+		}
+		var got map[string]any
+		if err := toml.Unmarshal(output.Bytes(), &got); err != nil {
+			t.Fatalf("the output of fragment %q cannot be read: %v\n%s", text, err, output.String())
+		}
+		value := fmt.Sprint(want["v"])
+		if fmt.Sprint(got["a"]) != value || fmt.Sprint(got["b"].([]any)[0]) != value || fmt.Sprint(got["c"].(map[string]any)["d"]) != value {
+			t.Fatalf("fragment %q is read differently: %v\n%s", text, got, output.String())
 		}
 	})
 }

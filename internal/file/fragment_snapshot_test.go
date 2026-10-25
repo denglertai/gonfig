@@ -155,6 +155,69 @@ trimmed: ${FRAGMENT | split | trim | fragment}
 			fragment: "db-1, db-2, db-3",
 		},
 		{
+			name:     "toml value replaced by an array of inline tables",
+			fileType: general.TOML,
+			content: `# Logging configuration
+[logging]
+level = "info" # default level
+appenders = "${FRAGMENT | fragment}" # set per environment
+`,
+			fragment: `[
+  { type = "console" },
+  { type = "file", path = "/var/log/app.log", maxSize = 100 }, # rotated daily
+]`,
+		},
+		{
+			name:     "toml fragment with placeholders",
+			fileType: general.TOML,
+			content: `[service]
+name = "api"
+settings = "${FRAGMENT | fragment}"
+`,
+			fragment: `{ port = "${FRAGMENT_PORT | to_int}", password = "${FRAGMENT_SECRET | base64}", url = "http://localhost:${FRAGMENT_PORT}/health" }`,
+		},
+		{
+			name:     "toml empty fragments",
+			fileType: general.TOML,
+			content: `optional = "${FRAGMENT | fragment}"
+[settings]
+a = 1
+  b = '${FRAGMENT | fragment}'
+c = """${FRAGMENT | fragment}""" # the comment is kept
+`,
+			fragment: "",
+		},
+		{
+			name:     "toml list from split",
+			fileType: general.TOML,
+			content:  "hosts = \"${FRAGMENT | split | trim | fragment}\"\nnested = { hosts = \"${FRAGMENT | split | fragment}\" }\n",
+			fragment: "db-1, db-2",
+		},
+		{
+			name:     "error for a toml key",
+			fileType: general.TOML,
+			content:  "[database]\n\"${FRAGMENT | fragment}\" = \"\"\n",
+			fragment: "host = \"db.prod\"\n",
+		},
+		{
+			name:     "error for an empty toml fragment in an array",
+			fileType: general.TOML,
+			content:  "hosts = [\"db-1\", \"${FRAGMENT | fragment}\"]\n",
+			fragment: "",
+		},
+		{
+			name:     "error for a toml fragment with several values",
+			fileType: general.TOML,
+			content:  "settings = \"${FRAGMENT | fragment}\"\n",
+			fragment: "1\nother = 2\n",
+		},
+		{
+			name:     "error for an invalid toml fragment",
+			fileType: general.TOML,
+			content:  "settings = \"${FRAGMENT | fragment}\"\n",
+			fragment: "{ a = 1, a = 2 }",
+		},
+		{
 			name:     "error for a list in an xml file",
 			fileType: general.XML,
 			content:  "<server><hosts>${FRAGMENT | split | fragment}</hosts></server>\n",

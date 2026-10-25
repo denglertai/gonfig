@@ -101,7 +101,7 @@ func (x *XmlTextConfigEntry) mask() {
 func (x *XmlTextConfigEntry) SetFragment(f filter.Fragment) ([]ConfigEntry, error) {
 	// XML has no lists, so a JSON array would only become text
 	if f.IsList {
-		return nil, errors.New("lists can only be inserted into YAML and JSON files")
+		return nil, errors.New("lists can only be inserted into YAML, JSON and TOML files")
 	}
 
 	fragment, err := parseXmlFragment(f.Text)

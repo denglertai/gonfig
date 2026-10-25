@@ -335,7 +335,7 @@ func (fp *FileProcessor) applyEntry(entry ConfigEntry, current string, allowFrag
 // Errors of fragments, which are wrapped with the entry and file, so a check can report the reason only
 var (
 	errNestedFragment       = errors.New("fragments cannot contain further fragments")
-	errFragmentNotSupported = errors.New("fragments are not supported here, only for YAML and JSON values and keys and the content of XML elements")
+	errFragmentNotSupported = errors.New("fragments are not supported here, only for YAML and JSON values and keys, TOML values and the content of XML elements")
 )
 
 // insertFragment inserts the fragment in place of the entry and processes the entries of the fragment.

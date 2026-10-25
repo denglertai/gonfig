@@ -199,3 +199,69 @@ func TestTomlWriteError(t *testing.T) {
 	handler, _ := readToml(t, "a = 1\n")
 	assert.ErrorIs(t, handler.Write(failingWriter{}), assert.AnError)
 }
+
+// TestTomlRemovedPairs checks the lines removed with key/value pairs by empty fragments, including CRLF line endings,
+// the end of the file and a renamed key of the removed pair, whose replacement is within the removed range
+func TestTomlRemovedPairs(t *testing.T) {
+	handler, entries := readToml(t, "a = 1\r\n\"${K}\" = \"${V}\"\r\n\tb = '${V}'   # kept\r\nc = \"${V}\"")
+	for _, entry := range entries {
+		if entry.(*TomlConfigEntry).isKey {
+			entry.SetValue("renamed")
+			continue
+		}
+		_, err := entry.(FragmentConfigEntry).SetFragment(filter.Fragment{Text: " \n"})
+		assert.NoError(t, err)
+	}
+
+	assert.Equal(t, "a = 1\r\n\t# kept\r\n", writeToml(t, handler))
+}
+
+// TestTomlFragmentEntries checks the entries of a fragment: every value with its path and position in the fragment,
+// keys containing placeholders, which may be renamed, and that masking replaces values of any type, but not keys
+func TestTomlFragmentEntries(t *testing.T) {
+	handler, entries := readToml(t, "[t]\nv = \"${V}\" # comment\n")
+	inserted, err := entries[0].(FragmentConfigEntry).SetFragment(filter.Fragment{Text: `{ n = 1, d = 1979-05-27, "${K}" = ["s", true] }`})
+	assert.NoError(t, err)
+
+	var paths []string
+	for _, entry := range inserted {
+		paths = append(paths, entry.Path())
+	}
+	assert.Equal(t, []string{"t.v.n", "t.v.d", "t.v.${K}", "t.v.${K}.0", "t.v.${K}.1"}, paths)
+
+	inserted[2].SetValue("k")
+	for _, entry := range inserted {
+		entry.(maskableConfigEntry).mask()
+	}
+	assert.Equal(t, "[t]\nv = { n = \"***\", d = \"***\", \"k\" = [\"***\", \"***\"] } # comment\n", writeToml(t, handler))
+
+	// A value set later replaces the fragment
+	entries[0].SetValue("text")
+	assert.Equal(t, "[t]\nv = \"text\" # comment\n", writeToml(t, handler))
+}
+
+// TestTomlFragmentKeyCollision checks that keys renamed within a fragment are checked like the keys of the file
+func TestTomlFragmentKeyCollision(t *testing.T) {
+	handler, entries := readToml(t, "v = \"${V}\"\n")
+	inserted, err := entries[0].(FragmentConfigEntry).SetFragment(filter.Fragment{Text: `{ a = 1, "${K}" = 2 }`})
+	assert.NoError(t, err)
+	inserted[1].SetValue("a")
+
+	assert.EqualError(t, handler.Write(&bytes.Buffer{}),
+		"the renamed keys make the TOML document invalid on line 1, e.g. because a key is defined twice")
+}
+
+// TestTomlFragmentErrors checks that the parser's message of an invalid fragment, which may quote it, is only included
+// if values are allowed in errors
+func TestTomlFragmentErrors(t *testing.T) {
+	_, entries := readToml(t, "v = \"${V}\"\n")
+	fragment := filter.Fragment{Text: "[1,\n2,"}
+
+	_, err := entries[0].(FragmentConfigEntry).SetFragment(fragment)
+	assert.EqualError(t, err, "invalid TOML fragment on line 2")
+
+	filter.SetValuesInErrors(true)
+	t.Cleanup(func() { filter.SetValuesInErrors(false) })
+	_, err = entries[0].(FragmentConfigEntry).SetFragment(fragment)
+	assert.ErrorContains(t, err, "invalid TOML fragment: toml: ")
+}

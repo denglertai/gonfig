@@ -7,7 +7,7 @@ import (
 )
 
 // FragmentConfigEntry is implemented by entries that can be replaced by or merged with a fragment,
-// e.g. YAML and JSON values and keys or the content of XML elements
+// e.g. YAML and JSON values and keys, TOML values or the content of XML elements
 type FragmentConfigEntry interface {
 	ConfigEntry
 	// SetFragment parses fragment.Text in the format of the file and replaces the entry's content,

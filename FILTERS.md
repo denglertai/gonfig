@@ -257,7 +257,7 @@ To find missing variables before processing a file, use [`gonfig config check`](
 ### to_int / to_float / to_bool
 
 Convert the value to an integer, a floating point number or a boolean, and fail if it cannot be converted.
-YAML and JSON files write the result as a number or boolean, see [types](#types).
+YAML, JSON and TOML files write the result as a number or boolean, see [types](#types).
 Error messages don't contain the value, since it may be a secret, unless `log-values` is enabled, see [configuration](./README.md#configuration).
 
 - `to_int` accepts integers, e.g. `8080` or `-1`.
@@ -439,7 +439,7 @@ $ LIST='a, b ,c' gonfig value '${LIST | split | trim | upper | join(;)}'
 A;B;C
 ```
 
-Always `join` a list before the placeholder ends, or insert it as a list into YAML and JSON files with [`fragment`](#lists-as-fragments).
+Always `join` a list before the placeholder ends, or insert it as a list into YAML, JSON and TOML files with [`fragment`](#lists-as-fragments).
 A list that is neither joined nor inserted as a fragment is written in Go's list format, e.g. `[a b c]`.
 
 ## Types
@@ -551,7 +551,7 @@ Placeholder templates may be embedded into other text like any placeholder, and 
 
 The filter `fragment` inserts whole structures (fragments) into a config file instead of text, e.g. a list of YAML mappings or XML elements.
 A fragment is read like any value, from an environment variable or from a file referenced with `@path`.
-The file it is inserted into parses it in its own format, so YAML files take YAML fragments, JSON files take JSON fragments and XML files take XML fragments.
+The file it is inserted into parses it in its own format, so YAML files take YAML fragments, JSON files take JSON fragments, TOML files take TOML values and XML files take XML fragments.
 JSON is valid YAML as well, so JSON fragments work in YAML files too.
 
 The position of the placeholder decides what happens.
@@ -576,6 +576,43 @@ logging:
     - type: file
       path: /var/log/app.log
 ```
+
+In TOML files, the fragment has to be a single TOML value, e.g. an array or an inline table, which replaces the string containing the placeholder:
+
+`logging.toml`:
+```toml
+[logging]
+level = "info"
+appenders = "${LOG_APPENDERS | fragment}"
+```
+
+```console
+$ LOG_APPENDERS='[{ type = "console" }, { type = "file", path = "/var/log/app.log" }]' gonfig config process -f logging.toml
+[logging]
+level = "info"
+appenders = [{ type = "console" }, { type = "file", path = "/var/log/app.log" }]
+```
+
+The value is inserted as written, so the rest of the file keeps its formatting. TOML has no null, so an empty fragment removes the key/value pair, e.g. optional settings:
+
+`debug.toml`:
+```toml
+[server]
+port = 8080
+debug = "${DEBUG_SETTINGS | fragment}"
+```
+
+```console
+$ DEBUG_SETTINGS= gonfig config process -f debug.toml
+[server]
+port = 8080
+$ DEBUG_SETTINGS='{ verbose = true }' gonfig config process -f debug.toml
+[server]
+port = 8080
+debug = { verbose = true }
+```
+
+Within arrays and inline tables, an empty fragment fails, since there is no pair to remove.
 
 In XML files, a fragment replaces the whole content of the element containing the placeholder, including other text and child elements. It may consist of several elements and text:
 
@@ -630,11 +667,11 @@ The fragment is merged deeply:
 - **Other values**, like scalars and lists, are replaced by the ones of the fragment.
 - **Comments and key order** of the file are kept, and new keys are appended in the order of the fragment.
 
-In JSON files, the key has to have the value `null`, e.g. `"${DB_OVERRIDES | fragment}": null`. XML files support fragments only as the content of elements.
+In JSON files, the key has to have the value `null`, e.g. `"${DB_OVERRIDES | fragment}": null`. TOML files support fragments only as values, and XML files only as the content of elements.
 
 ### Lists as fragments
 
-A list created by `split` becomes a list in YAML and JSON files when it is inserted as a fragment:
+A list created by `split` becomes a list in YAML, JSON and TOML files when it is inserted as a fragment:
 
 `list.yaml`:
 ```yaml
@@ -665,6 +702,18 @@ $ ENVVAR=alpha,beta gonfig config process -f list.json
     "beta"
   ]
 }
+```
+
+`list.toml`:
+```toml
+a = "val"
+b = "${ENVVAR | split | fragment}"
+```
+
+```console
+$ ENVVAR=alpha,beta gonfig config process -f list.toml
+a = "val"
+b = ["alpha","beta"]
 ```
 
 An empty value becomes an empty list:
@@ -741,7 +790,7 @@ b:
 
   ```console
   $ ENVVAR=alpha,beta gonfig config process -f list.xml
-  Error: failed to insert the fragment of /r/b in list.xml: lists can only be inserted into YAML and JSON files
+  Error: failed to insert the fragment of /r/b in list.xml: lists can only be inserted into YAML, JSON and TOML files
   ```
 
 - **Lists cannot be embedded into text**, like any fragment, e.g. `b: "hosts: ${ENVVAR | split | fragment}"` fails.
@@ -751,9 +800,9 @@ b:
 
 - **Whole values only:** A fragment has to make up the whole value or key, otherwise processing fails.
 - **Placeholders within fragments** are processed as well, e.g. a fragment may contain `${DB_PASSWORD | @secret}`. Fragments cannot contain further fragments.
-- **Empty fragments** replace a value by null, remove a key or remove the content of an XML element.
-- **Formatting:** YAML fragments are written in block style. Quotes are only kept where they are needed to keep a string a string.
-- **Errors:** Invalid fragments, fragments in properties, TOML or plain text files and fragments in XML attributes fail processing, so no output is written. The error of an invalid fragment names the format and, if known, the line, e.g. `invalid YAML fragment on line 3`. The parser's message may quote parts of the fragment, so it is only included with `log-values`, see [configuration](./README.md#configuration).
+- **Empty fragments** replace a value by null, remove a key, remove a key/value pair of a TOML file or remove the content of an XML element.
+- **Formatting:** YAML fragments are written in block style. Quotes are only kept where they are needed to keep a string a string. TOML fragments are inserted as written.
+- **Errors:** Invalid fragments, fragments in properties or plain text files, fragments as TOML keys and fragments in XML attributes fail processing, so no output is written. The error of an invalid fragment names the format and, if known, the line, e.g. `invalid YAML fragment on line 3`. The parser's message may quote parts of the fragment, so it is only included with `log-values`, see [configuration](./README.md#configuration).
 - **Templates:** Fragment files can be provided by [placeholder templates](#templates), e.g. with `default: "@/etc/app/logging.yaml"` and `${@logging | fragment}`.
 
 ## Recipes

@@ -269,7 +269,7 @@ func NewFileInterceptorFilter() *FileInterceptorFilter {
 type Fragment struct {
 	Text string
 	// IsList marks fragments created from lists, e.g. of split, whose text is a JSON array.
-	// They can only be inserted into file types supporting lists, like YAML and JSON.
+	// They can only be inserted into file types supporting lists, like YAML, JSON and TOML.
 	IsList bool
 }
 

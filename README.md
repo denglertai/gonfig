@@ -37,7 +37,7 @@ czNjciZ0
 | Key order preserved | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Formatting preserved | ✅ including multiple documents | ❌ indented with 2 spaces | ✅ | ✅ except values with placeholders spanning several lines | ✅ | ✅ |
 | Line endings and BOM preserved | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| [Fragments](./FILTERS.md#fragments) | ✅ values and keys | ✅ values and keys | ✅ element content | ❌ | ❌ | ❌ |
+| [Fragments](./FILTERS.md#fragments) | ✅ values and keys | ✅ values and keys | ✅ element content | ❌ | ✅ values | ❌ |
 | [Typed values](./FILTERS.md#types) | ✅ with `to_int`, `to_float`, `to_bool` | ✅ with `to_int`, `to_float`, `to_bool` | ❌ text | ❌ text | ✅ with `to_int`, `to_float`, `to_bool` | ❌ text |
 | [Schema validation](#schema-validation) | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
 

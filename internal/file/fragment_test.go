@@ -299,7 +299,7 @@ func TestFragments(t *testing.T) {
 			fileType: general.XML,
 			content:  "<r><b>${FRAGMENT | split | fragment}</b></r>",
 			fragment: "alpha,beta",
-			wantErr:  "lists can only be inserted into YAML and JSON files",
+			wantErr:  "lists can only be inserted into YAML, JSON and TOML files",
 		},
 		{
 			desc:     "xml attribute",
