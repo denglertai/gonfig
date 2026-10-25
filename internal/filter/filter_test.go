@@ -551,6 +551,8 @@ func TestMultiply(t *testing.T) {
 		{desc: "min int by -1", input: math.MinInt, params: map[string]string{"m": "-1"}, wantErr: "filter multiply: the result does not fit into an integer"},
 		{desc: "-1 by min int", input: -1, params: map[string]string{"m": strconv.Itoa(math.MinInt)}, wantErr: "filter multiply: the result does not fit into an integer"},
 		{desc: "zero by min int", input: 0, params: map[string]string{"m": strconv.Itoa(math.MinInt)}, expected: 0},
+		{desc: "multiplier out of range", input: 1, params: map[string]string{"m": "9223372036854775809"}, wantErr: `filter multiply: invalid param m "9223372036854775809", the integer is out of range`},
+		{desc: "value out of range", input: "9223372036854775809", params: map[string]string{"m": "1"}, wantErr: "filter multiply: the value is an integer out of range"},
 		{desc: "float overflow", input: 1e308, params: map[string]string{"m": "10"}, wantErr: "filter multiply: the result is not a finite number"},
 	}
 	for _, tC := range testCases {

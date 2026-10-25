@@ -455,8 +455,11 @@ func bcryptCost(filter string, params map[string]string) (int, error) {
 func multiply(filter string, value any, multiplier string) (any, error) {
 	// The multiplier is part of the config file, not a secret, so it is included in the error
 	m, mErr := strconv.Atoi(multiplier)
-	mIsInt := mErr == nil
-	if !mIsInt {
+	// Integers out of range would lose precision as floats, e.g. 9223372036854775809 would become 9223372036854775808
+	if errors.Is(mErr, strconv.ErrRange) {
+		return nil, fmt.Errorf("filter %s: invalid param m %q, the integer is out of range", filter, multiplier)
+	}
+	if mErr != nil {
 		f, err := strconv.ParseFloat(multiplier, 64)
 		if err != nil || math.IsInf(f, 0) || math.IsNaN(f) {
 			return nil, fmt.Errorf("filter %s: invalid param m %q, expected a number", filter, multiplier)
@@ -468,6 +471,9 @@ func multiply(filter string, value any, multiplier string) (any, error) {
 	if s, isString := value.(string); isString {
 		var err error
 		v, err = strconv.Atoi(s)
+		if errors.Is(err, strconv.ErrRange) {
+			return nil, valueError(filter, "the value is an integer out of range", value)
+		}
 		ok = err == nil
 	}
 	if !ok {
