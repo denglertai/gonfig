@@ -479,8 +479,9 @@ func TestPluginInfo(t *testing.T) {
 	}}, Plugins())
 
 	declared := filter.NewFilter(prefix + "declared")
-	assert.EqualError(t, filter.ValidateParams(prefix+"declared", declared, map[string]string{"thrid": "x"}),
-		`filter `+prefix+`declared has no param "thrid", it accepts first, second`)
+	// The param name is misspelled on purpose
+	assert.EqualError(t, filter.ValidateParams(prefix+"declared", declared, map[string]string{"thrid": "x"}), //nolint:misspell
+		`filter `+prefix+`declared has no param "thrid", it accepts first, second`) //nolint:misspell
 	assert.NoError(t, filter.ValidateParams(prefix+"declared", declared, map[string]string{"0": "a", "second": "b"}))
 	assert.NoError(t, filter.ValidateParams(prefix+"any", filter.NewFilter(prefix+"any"), map[string]string{"anything": "x"}))
 
