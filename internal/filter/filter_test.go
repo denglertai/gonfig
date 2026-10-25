@@ -520,3 +520,85 @@ func TestLookupRecorder(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, lookups, 3)
 }
+
+// TestHashAndHexFilters checks sha256, sha512, hex and hex_decode, including lists, whose elements are processed each
+func TestHashAndHexFilters(t *testing.T) {
+	testCases := []struct {
+		filter   string
+		input    any
+		expected any
+	}{
+		{"sha256", "hello", "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"},
+		{"sha256", "", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+		{"sha256", 5, "ef2d127de37b942baad06145e54b0c619a1f22327b2ebbcfbec78f5564afe39d"},
+		{"sha512", "hello", "9b71d224bd62f3785d96d46ad3ea3d73319bfbc2890caadae2dff72519673ca72323c3d99ba5c11d7c7acc6e14b8c5da0c4663475c2e5c3adef46f73bcdec043"},
+		{"sha256", []string{"a", "b"}, []string{
+			"ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
+			"3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d",
+		}},
+		{"hex", "hi!", "686921"},
+		{"hex", "", ""},
+		{"hex_decode", "686921", "hi!"},
+		{"hex_decode", "68692A", "hi*"},
+		{"hex", []string{"a", "b"}, []string{"61", "62"}},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.filter, func(t *testing.T) {
+			result, err := NewFilter(tC.filter).Process(tC.input)
+			assert.NoError(t, err)
+			assert.Equal(t, tC.expected, result)
+		})
+	}
+}
+
+// TestHexDecodeInvalid checks that invalid hex fails without the value, which the error of the hex package quotes
+func TestHexDecodeInvalid(t *testing.T) {
+	for _, input := range []string{"6g", "686", "zz"} {
+		_, err := NewFilter("hex_decode").Process(input)
+		assert.EqualError(t, err, "filter hex_decode: the value is not valid hex", input)
+	}
+}
+
+// TestOneOf checks that one_of passes allowed values on unchanged and fails on others, naming the allowed values
+func TestOneOf(t *testing.T) {
+	testCases := []struct {
+		desc    string
+		input   any
+		params  map[string]string
+		wantErr string
+	}{
+		{desc: "allowed", input: "info", params: map[string]string{"0": "debug|info|warn"}},
+		{desc: "allowed by name", input: "warn", params: map[string]string{"values": "debug|info|warn"}},
+		{desc: "single value", input: "prod", params: map[string]string{"0": "prod"}},
+		{desc: "int compared as text", input: 2, params: map[string]string{"0": "1|2|3"}},
+		{desc: "empty allowed by an empty entry", input: "", params: map[string]string{"0": "|debug"}},
+		{desc: "list with allowed elements", input: []string{"a", "b"}, params: map[string]string{"0": "a|b|c"}},
+		{desc: "not allowed", input: "trace", params: map[string]string{"0": "debug|info|warn"}, wantErr: "filter one_of: the value is not one of debug, info, warn"},
+		{desc: "case-sensitive", input: "INFO", params: map[string]string{"0": "debug|info"}, wantErr: "filter one_of: the value is not one of debug, info"},
+		{desc: "empty not allowed", input: "", params: map[string]string{"0": "debug|info"}, wantErr: "filter one_of: the value is not one of debug, info"},
+		{desc: "list with other element", input: []string{"a", "x"}, params: map[string]string{"0": "a|b"}, wantErr: "filter one_of: the value is not one of a, b"},
+		{desc: "without values", input: "a", wantErr: "filter one_of requires the param values"},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			filter := NewFilter("one_of")
+			if tC.params != nil {
+				filter.(FilterParams).AcceptParams(tC.params)
+			}
+			result, err := filter.Process(tC.input)
+			if tC.wantErr != "" {
+				assert.EqualError(t, err, tC.wantErr)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tC.input, result)
+		})
+	}
+
+	SetValuesInErrors(true)
+	t.Cleanup(func() { SetValuesInErrors(false) })
+	filter := NewFilter("one_of")
+	filter.(FilterParams).AcceptParams(map[string]string{"0": "a|b"})
+	_, err := filter.Process([]string{"a", "x"})
+	assert.EqualError(t, err, `filter one_of: the value is not one of a, b: "x"`)
+}

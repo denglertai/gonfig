@@ -595,14 +595,17 @@ ${ENV_VAR | filter1 | filter2(param) | filter3}
 | `trimright` | Removes trailing spaces | `${VAL \| trimright}` |
 | `default(value)` | Replaces an empty value, e.g. of a variable that is not set | `${VAL \| default(5432)}` |
 | `required` | Fails if the value is empty | `${VAL \| required}` |
+| `one_of(values)` | Fails unless the value is one of the `values`, separated by `\|` | `${VAL \| one_of(debug\|info\|warn)}` |
 | `to_int` | Converts the value to an integer, fails if it is not numeric | `${VAL \| to_int}` |
 | `to_float` | Converts the value to a finite floating point number | `${VAL \| to_float}` |
 | `to_bool` | Converts the value to a boolean, e.g. from `true` or `1` | `${VAL \| to_bool}` |
 | `multiply(m=factor)` | Multiplies an integer value by `m`, which defaults to `1` and may be given by position | `${VAL \| to_int \| multiply(2)}` |
 | `md5` | Hashes the value with MD5 (hex encoded) | `${VAL \| md5}` |
+| `sha256` / `sha512` | Hashes the value with SHA-256 / SHA-512 (hex encoded) | `${VAL \| sha256}` |
 | `bcrypt(cost)` | Hashes the value with bcrypt, fails for values longer than 72 bytes. `cost` from 4 to 31 defaults to `10` and may be given by position | `${VAL \| bcrypt(cost=12)}` |
 | `base64` | Encodes the value to base64 | `${VAL \| base64}` |
 | `base64_decode` | Decodes a base64 value, fails on invalid input | `${VAL \| base64_decode}` |
+| `hex` / `hex_decode` | Encodes the value to hex / decodes a hex value, fails on invalid input | `${VAL \| hex}` |
 | `url_encode(mode)` | Escapes the value for URL query parameters, or path segments with mode `path` | `${VAL \| url_encode}` |
 | `url_decode(mode)` | Reverses `url_encode` | `${VAL \| url_decode}` |
 | `fragment` | Inserts the value as a structure, e.g. a YAML mapping, XML elements or a list created by `split`, see [fragments](./FILTERS.md#fragments) | `${VAL \| split \| fragment}` |

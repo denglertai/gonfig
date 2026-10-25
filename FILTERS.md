@@ -159,14 +159,19 @@ api.example.com
 | [`trimright`](#trim--trimleft--trimright) | | Removes trailing spaces |
 | [`default`](#default--required) | `value` | Replaces an empty value, e.g. of a variable that is not set |
 | [`required`](#default--required) | | Fails if the value is empty |
+| [`one_of`](#one_of) | `values` | Fails unless the value is one of the given values |
 | [`to_int`](#to_int--to_float--to_bool) | | Converts the value to an integer |
 | [`to_float`](#to_int--to_float--to_bool) | | Converts the value to a floating point number |
 | [`to_bool`](#to_int--to_float--to_bool) | | Converts the value to a boolean |
 | [`multiply`](#multiply) | `m` | Multiplies an integer |
 | [`md5`](#md5) | | Hashes the value with MD5 |
+| [`sha256`](#sha256--sha512) | | Hashes the value with SHA-256 |
+| [`sha512`](#sha256--sha512) | | Hashes the value with SHA-512 |
 | [`bcrypt`](#bcrypt) | `cost` | Hashes the value with bcrypt |
 | [`base64`](#base64--base64_decode) | | Encodes the value to base64 |
 | [`base64_decode`](#base64--base64_decode) | | Decodes a base64 value |
+| [`hex`](#hex--hex_decode) | | Encodes the value to hex |
+| [`hex_decode`](#hex--hex_decode) | | Decodes a hex value |
 | [`url_encode`](#url_encode--url_decode) | `mode` | Escapes the value for use within URLs |
 | [`url_decode`](#url_encode--url_decode) | `mode` | Reverses `url_encode` |
 | [`fragment`](#fragments) | | Inserts the value as a structure, e.g. a YAML mapping, XML elements or a [list](#lists-as-fragments) |
@@ -211,6 +216,21 @@ Error: filter required: the value is empty or the environment variable is not se
 ```
 
 A default containing a comma has to be [escaped](#filter-params), e.g. `default(a\,b)`.
+
+### one_of
+
+Fails unless the value is one of the values of the param `values`, separated by `|`, e.g. to validate log levels or
+environment names. The value is passed on unchanged. The comparison is case-sensitive, so combine it with `lower` if needed.
+
+```console
+$ LOG_LEVEL=info gonfig value '${LOG_LEVEL | default(info) | one_of(debug|info|warn|error)}'
+info
+$ LOG_LEVEL=verbose gonfig value '${LOG_LEVEL | default(info) | one_of(debug|info|warn|error)}'
+Error: filter one_of: the value is not one of debug, info, warn, error
+```
+
+An empty entry allows empty values, e.g. `one_of(|debug|info)`. Each element of a [list](#lists) has to be one of the values.
+The error includes the value only with [`log-values`](./README.md#options).
 
 ### Missing variables
 
@@ -277,6 +297,18 @@ $ V=hello gonfig value '${V | md5}'
 5d41402abc4b2a76b9719d911017c592
 ```
 
+### sha256 / sha512
+
+Hash the value with SHA-256 or SHA-512 and return the hex encoded digest, e.g. for checksums or fingerprints.
+Like MD5, they are fast, so use [bcrypt](#bcrypt) for passwords.
+
+```console
+$ TOKEN=s3cret gonfig value '${TOKEN | sha256}'
+1ec1c26b50d5d3c58d9583181af8076655fe00756bf7285940ba3670f99fcba0
+$ TOKEN=s3cret gonfig value '${TOKEN | sha512}'
+95c89addde506357ec5efd0ee41ac241efd6fb1009a7680c1501ea8170342b8cbf0f2d938b56295490f19f1fc5fa28d09b1584eaa09c9a6b2f777623299cd521
+```
+
 ### bcrypt
 
 Hashes the value with bcrypt. The salt is random, so the result differs on every run.
@@ -303,6 +335,20 @@ $ V=s3cret gonfig value '${V | base64}'
 czNjcmV0
 $ V=czNjcmV0 gonfig value '${V | base64_decode}'
 s3cret
+```
+
+### hex / hex_decode
+
+Encode the value to lower case hex or decode it again, e.g. for keys or IDs expected in hex.
+`hex_decode` accepts upper and lower case and fails if the value is not valid hex.
+
+```console
+$ KEY=s3cret gonfig value '${KEY | hex}'
+733363726574
+$ KEY=733363726574 gonfig value '${KEY | hex_decode}'
+s3cret
+$ KEY=xyz gonfig value '${KEY | hex_decode}'
+Error: filter hex_decode: the value is not valid hex
 ```
 
 ### url_encode / url_decode
