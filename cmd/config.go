@@ -117,5 +117,5 @@ func init() {
 	// Marking fails only for flags that are not defined
 	cobra.CheckErr(configCmd.MarkPersistentFlagRequired("file"))
 
-	configCmd.PersistentFlags().StringP("file-type", "t", "", "Type of file to be read. If not set, the file type will be inferred from the file extension")
+	configCmd.PersistentFlags().StringP("file-type", "t", "", "Type of file to be read. If not set, the file type will be inferred from the file extension, ignoring case")
 }

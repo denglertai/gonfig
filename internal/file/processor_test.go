@@ -56,12 +56,44 @@ func TestFileProcessor_Process(t *testing.T) {
 	}
 }
 
+// TestFileProcessorWithoutExtension checks that files without an extension need -t
 func TestFileProcessorWithoutExtension(t *testing.T) {
 	file := path.Join(t.TempDir(), "Dockerfile")
 	assert.NoError(t, os.WriteFile(file, []byte("FROM scratch"), 0o644))
 
 	err := NewFileProcessor(file, general.Undefined, io.Discard).Process()
-	assert.ErrorContains(t, err, "could not infer the file type")
+	assert.EqualError(t, err, "could not infer the file type of "+file+"; use -t / --file-type to set it explicitly, "+
+		"e.g. -t plain to process any text file line by line")
+}
+
+// TestFileProcessorTypeIgnoresCase checks that file types and extensions are matched case-insensitively
+func TestFileProcessorTypeIgnoresCase(t *testing.T) {
+	t.Setenv("PROCESSOR_TEST_CASE", "x")
+	dir := t.TempDir()
+
+	tests := []struct {
+		name     string
+		file     string
+		fileType general.FileType
+		content  string
+		want     string
+	}{
+		{"upper case extension", "C.YAML", general.Undefined, "a: ${PROCESSOR_TEST_CASE}\n", "a: x\n"},
+		{"mixed case extension", "config.Json", general.Undefined, `{"a": "${PROCESSOR_TEST_CASE}"}`, "{\n  \"a\": \"x\"\n}\n"},
+		{"upper case type", "config.txt", "PLAIN", "a=${PROCESSOR_TEST_CASE}\n", "a=x\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file := path.Join(dir, tt.file)
+			assert.NoError(t, os.WriteFile(file, []byte(tt.content), 0o644))
+
+			var out bytes.Buffer
+			processor := NewFileProcessor(file, tt.fileType, &out)
+			assert.NoError(t, processor.Process())
+			assert.Equal(t, tt.want, out.String())
+			assert.Equal(t, general.FileType(strings.ToLower(string(processor.FileType))), processor.FileType)
+		})
+	}
 }
 
 func TestFileProcessorProcessesEntries(t *testing.T) {

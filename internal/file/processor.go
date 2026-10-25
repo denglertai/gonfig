@@ -69,6 +69,8 @@ func NewFileProcessor(fileName string, fileType general.FileType, output io.Writ
 		fileType = general.FileType(ext)
 		logging.Debug("File type not provided, using the file's extension", "file", fileName, "type", fileType)
 	}
+	// Types and extensions are matched case-insensitively, e.g. C.YAML or -t JSON
+	fileType = general.FileType(strings.ToLower(string(fileType)))
 
 	return &FileProcessor{
 		FileName: fileName,
@@ -434,8 +436,11 @@ func (fp *FileProcessor) getFileProcessor() (ConfigFileHandler, error) {
 	case general.PLAIN:
 		return NewPlainFileProcessor(), nil
 	case general.Undefined:
-		return nil, fmt.Errorf("could not infer the file type of %q; use -t / --file-type to set it explicitly", fp.FileName)
+		return nil, fmt.Errorf("could not infer the file type of %s; use -t / --file-type to set it explicitly, "+
+			"e.g. -t plain to process any text file line by line", fp.FileName)
 	default:
-		return nil, fmt.Errorf("unsupported file type: %v", fp.FileType)
+		// Unknown extensions are not processed as plain text automatically, so typos like c.yam fail
+		return nil, fmt.Errorf("unsupported file type %q of %s; supported are json, yaml, yml, xml, properties and plain; "+
+			"use -t plain to process any text file line by line", fp.FileType, fp.FileName)
 	}
 }
