@@ -1,0 +1,2 @@
+go test fuzz v1
+string("00: ${0 split fragment} #0\n0:\n 000000000000000000000000000000")
