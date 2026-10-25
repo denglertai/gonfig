@@ -265,3 +265,20 @@ func TestTomlFragmentErrors(t *testing.T) {
 	_, err = entries[0].(FragmentConfigEntry).SetFragment(fragment)
 	assert.ErrorContains(t, err, "invalid TOML fragment: toml: ")
 }
+
+// TestTomlFragmentComments checks that a fragment may end with comments as the value of a pair, where the rest of the
+// line may be a comment as well, but not within arrays and inline tables, where it would comment out the closing bracket
+func TestTomlFragmentComments(t *testing.T) {
+	handler, entries := readToml(t, "a = \"${X}\" # per environment\nb = [\"${X}\"]\nc = { d = \"${X}\" }\n")
+	fragment := filter.Fragment{Text: "[\"x\"] # managed by ops\n# second comment\n"}
+
+	_, err := entries[0].(FragmentConfigEntry).SetFragment(fragment)
+	assert.NoError(t, err)
+	for _, entry := range entries[1:] {
+		_, err := entry.(FragmentConfigEntry).SetFragment(fragment)
+		assert.EqualError(t, err, "invalid TOML fragment: a fragment within an array or inline table cannot end with a comment", entry.Path())
+	}
+
+	assert.Equal(t, "a = [\"x\"] # managed by ops\n# second comment # per environment\nb = [\"${X}\"]\nc = { d = \"${X}\" }\n",
+		writeToml(t, handler))
+}

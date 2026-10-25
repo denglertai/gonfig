@@ -204,10 +204,11 @@ func FuzzTomlRoundTrip(f *testing.F) {
 	})
 }
 
-// FuzzTomlFragment checks that a fragment accepted as a value is valid wherever a string is: as the value of a pair,
-// within an array and within an inline table, and that it is read as it was parsed on its own
+// FuzzTomlFragment checks that a fragment accepted as a value is valid where it is accepted: as the value of a pair,
+// within an array and within an inline table, and that it is read as it was parsed on its own.
+// Fragments ending with a comment are only accepted as the value of a pair.
 func FuzzTomlFragment(f *testing.F) {
-	for _, seed := range []string{`"s"`, "[1, 2]", "{ a = 1 }", "[\n  1, # c\n  2,\n]", "1979-05-27", `"""a"""`, "'b' # c", "1\nx = 2", ""} {
+	for _, seed := range []string{`"s"`, "[1, 2]", "{ a = 1 }", "[\n  1, # c\n  2,\n]", "1979-05-27", `"""a"""`, "'b' # c", "1\n# c", "1\nx = 2", ""} {
 		f.Add(seed)
 	}
 	f.Fuzz(func(t *testing.T, text string) {
@@ -221,10 +222,14 @@ func FuzzTomlFragment(f *testing.F) {
 			t.Fatal(err)
 		}
 		entries, _ := handler.Process()
+		var accepted []string
 		for entry := range entries {
-			if _, err := entry.(FragmentConfigEntry).SetFragment(filter.Fragment{Text: text}); err != nil {
-				t.Skip("rejected: ", err)
+			if _, err := entry.(FragmentConfigEntry).SetFragment(filter.Fragment{Text: text}); err == nil {
+				accepted = append(accepted, entry.Path())
 			}
+		}
+		if len(accepted) == 0 {
+			t.Skip("rejected")
 		}
 
 		var output bytes.Buffer
@@ -235,9 +240,17 @@ func FuzzTomlFragment(f *testing.F) {
 		if err := toml.Unmarshal(output.Bytes(), &got); err != nil {
 			t.Fatalf("the output of fragment %q cannot be read: %v\n%s", text, err, output.String())
 		}
-		value := fmt.Sprint(want["v"])
-		if fmt.Sprint(got["a"]) != value || fmt.Sprint(got["b"].([]any)[0]) != value || fmt.Sprint(got["c"].(map[string]any)["d"]) != value {
-			t.Fatalf("fragment %q is read differently: %v\n%s", text, got, output.String())
+		values := map[string]any{"a": got["a"]}
+		if b, ok := got["b"].([]any); ok && len(b) == 2 {
+			values["b.0"] = b[0]
+		}
+		if c, ok := got["c"].(map[string]any); ok {
+			values["c.d"] = c["d"]
+		}
+		for _, path := range accepted {
+			if fmt.Sprint(values[path]) != fmt.Sprint(want["v"]) {
+				t.Fatalf("fragment %q at %s is read differently: %v\n%s", text, path, got, output.String())
+			}
 		}
 	})
 }

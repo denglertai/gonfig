@@ -117,7 +117,7 @@ func (t *TomlConfigEntry) SetFragment(f filter.Fragment) ([]ConfigEntry, error) 
 		return nil, nil
 	}
 
-	fragment, err := parseTomlFragment(text, t.path, t.key)
+	fragment, err := parseTomlFragment(text, t.path, t.key, t.pair.end != 0)
 	if err != nil {
 		return nil, err
 	}
@@ -134,15 +134,17 @@ func (t *TomlConfigEntry) SetFragment(f filter.Fragment) ([]ConfigEntry, error) 
 // tomlFragmentKey is the key a fragment is parsed with, since a TOML document consists of key/value pairs
 const tomlFragmentKey = "v = "
 
-// parseTomlFragment parses the text of a fragment as a single TOML value at the path and key of the replaced string
-func parseTomlFragment(text string, path string, key string) (*tomlFragment, error) {
+// parseTomlFragment parses the text of a fragment as a single TOML value at the path and key of the replaced string.
+// Comments after the value are only allowed for the value of a pair, since the rest of its line may be a comment as
+// well, while within arrays and inline tables they would comment out the closing bracket.
+func parseTomlFragment(text string, path string, key string, pairValue bool) (*tomlFragment, error) {
 	document := []byte(tomlFragmentKey + text + "\n")
 	var decoded map[string]any
 	if err := toml.Unmarshal(document, &decoded); err != nil {
 		return nil, fragmentError("TOML", fmt.Sprintf("on line %d", tomlLine(err)), err)
 	}
 
-	// Further key/value pairs or a comment after the value would be inserted into the document as well.
+	// Further key/value pairs would be inserted into the document as well.
 	// The parser sets no range for arrays and inline tables, so the end of the value is the end of the pair.
 	// The nodes of an expression are only valid until the next one is parsed, so the entries are collected first.
 	parser := unstable.Parser{}
@@ -153,8 +155,12 @@ func parseTomlFragment(text string, path string, key string) (*tomlFragment, err
 	collector := tomlCollector{parser: &parser, arrayTables: map[string]int{}, fragment: true}
 	collector.value(pair.Value(), path, key)
 
-	if end != len(tomlFragmentKey)+len(text) || parser.NextExpression() {
+	if parser.NextExpression() {
 		return nil, errors.New("invalid TOML fragment: a fragment used as a value must consist of a single value")
+	}
+	// The document is valid and has no further expression, so only comments and whitespace follow the value
+	if len(bytes.TrimSpace(document[end:])) > 0 && !pairValue {
+		return nil, errors.New("invalid TOML fragment: a fragment within an array or inline table cannot end with a comment")
 	}
 	return &tomlFragment{text: []byte(text), entries: collector.entries}, nil
 }

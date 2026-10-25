@@ -612,7 +612,7 @@ port = 8080
 debug = { verbose = true }
 ```
 
-Within arrays and inline tables, an empty fragment fails, since there is no pair to remove.
+Within arrays and inline tables, an empty fragment fails, since there is no pair to remove, and so does a fragment ending with a comment, since the comment would hide the closing bracket. As the value of a pair, a fragment may end with comments, e.g. `["db-1", "db-2"] # managed by ops`.
 
 In XML files, a fragment replaces the whole content of the element containing the placeholder, including other text and child elements. It may consist of several elements and text:
 
