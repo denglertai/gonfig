@@ -3,9 +3,8 @@ name: Release snapshot
 # Builds the release like release.yml, without publishing, and checks the archives and the container image, since the
 # release itself only runs on tags. It runs for changes to the release configuration and to what the image contains.
 on:
+  # Every pull request, including those based on another pull request's branch, which merge into main eventually
   pull_request:
-    branches:
-      - main
     paths:
       - .goreleaser.yaml
       - release.Dockerfile

@@ -83,7 +83,7 @@ Review every changed snapshot line and state in the PR which changes are intende
 
 ### Fuzzing refactors
 
-When rewriting parsing or placeholder handling, prove equivalence: copy the old implementation into a temporary `zz_*_test.go` file with renamed identifiers, write a fuzz test comparing old and new results, and run it for a few minutes (`go test -run '^$' -fuzz FuzzX -fuzztime 120s ./internal/value/`). Exclude inputs where a difference is intended and document why. Afterwards delete the temporary file and `testdata/fuzz/`. Crashes found this way are real bugs: fix them and add regression tests. `FuzzProcessValue` stays as a permanent panic check.
+When rewriting parsing or placeholder handling, prove equivalence: copy the old implementation into a temporary `zz_*_test.go` file with renamed identifiers, write a fuzz test comparing old and new results, and run it for a few minutes (`go test -run '^$' -fuzz FuzzX -fuzztime 120s ./internal/value/`). Exclude inputs where a difference is intended and document why. Afterwards delete the temporary file and `testdata/fuzz/`. Crashes found this way are real bugs: fix them and add regression tests. `FuzzProcessValue` stays as a permanent panic check. Permanent fuzz targets, like the per-file-type `Fuzz<Type>` tests, only run in CI if they are listed in the matrix of `.github/workflows/fuzz.yml`, so add new ones there.
 
 ### The real binary
 

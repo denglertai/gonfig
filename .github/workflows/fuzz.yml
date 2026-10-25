@@ -4,9 +4,8 @@ on:
   push:
     branches:
       - main
+  # Every pull request, including those based on another pull request's branch, which merge into main eventually
   pull_request:
-    branches:
-      - main
   # Longer runs find inputs that short runs on pull requests miss
   schedule:
     - cron: '17 3 * * 1'
@@ -37,6 +36,10 @@ jobs:
             target: FuzzPropertiesRoundTrip
           - package: ./internal/file
             target: FuzzPlain
+          - package: ./internal/file
+            target: FuzzTOML
+          - package: ./internal/file
+            target: FuzzTomlRoundTrip
 
     steps:
     - name: Checkout code

@@ -5,9 +5,8 @@ on:
     branches:
       - main
       - 'feature/*'
+  # Every pull request, including those based on another pull request's branch, which merge into main eventually
   pull_request:
-    branches:
-      - main
 
 # The jobs only read the repository; Codecov is authenticated with its own token
 permissions:
