@@ -2,7 +2,7 @@ package filter
 
 import (
 	"cmp"
-	"crypto/md5"
+	"crypto/md5" //nolint:gosec // md5 is a documented filter for checksums, bcrypt is the one for passwords
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -227,12 +227,12 @@ func (f *FileInterceptorFilter) Process(value any) (any, error) {
 	if !isExplicitPath(path) {
 		if _, err := os.Stat(path); err != nil {
 			// Not a file, so the value is kept including the "@"
-			return value, nil
+			return value, nil //nolint:nilerr // values like @admin are no file references
 		}
 	}
 
 	// The error of os.ReadFile names the path, which identifies the file but not its content
-	file, err := os.ReadFile(path)
+	file, err := os.ReadFile(path) //nolint:gosec // reading the referenced file is the purpose of @
 	if err != nil {
 		return "", fmt.Errorf("failed to read the file referenced with @: %w", err)
 	}
@@ -714,7 +714,7 @@ func init() {
 	filterMap[md5FilterKey] = func(token string) Filter {
 		return &FuncFilter{
 			fn: func(value any, _ map[string]string) (any, error) {
-				hash := md5.New()
+				hash := md5.New() //nolint:gosec // see the import
 				_, err := hash.Write([]byte(toString(value)))
 				if err != nil {
 					return "", err

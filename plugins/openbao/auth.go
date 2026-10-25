@@ -112,7 +112,7 @@ func setting(name string, required bool) (string, error) {
 // readSetting returns the content of the file without surrounding whitespace, e.g. a trailing line break.
 // An empty file is an error, since it would log in without credentials.
 func readSetting(file string) (string, error) {
-	content, err := os.ReadFile(file)
+	content, err := os.ReadFile(file) //nolint:gosec // the files of the settings are given by the user
 	if err != nil {
 		return "", err
 	}

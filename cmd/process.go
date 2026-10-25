@@ -110,7 +110,8 @@ leaves all files unchanged.`,
 
 		if outputDir != "" {
 			// --mode applies to files only, as a directory without the execute permission cannot be entered
-			if err := os.MkdirAll(outputDir, 0o755); err != nil {
+			// The files within it have their own modes, and applications running as other users need to enter it
+			if err := os.MkdirAll(outputDir, 0o755); err != nil { //nolint:gosec
 				return fmt.Errorf("failed to create the output directory: %w", err)
 			}
 		}
