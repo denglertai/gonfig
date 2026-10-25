@@ -94,6 +94,23 @@ func TestPositionalArgumentsAreRejected(t *testing.T) {
 	}
 }
 
+// TestInlineWithOutputIsRejected checks that -i and -o fail together before anything is processed, since -i writes to
+// the input files and the output was ignored before
+func TestInlineWithOutputIsRejected(t *testing.T) {
+	t.Setenv("INLINE_VALUE", "value")
+	dir := t.TempDir()
+	paths := writeFiles(t, dir, map[string]string{"a.yaml": "a: ${INLINE_VALUE}\n"}, "a.yaml")
+	output := filepath.Join(dir, "out.yaml")
+
+	for _, args := range [][]string{{"-i", "-o", output}, {"--output", output, "--inline"}, {"-i", "-o", "-"}} {
+		_, err := runGonfig(t, append([]string{"config", "process", "-f", paths[0]}, args...)...)
+		assert.EqualError(t, err, "if any flags in the group [inline output] are set none of the others can be; [inline output] were all set", args)
+	}
+
+	assert.Equal(t, "a: ${INLINE_VALUE}\n", readFile(t, paths[0]), "the input must not be written")
+	assert.NoFileExists(t, output)
+}
+
 // TestPatternWithoutMatchesFails checks that process and check fail for a pattern matching no file, so typos don't skip files
 func TestPatternWithoutMatchesFails(t *testing.T) {
 	pattern := filepath.Join(t.TempDir(), "conf.d", "*.yaml")

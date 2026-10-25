@@ -171,6 +171,9 @@ func init() {
 	processCmd.Flags().BoolP("overwrite", "w", false, "Controls if an already existing output file may be overwritten (defaults to false). Not needed for -i (--inline)")
 
 	processCmd.Flags().String("mode", "", "File mode of the output files in octal, e.g. 0600 (defaults to the mode of an existing output file, or of the input file for new ones)")
+
+	// -i writes to the input files, so an output given as well would be ignored
+	processCmd.MarkFlagsMutuallyExclusive("inline", "output")
 }
 
 // ErrFileExists is returned if an output file exists and may not be overwritten, see -w / --overwrite.

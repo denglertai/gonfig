@@ -332,6 +332,7 @@ Usage:
     ```
    This will take the given file as an input, read it, apply filters and write back to `/path/to/file.xml`.
    Because no file extension is given, the type will be inferred from the file's extension (xml).
+   `-i` cannot be combined with `-o`, which fails before anything is processed.
 
 1. Process a file with a custom extension that does not allow inferring the file's type (`-t` / `--file-type` flag)
     ```console

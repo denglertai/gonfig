@@ -27,8 +27,12 @@ var rootCmd = &cobra.Command{
 of multiple formats (JSON, YAML, XML, properties and plain text) with values from environment variables or files.
 It provides a flexible plugin system for extending functionality and a filtering mechanism for transforming values.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// Cobra validates required flags only after this hook, so validate them while the usage is still printed
+		// Cobra validates required flags and flag groups only after this hook, so validate them while the usage is still
+		// printed and before plugins are started
 		if err := cmd.ValidateRequiredFlags(); err != nil {
+			return err
+		}
+		if err := cmd.ValidateFlagGroups(); err != nil {
 			return err
 		}
 
