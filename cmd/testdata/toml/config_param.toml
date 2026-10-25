@@ -1,0 +1,13 @@
+# Application settings
+title = "${BLA_BLUB | upper}"
+
+[database]
+url = "jdbc:mysql://localhost:3306/mydatabase"
+port = "${INT | to_int}" # written as an integer
+ratio = '${FLOAT | to_float}'
+enabled = "${BOOL | to_bool}"
+special = "${SPECIAL_CHARACTERS}"
+
+[[servers]]
+name = "${STRING}"
+ports = ["${INT}", 8080]

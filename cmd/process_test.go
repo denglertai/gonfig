@@ -70,6 +70,16 @@ func TestStdout(t *testing.T) {
 			file:     path.Join(wd, "./testdata/properties/props_param.properties"),
 			fileType: general.PROPERTIES,
 		},
+		{
+			desc:     "TOML AutoDiscover",
+			file:     path.Join(wd, "./testdata/toml/config_param.toml"),
+			fileType: general.Undefined,
+		},
+		{
+			desc:     "TOML Explicit",
+			file:     path.Join(wd, "./testdata/toml/config_param.toml"),
+			fileType: general.TOML,
+		},
 	}
 	for _, tC := range testCases {
 		t.Run(tC.desc, func(t *testing.T) {
@@ -163,6 +173,16 @@ func TestFile(t *testing.T) {
 			fileType: general.PROPERTIES,
 		},
 		{
+			desc:     "TOML AutoDiscover",
+			file:     path.Join(wd, "./testdata/toml/config_param.toml"),
+			fileType: general.Undefined,
+		},
+		{
+			desc:     "TOML Explicit",
+			file:     path.Join(wd, "./testdata/toml/config_param.toml"),
+			fileType: general.TOML,
+		},
+		{
 			desc:     "PLAIN Shell Script",
 			file:     path.Join(wd, "./testdata/plain/test.sh"),
 			fileType: general.PLAIN,
@@ -227,6 +247,11 @@ func TestPassingExtension(t *testing.T) {
 			desc:     "PROPERTIES Explicit",
 			file:     path.Join(wd, "./testdata/properties/props_param.properties"),
 			fileType: general.PROPERTIES,
+		},
+		{
+			desc:     "TOML Explicit",
+			file:     path.Join(wd, "./testdata/toml/config_param.toml"),
+			fileType: general.TOML,
 		},
 	}
 
@@ -305,6 +330,16 @@ func TestFileOverwrite(t *testing.T) {
 			desc:     "PROPERTIES Explicit",
 			file:     path.Join(wd, "./testdata/properties/props_param.properties"),
 			fileType: general.PROPERTIES,
+		},
+		{
+			desc:     "TOML AutoDiscover",
+			file:     path.Join(wd, "./testdata/toml/config_param.toml"),
+			fileType: general.Undefined,
+		},
+		{
+			desc:     "TOML Explicit",
+			file:     path.Join(wd, "./testdata/toml/config_param.toml"),
+			fileType: general.TOML,
 		},
 	}
 	for _, tC := range testCases {

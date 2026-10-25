@@ -58,6 +58,7 @@ $ go tool pprof -top -sample_index=alloc_space benchmarks.test mem.out
 
 Measured on an AMD Ryzen 7 5800X3D with Go 1.27.2 on Linux, 6 runs each, median values.
 "Before" is the state before [#165](https://github.com/denglertai/gonfig/issues/165), "after" includes the optimizations described below.
+TOML files are supported since [#161](https://github.com/denglertai/gonfig/issues/161), so they have no "before" values.
 
 ### Files (≥ 1 MiB)
 
@@ -71,6 +72,8 @@ Measured on an AMD Ryzen 7 5800X3D with Go 1.27.2 on Linux, 6 runs each, median 
 | xml/placeholders | 67.2 ms | 41.8 ms | 39.2 MiB | 21.5 MiB | 885.7k | 499.5k |
 | properties/static | 92.7 ms | 81.2 ms | 44.8 MiB | 33.2 MiB | 2,079k | 1,894k |
 | properties/placeholders | 104.7 ms | 96.3 ms | 54.5 MiB | 43.7 MiB | 2,383k | 2,220k |
+| toml/static | – | 22.9 ms | – | 17.3 MiB | – | 365.8k |
+| toml/placeholders | – | 41.8 ms | – | 31.0 MiB | – | 635.7k |
 | plain/static | 35.6 ms | 3.7 ms | 21.9 MiB | 8.1 MiB | 360.1k | 67.6k |
 | plain/placeholders | 46.5 ms | 17.7 ms | 29.4 MiB | 17.1 MiB | 545.2k | 269.1k |
 
@@ -82,6 +85,7 @@ Peak heap size after the optimizations:
 | json | 21.8 MiB | 23.1 MiB |
 | xml | 14.0 MiB | 15.2 MiB |
 | properties | 10.5 MiB | 11.1 MiB |
+| toml | 18.0 MiB | 22.4 MiB |
 | plain | 11.1 MiB | 10.6 MiB |
 
 ### Values
@@ -110,6 +114,7 @@ Measured with the gonfig binary, `/usr/bin/time` and files with two placeholders
 | json | 0.08 s | 0.60 s | 2.43 s | 44 MiB | 298 MiB | 987 MiB |
 | xml | 0.07 s | 0.56 s | 2.31 s | 36 MiB | 199 MiB | 748 MiB |
 | properties | 0.06 s | 0.43 s | 1.81 s | 28 MiB | 103 MiB | 359 MiB |
+| toml | 0.04 s | 0.29 s | 1.13 s | 29 MiB | 122 MiB | 437 MiB |
 | plain | 0.02 s | 0.19 s | 0.76 s | 26 MiB | 114 MiB | 380 MiB |
 
 The peak memory of the process is a multiple of the file size: about 110 times for YAML and 11 to 31 times for the other file types.

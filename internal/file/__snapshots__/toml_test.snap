@@ -1,0 +1,30 @@
+
+[TestTomlFileHandlerEdit - 1]
+# Application settings
+title = "My \"app\""   # trailing comment
+version = 2
+
+[database]
+host = 'db.local'
+port = 5432
+ports = [ "5432", 2, [ "nested" ] ]
+inline = { user = "it's me", "renamed" = "value" }
+cert = """
+-----BEGIN-----
+abc
+-----END-----"""
+pattern = '''^\d+$'''
+
+[[servers]]
+name = "primary"
+[servers.tls]
+mode = "strict"
+
+[[servers]]
+name = "backup"
+a."renamed".c = "dotted"
+
+["prod".cache]
+size = "small"
+
+---

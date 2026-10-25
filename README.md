@@ -27,18 +27,18 @@ czNjciZ0
 
 ## Features
 
-| | YAML | JSON | XML | Properties | Plain text | TOML |
+| | YAML | JSON | XML | Properties | TOML | Plain text |
 | --- | --- | --- | --- | --- | --- | --- |
-| File extensions | `.yaml`, `.yml` | `.json` | `.xml` | `.properties` | any, with `-t plain` | planned ([#161](https://github.com/denglertai/gonfig/issues/161)) |
-| Placeholders in values | ✅ | ✅ | ✅ element text, CDATA and attributes | ✅ | ✅ every line | |
-| Placeholders in keys | ✅ | ✅ | ❌ | ❌ | ✅ | |
-| [Filters](./FILTERS.md) and [plugins](./PLUGINS.md) | ✅ | ✅ | ✅ | ✅ | ✅ | |
-| Comments preserved | ✅ | – | ✅ | ✅ | ✅ | |
-| Key order preserved | ✅ | ✅ | ✅ | ✅ | ✅ | |
-| Formatting preserved | ✅ including multiple documents | ❌ indented with 2 spaces | ✅ | ✅ except values with placeholders spanning several lines | ✅ | |
-| Line endings and BOM preserved | ✅ | ✅ | ✅ | ✅ | ✅ | |
-| [Fragments](./FILTERS.md#fragments) | ✅ values and keys | ✅ values and keys | ✅ element content | ❌ | ❌ | |
-| [Typed values](./FILTERS.md#types) | ✅ with `to_int`, `to_float`, `to_bool` | ✅ with `to_int`, `to_float`, `to_bool` | ❌ text | ❌ text | ❌ text | |
+| File extensions | `.yaml`, `.yml` | `.json` | `.xml` | `.properties` | `.toml` | any, with `-t plain` |
+| Placeholders in values | ✅ | ✅ | ✅ element text, CDATA and attributes | ✅ | ✅ strings, also within arrays and inline tables | ✅ every line |
+| Placeholders in keys | ✅ | ✅ | ❌ | ❌ | ✅ including table headers | ✅ |
+| [Filters](./FILTERS.md) and [plugins](./PLUGINS.md) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Comments preserved | ✅ | – | ✅ | ✅ | ✅ | ✅ |
+| Key order preserved | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Formatting preserved | ✅ including multiple documents | ❌ indented with 2 spaces | ✅ | ✅ except values with placeholders spanning several lines | ✅ | ✅ |
+| Line endings and BOM preserved | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| [Fragments](./FILTERS.md#fragments) | ✅ values and keys | ✅ values and keys | ✅ element content | ❌ | ❌ | ❌ |
+| [Typed values](./FILTERS.md#types) | ✅ with `to_int`, `to_float`, `to_bool` | ✅ with `to_int`, `to_float`, `to_bool` | ❌ text | ❌ text | ✅ with `to_int`, `to_float`, `to_bool` | ❌ text |
 
 ## Installation
 
@@ -271,7 +271,26 @@ echo "Deploying 1.4.2 to ${TARGET:-staging} at $(date) by $1"
 
 ### TOML
 
-TOML support is planned, see [#161](https://github.com/denglertai/gonfig/issues/161).
+`app.toml`:
+```toml
+# Database settings
+[database]
+host = "${DB_HOST}"
+port = "${DB_PORT | to_int}" # written as an integer
+password = '${DB_PASSWORD}'
+```
+
+```console
+$ DB_HOST=db.internal DB_PORT=5432 DB_PASSWORD="it's secret" gonfig config process -f app.toml
+# Database settings
+[database]
+host = "db.internal"
+port = 5432 # written as an integer
+password = "it's secret"
+```
+
+Only the strings and keys whose value changes are rewritten, everything else is written as it was read.
+Changed strings keep their quotes where possible: the literal string `'${DB_PASSWORD}'` becomes a basic string, since its value contains a `'`.
 
 ## Use cases
 
@@ -313,16 +332,17 @@ Binaries installed with `go install` print the version only, and the commit is m
 
 ### config
 
-`gonfig config` works with JSON, YAML, XML and properties files, as well as plain text files (`-t plain`).
+`gonfig config` works with JSON, YAML, XML, properties and TOML files, as well as plain text files (`-t plain`).
 
 It has two subcommands: `process` processes the given config files and is described below, while [`check`](#check) reports missing variables and errors without writing anything.
 
 `process` parses each file in its format and collects the entries that may contain placeholders: depending on the file type, values and keys, the text and attributes of XML elements, or lines.
 Each entry is then processed on its own, by replacing its placeholders and applying their filters.
 
-Only the processed values are changed, the rest of the file is preserved as far as the format allows: comments are kept for YAML, XML and properties files, the order of keys for every file type, and YAML files may contain multiple documents.
+Only the processed values are changed, the rest of the file is preserved as far as the format allows: comments are kept for YAML, XML, properties and TOML files, the order of keys for every file type, and YAML files may contain multiple documents.
+TOML files are written as they were read, with only the changed strings and keys replaced.
 Properties files are written line by line as they were read, so separators, blank lines, continuation lines and duplicate keys are kept as well. Only lines whose value changes are rewritten, after the key and separator as they were, with the value on a single line.
-CRLF line endings and a UTF-8 byte order mark are kept for every file type. Other than plain text and properties files, which keep the line ending of every line, files with mixed line endings are written with the line ending of their first line.
+CRLF line endings and a UTF-8 byte order mark are kept for every file type. Other than plain text, properties and TOML files, which keep the line ending of every line, files with mixed line endings are written with the line ending of their first line.
 
 Usage:
 
@@ -833,5 +853,5 @@ After the tag is pushed, monitor the workflow runs in GitHub Actions and verify 
 
 ## Roadmap
 
-Planned features and known limitations are tracked as [GitHub issues](https://github.com/denglertai/gonfig/issues), e.g. the [planned features](https://github.com/denglertai/gonfig/issues?q=is%3Aissue%20is%3Aopen%20label%3Atype%2Ffeature) like TOML support ([#161](https://github.com/denglertai/gonfig/issues/161)).
+Planned features and known limitations are tracked as [GitHub issues](https://github.com/denglertai/gonfig/issues), e.g. the [planned features](https://github.com/denglertai/gonfig/issues?q=is%3Aissue%20is%3Aopen%20label%3Atype%2Ffeature) like schema validation ([#163](https://github.com/denglertai/gonfig/issues/163)).
 Feature requests and bug reports are welcome as issues as well. See [CONTRIBUTING.md](./CONTRIBUTING.md) for how to report them and how to contribute changes.

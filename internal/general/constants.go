@@ -18,4 +18,6 @@ const (
 	PROPERTIES FileType = "properties"
 	// PLAIN represents a plain text file
 	PLAIN FileType = "plain"
+	// TOML represents a TOML file
+	TOML FileType = "toml"
 )

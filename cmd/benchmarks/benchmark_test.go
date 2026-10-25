@@ -86,6 +86,17 @@ func propertiesEntry(buf *bytes.Buffer, i int, placeholders bool) {
 	fmt.Fprintf(buf, "service%d.description=A static description that is not processed by any filter\n", i)
 }
 
+// tomlEntry writes the i-th service as an element of an array of tables, with a comment and an inline array
+func tomlEntry(buf *bytes.Buffer, i int, placeholders bool) {
+	fmt.Fprintf(buf, "# Settings of service %d\n[[services]]\n", i)
+	fmt.Fprintf(buf, "host = \"%s\"\n", pick(placeholders, "${BENCH_HOST}", "db.internal.example.com"))
+	fmt.Fprintf(buf, "port = %d\n", 8000+i%1000)
+	fmt.Fprintf(buf, "password = '%s'\n", pick(placeholders, "${BENCH_PASSWORD | trim}", "s3cret"))
+	fmt.Fprintf(buf, "url = \"%s/api/%d\"\n", pick(placeholders, "https://${BENCH_HOST}", "https://db.internal.example.com"), i)
+	fmt.Fprintf(buf, "tags = [\"a\", \"b\", \"c\"]\n")
+	fmt.Fprintf(buf, "description = \"A static description that is not processed by any filter\"\n")
+}
+
 func plainEntry(buf *bytes.Buffer, i int, placeholders bool) {
 	fmt.Fprintf(buf, "# Settings of service %d\n", i)
 	fmt.Fprintf(buf, "export SERVICE%d_URL=\"%s/api/%d\"\n", i, pick(placeholders, "https://${BENCH_HOST}", "https://db.internal.example.com"), i)
@@ -182,6 +193,7 @@ func BenchmarkProcessFile(b *testing.B) {
 		{general.JSON, jsonEntry},
 		{general.XML, xmlEntry},
 		{general.PROPERTIES, propertiesEntry},
+		{general.TOML, tomlEntry},
 		{general.PLAIN, plainEntry},
 	}
 

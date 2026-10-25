@@ -454,10 +454,11 @@ If a placeholder with such a result makes up the whole value, file types support
 | --- | --- | --- | --- |
 | YAML | `8080` | `true` | `"01701"` |
 | JSON | `8080` | `true` | `"01701"` |
+| TOML | `8080` | `true` | `"01701"` |
 | XML, properties, plain text | `8080` as text | `true` as text | `01701` as text |
 
 In YAML, this also applies to quoted placeholders like `"${PORT | to_int}"`, while keys of mappings are always text.
-In JSON, placeholders are always written within strings, e.g. `"port": "${PORT | to_int}"` becomes `"port": 8080`.
+In JSON and TOML, placeholders are always written within strings, e.g. `"port": "${PORT | to_int}"` becomes `"port": 8080`, and `port = "${PORT | to_int}"` becomes `port = 8080`.
 
 If such a placeholder is surrounded by other text, its result is formatted as text:
 
@@ -752,7 +753,7 @@ b:
 - **Placeholders within fragments** are processed as well, e.g. a fragment may contain `${DB_PASSWORD | @secret}`. Fragments cannot contain further fragments.
 - **Empty fragments** replace a value by null, remove a key or remove the content of an XML element.
 - **Formatting:** YAML fragments are written in block style. Quotes are only kept where they are needed to keep a string a string.
-- **Errors:** Invalid fragments, fragments in properties or plain text files and fragments in XML attributes fail processing, so no output is written. The error of an invalid fragment names the format and, if known, the line, e.g. `invalid YAML fragment on line 3`. The parser's message may quote parts of the fragment, so it is only included with `log-values`, see [configuration](./README.md#configuration).
+- **Errors:** Invalid fragments, fragments in properties, TOML or plain text files and fragments in XML attributes fail processing, so no output is written. The error of an invalid fragment names the format and, if known, the line, e.g. `invalid YAML fragment on line 3`. The parser's message may quote parts of the fragment, so it is only included with `log-values`, see [configuration](./README.md#configuration).
 - **Templates:** Fragment files can be provided by [placeholder templates](#templates), e.g. with `default: "@/etc/app/logging.yaml"` and `${@logging | fragment}`.
 
 ## Recipes
