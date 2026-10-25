@@ -47,8 +47,10 @@ Installing the apk from [https://denglertai.github.io/apk/](https://denglertai.g
 ```bash
 # Add the repository to the list of apk repositories
 $ echo "https://denglertai.github.io/apk/" >> /etc/apk/repositories
-# Download the key used for signing the packages
-$ curl https://denglertai.github.io/apk/melange.rsa.pub > /etc/apk/keys/denglertai.rsa.pub
+# Download the key used for signing the packages. apk finds keys by their file name, so it is saved under both
+# names it signs with: denglertai.rsa.pub, and melange.rsa.pub for older packages
+$ curl -fsSL https://denglertai.github.io/apk/denglertai.rsa.pub -o /etc/apk/keys/denglertai.rsa.pub
+$ cp /etc/apk/keys/denglertai.rsa.pub /etc/apk/keys/melange.rsa.pub
 # Update the package list
 $ apk update
 # Install gonfig
@@ -58,7 +60,9 @@ $ apk add gonfig
 Using [apko](https://github.com/chainguard-dev/apko/) for building images:
 ```yaml
 contents:
+  # The same key under both names, see above
   keyring:
+    - https://denglertai.github.io/apk/denglertai.rsa.pub
     - https://denglertai.github.io/apk/melange.rsa.pub
   repositories:
     - https://denglertai.github.io/apk/

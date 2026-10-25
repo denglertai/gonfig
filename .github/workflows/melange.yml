@@ -37,9 +37,11 @@ jobs:
         persist-credentials: false
         fetch-depth: 0
 
+    # apk finds the key of a signature by the file name of the signing key plus .pub, so the key is named after this
+    # repository instead of melange's default name melange.rsa, which other repositories use as well (#348)
     - name: Prepare melange build
       run: | 
-        echo "${{ secrets.MELANGE_RSA_KEY }}" > ${{ runner.temp }}/melange.rsa 
+        echo "${{ secrets.MELANGE_RSA_KEY }}" > ${{ runner.temp }}/denglertai.rsa
         
         sudo apt-get update -y
         sudo apt-get install -y bubblewrap
@@ -66,7 +68,7 @@ jobs:
         cat ${{ runner.temp }}/melange-vars.yaml
 
     - name: Run melange
-      run: melange build melange.yaml --out-dir ./apk --arch=x86_64 --signing-key ${{ runner.temp }}/melange.rsa --vars-file ${{ runner.temp }}/melange-vars.yaml
+      run: melange build melange.yaml --out-dir ./apk --arch=x86_64 --signing-key ${{ runner.temp }}/denglertai.rsa --vars-file ${{ runner.temp }}/melange-vars.yaml
 
     # The apk repository contains the packages of previous releases as well, so only the built ones are attested:
     # gonfig and the plugins of its subpackages
@@ -92,6 +94,9 @@ jobs:
     
     - name: Commit changes
       run: |
+        # The same key under both names: denglertai.rsa.pub for the index and new packages, melange.rsa.pub for
+        # packages signed before the key was renamed
+        cp ./melange.rsa.pub ./apk/denglertai.rsa.pub
         cp ./melange.rsa.pub ./apk/melange.rsa.pub
 
         cd ./apk
