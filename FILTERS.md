@@ -162,7 +162,7 @@ api.example.com
 | [`to_int`](#to_int--to_float--to_bool) | | Converts the value to an integer |
 | [`to_float`](#to_int--to_float--to_bool) | | Converts the value to a floating point number |
 | [`to_bool`](#to_int--to_float--to_bool) | | Converts the value to a boolean |
-| [`multiply`](#multiply) | `m` | Multiplies an integer |
+| [`multiply`](#multiply) | `m` | Multiplies a number |
 | [`md5`](#md5) | | Hashes the value with MD5 |
 | [`bcrypt`](#bcrypt) | `cost` | Hashes the value with bcrypt |
 | [`base64`](#base64--base64_decode) | | Encodes the value to base64 |
@@ -257,15 +257,26 @@ Error: filter to_int: the value is not an integer
 
 ### multiply
 
-Multiplies an integer by the param `m`, which defaults to `1` and may be given by name or by position.
-The value has to be an integer or a numeric string, so it is usually combined with `to_int`.
+Multiplies a number by the param `m`, which defaults to `1` and may be given by name or by position.
+The value and `m` may be integers or floats, and the value may be a numeric string.
+
+The result is an integer if the value and `m` are integers, and a float otherwise, which file types supporting types
+write as such, see [types](#types). Floats are written in their shortest exact form, so `3 * 0.1` gives `0.30000000000000004`.
 
 ```console
 $ WORKERS=4 gonfig value '${WORKERS | to_int | multiply(m=2)}'
 8
 $ WORKERS=4 gonfig value '${WORKERS | to_int | multiply(3)}'
 12
+$ MEM_MB=1024 gonfig value '${MEM_MB | multiply(0.75)}'
+768
+$ TIMEOUT=1.5 gonfig value '${TIMEOUT | multiply(1000)}'
+1500
+$ WORKERS=4 gonfig value '${WORKERS | multiply(two)}'
+Error: filter multiply: invalid param m "two", expected a number
 ```
+
+Results that don't fit into an integer fail instead of wrapping around.
 
 ### md5
 
@@ -389,7 +400,7 @@ A list that is neither joined nor inserted as a fragment is written in Go's list
 Placeholders are replaced by text, so processed values are strings by default, even if they look like numbers.
 This keeps values like `01701` or `123456` unchanged, e.g. for zip codes or passwords.
 
-`to_int`, `to_float` and `to_bool` return a number or boolean instead.
+`to_int`, `to_float`, `to_bool` and `multiply` return a number or boolean instead.
 If a placeholder with such a result makes up the whole value, file types supporting types write it as such:
 
 | File type | `${PORT \| to_int}` | `${ENABLED \| to_bool}` | `${ZIP}` |
