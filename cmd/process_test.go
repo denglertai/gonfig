@@ -588,7 +588,7 @@ func captureStderr(t *testing.T, run func()) string {
 	t.Cleanup(func() {
 		os.Stderr = stderr
 		// Logging was initialized with the pipe, so initialize it with the real stderr again
-		assert.NoError(t, logging.InitLogging("info", false))
+		assert.NoError(t, logging.InitLogging("info", "json", false))
 	})
 
 	run()

@@ -197,6 +197,7 @@ func TestLoadAppConfig_Defaults(t *testing.T) {
 
 	want := AppConfig{
 		LogLevel:            "info",
+		LogFormat:           "json",
 		LogSource:           false,
 		ConfigPath:          "",
 		PluginPath:          "",

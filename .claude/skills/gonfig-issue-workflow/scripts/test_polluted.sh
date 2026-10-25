@@ -16,6 +16,7 @@ GOCACHE=$(go env GOCACHE)
 export GOMODCACHE GOCACHE
 
 config='log-level: debug
+log-format: text
 log-source: true
 log-values: true
 fail-on-missing: true
@@ -26,7 +27,7 @@ printf '%s\n' "$config" > "$dir/config/.gonfig.yaml"
 
 status=0
 echo "== GONFIG_* variables and home config file"
-HOME="$dir/home" GONFIG_LOG_LEVEL=debug GONFIG_LOG_SOURCE=true GONFIG_LOG_VALUES=true GONFIG_FAIL_ON_MISSING=true \
+HOME="$dir/home" GONFIG_LOG_LEVEL=debug GONFIG_LOG_FORMAT=text GONFIG_LOG_SOURCE=true GONFIG_LOG_VALUES=true GONFIG_FAIL_ON_MISSING=true \
 	GONFIG_ALLOW_UNKNOWN_FILTERS=true GONFIG_PLUGIN_PATH="$dir/no-plugins" go test -count=1 "$@" ./... || status=1
 
 echo "== GONFIG_CONFIG_PATH"

@@ -23,7 +23,7 @@ const minFileSize = 1 << 20
 
 // TestMain uses the log level the CLI uses by default, so disabled debug logging is part of the measurements
 func TestMain(m *testing.M) {
-	if err := logging.InitLogging("info", false); err != nil {
+	if err := logging.InitLogging("info", "json", false); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
