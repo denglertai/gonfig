@@ -1,0 +1,125 @@
+name: Release snapshot
+
+# Builds the release like release.yml, without publishing, and checks the archives and the container image, since the
+# release itself only runs on tags. It runs for changes to the release configuration and to what the image contains.
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .goreleaser.yaml
+      - release.Dockerfile
+      - .github/workflows/release.yml
+      - .github/workflows/release-snapshot.yml
+      - .github/actions/**
+      - go.mod
+      - go.sum
+      - internal/plugin/**
+      - pkg/plugin/**
+      - plugins/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    env:
+      # Same version as release.yml
+      # renovate: datasource=github-releases depName=goreleaser/goreleaser
+      GORELEASER_VERSION: v2.19.0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          # Like the release, built without the cache, which a poisoned cache entry could alter
+          cache: false
+          go-version-file: go.mod
+      - name: Set up the cross toolchain
+        # actionlint does not support the self-repository syntax $/ yet
+        uses: ./.github/actions/setup-cross-toolchain # zizmor: ignore[self-repository]
+      - name: Setup syft
+        uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+      # The image only copies binaries, so building it for arm64 needs no QEMU
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # Snapshots build one image per platform and load it into the Docker daemon, tagged e.g. <version>-amd64
+      - name: Run GoReleaser in snapshot mode
+        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
+        with:
+          distribution: goreleaser
+          version: ${{ env.GORELEASER_VERSION }}
+          args: release --snapshot --clean --skip=sign
+
+      - name: Check the archives
+        run: |
+          set -euo pipefail
+          for archive in dist/gonfig_Linux_x86_64.tar.gz dist/gonfig_Linux_arm64.tar.gz; do
+            test "$(tar tzf "$archive" | sort | tr '\n' ' ')" = "LICENSE gonfig "
+          done
+          test "$(unzip -Z1 dist/gonfig_Windows_x86_64.zip | sort | tr '\n' ' ')" = "LICENSE gonfig.exe "
+          for plugin in gonfig-plugin-openbao gonfig-plugin-azure-keyvault; do
+            for platform in Linux_x86_64 Linux_arm64 Darwin_x86_64 Darwin_arm64; do
+              test "$(tar tzf "dist/${plugin}_${platform}.tar.gz" | sort | tr '\n' ' ')" = "LICENSE ${plugin} "
+            done
+            test "$(unzip -Z1 "dist/${plugin}_Windows_x86_64.zip" | sort | tr '\n' ' ')" = "LICENSE ${plugin}.exe "
+          done
+
+      # The image has to run gonfig without credentials, with both plugins started and their filters known
+      - name: Check the image for linux/amd64
+        run: |
+          set -euo pipefail
+          # The image of this snapshot, tagged with its version and the platform, see dockers_v2 in .goreleaser.yaml
+          image="ghcr.io/denglertai/gonfig:$(jq -r .version dist/metadata.json)-amd64"
+          docker image inspect "$image" >/dev/null
+          echo "Checking $image"
+          # The result goes to stdout without a newline, the logs to stderr, so they are captured separately
+          result=$(docker run --rm "$image" --log-level debug value ok 2>"$RUNNER_TEMP/logs")
+          logs=$(cat "$RUNNER_TEMP/logs")
+          echo "$logs"
+          test "$result" = "ok"
+          for plugin in gonfig-plugin-openbao gonfig-plugin-azure-keyvault; do
+            grep -q "\"msg\":\"Started filter plugin\",\"plugin\":\"/usr/libexec/gonfig/plugins/${plugin}\"" <<<"$logs"
+          done
+          # set -e ignores negated commands, so the check fails explicitly
+          if grep -q '"level":"ERROR"' <<<"$logs"; then
+            echo "The image logged errors"
+            exit 1
+          fi
+          # Unconfigured placeholders fail with exit code 1 and the errors of the plugins, so their filters are known
+          expect_error() {
+            local message=$1 out status=0
+            shift
+            out=$("$@" 2>&1) || status=$?
+            echo "$out"
+            test "$status" -eq 1
+            grep -qF "$message" <<<"$out"
+          }
+          expect_error 'filter openbao: failed to connect: no address, set BAO_ADDR or VAULT_ADDR' \
+            docker run --rm -e DB=secret/app/db "$image" value '${DB | openbao}'
+          expect_error 'filter azure_keyvault: failed to read the secret "myvault": invalid reference' \
+            docker run --rm -e DB=myvault "$image" value '${DB | azure_keyvault}'
+
+      # Running the arm64 image would need QEMU, so its files are checked instead
+      - name: Check the image for linux/arm64
+        run: |
+          set -euo pipefail
+          image="ghcr.io/denglertai/gonfig:$(jq -r .version dist/metadata.json)-arm64"
+          docker image inspect "$image" >/dev/null
+          echo "Checking $image"
+          container=$(docker create --platform linux/arm64 "$image")
+          docker cp "$container:/usr/bin/gonfig" "$RUNNER_TEMP/gonfig"
+          docker cp "$container:/usr/libexec/gonfig/plugins" "$RUNNER_TEMP/plugins"
+          docker rm "$container"
+          # gonfig is linked against glibc for cgo, the plugins are static
+          file "$RUNNER_TEMP/gonfig" | tee /dev/stderr | grep -q 'ARM aarch64.*dynamically linked'
+          for plugin in gonfig-plugin-openbao gonfig-plugin-azure-keyvault; do
+            file "$RUNNER_TEMP/plugins/$plugin" | tee /dev/stderr | grep -q 'ARM aarch64.*statically linked'
+          done

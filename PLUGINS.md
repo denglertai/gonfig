@@ -350,6 +350,7 @@ The plugins build on [pkg/plugin/secret](./pkg/plugin/secret/), so they behave t
 - **Prefer files or workload identities to credentials in the environment**, which other processes of the same user may read: e.g. `GONFIG_OPENBAO_TOKEN_FILE` or Kubernetes authentication for OpenBao, and workload or managed identity for Azure.
 - **Secrets travel only through the pipe** between gonfig and the plugin. The plugins never put them into errors, and gonfig leaves processed values out of its logs unless [`log-values`](./README.md#configuration) is enabled for debugging.
 - **gonfig starts every plugin it finds**, so installed plugins run even if no placeholder uses them. They don't contact a secret manager before a placeholder uses them.
+  The image `ghcr.io/denglertai/gonfig` contains all plugins, so it runs the code of every secret manager even if only one is used; images built with apko or a multi-stage build can contain only the plugins they need.
 
 ### Writing a plugin for another secret manager
 
@@ -403,6 +404,7 @@ pipeline:
 ```
 
 The runtime dependency doesn't pin a gonfig version, since plugins and gonfig only share the versioned [protocol](#the-protocol).
+The plugins of this repository are built as subpackages of gonfig's [melange.yaml](./melange.yaml) in the same way.
 
 The [apko](https://github.com/chainguard-dev/apko) configuration of the image adds the plugin package from the repository it is published to, which installs gonfig as well.
 These are the relevant parts of the configuration, e.g. for packages built with melange into its output directory `./packages`:

@@ -30,7 +30,6 @@ builds:
       - CGO_ENABLED=1
       - CC=aarch64-linux-gnu-gcc
       - CXX=aarch64-linux-gnu-g++
-      - CGO_LDFLAGS=-fuse-ld=gold
     goos:
       - linux
     goarch:
@@ -54,8 +53,48 @@ builds:
       - -buildmode=exe
     ldflags: *ldflags
 
+  # Plugins for secret managers, released with gonfig. They don't need cgo, so they are built for every platform here,
+  # including macOS, which gonfig itself is built for in a separate job of release.yml.
+  - id: plugin-openbao
+    dir: plugins/openbao
+    binary: gonfig-plugin-openbao
+    env: &pluginEnv
+      - CGO_ENABLED=0
+    goos: &pluginGoos
+      - linux
+      - darwin
+      - windows
+    goarch: &pluginGoarch
+      - amd64
+      - arm64
+    ignore: &pluginIgnore
+      - goos: windows
+        goarch: arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+
+  - id: plugin-azure-keyvault
+    dir: plugins/azure-keyvault
+    binary: gonfig-plugin-azure-keyvault
+    env: *pluginEnv
+    goos: *pluginGoos
+    goarch: *pluginGoarch
+    ignore: *pluginIgnore
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+
 archives:
-  - formats: [tar.gz]
+  - id: gonfig
+    # Archives include all builds by default, so the plugins get archives of their own below
+    ids:
+      - linux-amd64
+      - linux-arm64
+      - windows-amd64
+    formats: [tar.gz]
     # this name template makes the OS and Arch compatible with the results of `uname`.
     name_template: >-
       {{ .ProjectName }}_
@@ -70,6 +109,30 @@ archives:
         formats: [zip]
     files:
       - LICENSE
+
+  # One archive per plugin, e.g. gonfig-plugin-openbao_Linux_x86_64.tar.gz
+  - id: plugin-openbao
+    ids:
+      - plugin-openbao
+    formats: [tar.gz]
+    name_template: &pluginArchiveName >-
+      {{ .Binary }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else }}{{ .Arch }}{{ end }}
+    format_overrides: &pluginFormatOverrides
+      - goos: windows
+        formats: [zip]
+    files: &pluginFiles
+      - LICENSE
+
+  - id: plugin-azure-keyvault
+    ids:
+      - plugin-azure-keyvault
+    formats: [tar.gz]
+    name_template: *pluginArchiveName
+    format_overrides: *pluginFormatOverrides
+    files: *pluginFiles
 
 changelog:
   sort: asc
@@ -90,7 +153,9 @@ release:
     
     Multi-architecture binaries built with CGO enabled
 
-    Container image for linux/amd64 and linux/arm64: `ghcr.io/denglertai/gonfig:{{ .Version }}`
+    Plugins for secret managers, see PLUGINS.md: `gonfig-plugin-openbao` (OpenBao, HashiCorp Vault) and `gonfig-plugin-azure-keyvault` (Azure Key Vault)
+
+    Container image for linux/amd64 and linux/arm64, including the plugins: `ghcr.io/denglertai/gonfig:{{ .Version }}`
   footer: |
     **Full Changelog**: https://github.com/denglertai/gonfig/compare/{{ .PreviousTag }}...{{ .Tag }}
 
@@ -101,9 +166,12 @@ sboms:
 # Multi-arch image built from the Linux binaries and pushed to ghcr.io on release
 dockers_v2:
   - id: gonfig
+    # The plugins are part of the image, see release.Dockerfile
     ids:
       - linux-amd64
       - linux-arm64
+      - plugin-openbao
+      - plugin-azure-keyvault
     dockerfile: release.Dockerfile
     images:
       - ghcr.io/denglertai/gonfig
