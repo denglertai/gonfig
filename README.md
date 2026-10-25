@@ -639,6 +639,7 @@ Order of precedence (highest to lowest):
 | Option | CLI flag | Environment variable | Default | Description |
 | --- | --- | --- | --- | --- |
 | Log level | `--log-level`, `-l` | `GONFIG_LOG_LEVEL` | `info` | Logging verbosity (`trace`, `debug`, `info`, `warn`, `error`, `fatal`) |
+| Log format | `--log-format` | `GONFIG_LOG_FORMAT` | `json` | `json` for containers and log collectors, `text` for reading, or `auto` for `text` if stderr is a terminal and `json` otherwise |
 | Include source location | `--log-source`, `-s` | `GONFIG_LOG_SOURCE` | `false` | Includes source location in log output |
 | Config directory | `--config-path` | `GONFIG_CONFIG_PATH` | empty | Directory that contains `.gonfig.yaml` |
 | Plugin directory | `--plugin-path` | `GONFIG_PLUGIN_PATH` | `/usr/libexec/gonfig/plugins` (except on Windows) and `./plugins` | Directory scanned recursively for executable plugins (`gonfig-plugin-*`) and deprecated Go plugins (`.so` files). If set, only this directory is scanned |
@@ -660,6 +661,8 @@ Example config file:
 
 ```yaml
 log-level: debug
+# Readable logs instead of JSON, see "Logging Notes"
+log-format: text
 log-source: true
 # Only this plugin directory instead of the default ones
 plugin-path: /opt/gonfig/plugins
@@ -717,6 +720,13 @@ The wrappers in `./pkg/logging` also support `trace` and `fatal` levels.
 `fatal` exits with status code `1`.
 
 Since the CLI command output may be written to stdout, logs are written to stderr by default.
+They are JSON by default, which suits containers and log collectors. `--log-format text` writes them readable instead, and `auto` chooses `text` when running in a terminal,
+e.g. for the warning of `gonfig --log-format text --allow-unknown-filters value '${Y | bogus}'`:
+
+```text
+time=2026-10-25T11:46:01.739+01:00 level=WARN msg="Unknown filter, passing the value on unchanged" filter=bogus
+```
+
 Successful runs write nothing to stderr at the default level `info`, so gonfig can be used in scripts and entrypoints without noise. Use `--log-level debug` to see which files are processed and written.
 
 Processed values are not logged by default, even at `trace` level, since they may contain secrets. Debug logs show the entry and the type of its result instead, e.g. `"entry":"database.password","type":"string"`.

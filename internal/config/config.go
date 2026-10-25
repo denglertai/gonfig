@@ -57,7 +57,9 @@ type Templates struct {
 
 // AppConfig holds all global application settings
 type AppConfig struct {
-	LogLevel   string
+	LogLevel string
+	// LogFormat is json, text or auto, which is text if stderr is a terminal
+	LogFormat  string
 	LogSource  bool
 	ConfigPath string
 	// PluginPath is the plugin directory. If empty, the default plugin paths are searched, see plugin.InitPlugins.
@@ -79,6 +81,7 @@ type AppConfig struct {
 func LoadAppConfig(v *viper.Viper) (*AppConfig, error) {
 	cfg := &AppConfig{
 		LogLevel:   v.GetString("log-level"),
+		LogFormat:  v.GetString("log-format"),
 		LogSource:  v.GetBool("log-source"),
 		ConfigPath: v.GetString("config-path"),
 		PluginPath: v.GetString("plugin-path"),
@@ -111,6 +114,8 @@ func SetupViper(flags *pflag.FlagSet) (*viper.Viper, error) {
 
 	// Set defaults
 	v.SetDefault("log-level", "info")
+	// JSON by default, so existing log processing keeps working
+	v.SetDefault("log-format", "json")
 	v.SetDefault("log-source", false)
 	v.SetDefault("config-path", "")
 	// Empty, so the default plugin paths are searched, see plugin.InitPlugins
