@@ -136,9 +136,12 @@ func TestCheckSchemaErrors(t *testing.T) {
 
 	sch, err := schema.Load(configSchemaPath(t))
 	assert.NoError(t, err)
+	removed := filepath.Join(t.TempDir(), "removed.yaml")
 	report := &file.CheckReport{File: "removed.yaml"}
-	validateChecked(report, file.NewFileProcessor(filepath.Join(t.TempDir(), "removed.yaml"), general.Undefined, nil), sch)
-	assert.Contains(t, report.Error, "no such file or directory")
+	validateChecked(report, file.NewFileProcessor(removed, general.Undefined, nil), sch)
+	// The message of a missing file depends on the operating system, e.g. "The system cannot find the file specified." on Windows
+	_, openErr := os.Open(removed)
+	assert.Equal(t, openErr.Error(), report.Error)
 }
 
 // TestCheckSchemaStdinReadError checks that an error reading stdin, which is read at once for the validation, is returned
