@@ -299,6 +299,8 @@ gonfig expands the pattern itself, so it works in exec-form entrypoints of image
 $ gonfig config process -f config.template.yaml -o config.yaml -w
 ```
 
+**Pipelines:** Render generated or downloaded configs without a temporary file, e.g. `curl -fsSL "$URL" | gonfig config process -f - -t yaml | kubectl apply -f -`.
+
 **Scripts:** Use `gonfig value` to transform single values, e.g. `gonfig value '${CREDENTIALS | base64}'`.
 
 ## Usage
@@ -357,6 +359,15 @@ Usage:
    Rendered files often contain secrets, so their mode is not left to the umask:
    a new output file gets the mode of the input file, so restricting the template restricts the output, and an existing output file keeps its mode.
    `--mode` sets the mode in both cases, also for `-i`.
+
+1. Read the input from stdin (`-f -`), e.g. in a pipeline
+    ```console
+    $ printf 'replicas: ${REPLICAS | to_int}\n' | REPLICAS=3 gonfig config process -f - -t yaml
+    replicas: 3
+    ```
+   The file type of stdin cannot be inferred, so `-t` is required. `-f -` cannot be combined with other files or `-i`;
+   the output goes to stdout, or to a file with `-o <file>`, which gets mode `0600` unless `--mode` is given.
+   `config check -f -` reports stdin as `<stdin>`. A file named `-` is processed with `-f ./-`.
 
 1. Process several files (`-f` per file or glob patterns), see [several files](#several-files)
     ```console

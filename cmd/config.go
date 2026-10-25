@@ -4,12 +4,16 @@ Copyright © 2024 Daniel Englert
 package cmd
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/denglertai/gonfig/internal/config"
+	"github.com/denglertai/gonfig/internal/file"
 	"github.com/denglertai/gonfig/internal/general"
 	"github.com/denglertai/gonfig/pkg/logging"
 	"github.com/spf13/cobra"
@@ -30,9 +34,21 @@ func getConfigSettings(cmd *cobra.Command) (*config.Settings, error) {
 	fileValues, _ := cmd.Flags().GetStringArray("file")
 	fileType, _ := cmd.Flags().GetString("file-type")
 
-	files, err := expandFiles(fileValues)
-	if err != nil {
-		return nil, err
+	var files []string
+	if slices.Contains(fileValues, stdinFile) {
+		// stdin can be read only once, and a file named - is still processed with -f ./-
+		if len(fileValues) > 1 {
+			return nil, errors.New("-f - reads the input from stdin, which cannot be combined with other files")
+		}
+		if fileType == "" {
+			return nil, errors.New("-f - needs -t / --file-type, since the file type of stdin cannot be inferred")
+		}
+		files = fileValues
+	} else {
+		var err error
+		if files, err = expandFiles(fileValues); err != nil {
+			return nil, err
+		}
 	}
 
 	configSettings := config.NewSettings()
@@ -43,6 +59,22 @@ func getConfigSettings(cmd *cobra.Command) (*config.Settings, error) {
 	logging.Debug("Config settings", "settings", configSettings)
 
 	return configSettings, nil
+}
+
+// stdinFile is the --file value reading the input from stdin
+const stdinFile = "-"
+
+// stdinName names stdin in messages and reports
+const stdinName = "<stdin>"
+
+// newFileProcessor creates the processor of an input file, which reads stdin for -f -
+func newFileProcessor(cmd *cobra.Command, name string, fileType general.FileType, output io.Writer) *file.FileProcessor {
+	if name != stdinFile {
+		return file.NewFileProcessor(name, fileType, output)
+	}
+	processor := file.NewFileProcessor(stdinName, fileType, output)
+	processor.Input = cmd.InOrStdin()
+	return processor
 }
 
 // expandFiles returns the files of the --file values in their order, without duplicates.
@@ -113,7 +145,7 @@ func noArgs(_ *cobra.Command, args []string) error {
 func init() {
 	rootCmd.AddCommand(configCmd)
 
-	configCmd.PersistentFlags().StringArrayP("file", "f", nil, "Path of a configuration file or a glob pattern like 'conf/*.yaml'; can be repeated")
+	configCmd.PersistentFlags().StringArrayP("file", "f", nil, "Path of a configuration file or a glob pattern like 'conf/*.yaml'; can be repeated. - reads stdin and needs -t")
 	// Marking fails only for flags that are not defined
 	cobra.CheckErr(configCmd.MarkPersistentFlagRequired("file"))
 

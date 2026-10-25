@@ -301,3 +301,37 @@ func TestFormatReader(t *testing.T) {
 		})
 	}
 }
+
+// TestFileProcessorInput checks that the input is read instead of the file, which needn't exist, with and without diff
+func TestFileProcessorInput(t *testing.T) {
+	t.Setenv("PROCESSOR_TEST_INPUT", "x")
+
+	var out bytes.Buffer
+	processor := NewFileProcessor("<stdin>", general.YAML, &out)
+	processor.Input = strings.NewReader("a: ${PROCESSOR_TEST_INPUT}\n")
+	assert.NoError(t, processor.Process())
+	assert.Equal(t, "a: x\n", out.String())
+
+	processor = NewFileProcessor("<stdin>", general.YAML, io.Discard)
+	processor.Input = strings.NewReader("a: ${PROCESSOR_TEST_INPUT}\n")
+	processor.Diff = true
+	report, err := processor.Check()
+	assert.NoError(t, err)
+	assert.Equal(t, "<stdin>", report.File)
+	if assert.NotNil(t, report.Diff) {
+		assert.Contains(t, *report.Diff, "-a: ${PROCESSOR_TEST_INPUT}")
+	}
+}
+
+// TestFileProcessorInputReadError checks that an input failing to be read names the input, also when read for the diff
+func TestFileProcessorInputReadError(t *testing.T) {
+	for _, diff := range []bool{false, true} {
+		processor := NewFileProcessor("<stdin>", general.YAML, io.Discard)
+		processor.Input = iotest.ErrReader(assert.AnError)
+		processor.Diff = diff
+		_, err := processor.Check()
+		assert.ErrorContains(t, err, "failed to read <stdin>: ")
+		// The YAML parser reports read errors without wrapping them
+		assert.ErrorContains(t, err, assert.AnError.Error())
+	}
+}
