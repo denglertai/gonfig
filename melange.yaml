@@ -62,6 +62,8 @@ subpackages:
           packages: .
           output: gonfig-plugin-openbao
           install-dir: libexec/gonfig/plugins
+          # The plugins have gonfig's version, which gonfig plugin list shows
+          ldflags: -X main.version=${{package.version}}
 
   - name: gonfig-plugin-azure-keyvault
     description: gonfig plugin reading secrets from Azure Key Vault
@@ -78,3 +80,4 @@ subpackages:
           packages: .
           output: gonfig-plugin-azure-keyvault
           install-dir: libexec/gonfig/plugins
+          ldflags: -X main.version=${{package.version}}
