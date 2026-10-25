@@ -3,6 +3,8 @@ package filter
 import (
 	"cmp"
 	"crypto/md5" //nolint:gosec // md5 is a documented filter for checksums, bcrypt is the one for passwords
+	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -628,6 +630,7 @@ var (
 	regexParams    = []string{"pattern", "replacement"}
 	listParams     = []string{"delimiter"}
 	bcryptParams   = []string{"cost"}
+	oneOfParams    = []string{"values"}
 )
 
 // init initializes the filter map
@@ -761,6 +764,71 @@ func init() {
 				}
 				// return the md5 hash as a string
 				return hex.EncodeToString(hash.Sum(nil)), nil
+			},
+		}
+	}
+
+	filterMap["sha256"] = func(token string) Filter {
+		return &FuncFilter{
+			fn: stringFunc(func(s string, _ map[string]string) (string, error) {
+				sum := sha256.Sum256([]byte(s))
+				return hex.EncodeToString(sum[:]), nil
+			}),
+		}
+	}
+
+	filterMap["sha512"] = func(token string) Filter {
+		return &FuncFilter{
+			fn: stringFunc(func(s string, _ map[string]string) (string, error) {
+				sum := sha512.Sum512([]byte(s))
+				return hex.EncodeToString(sum[:]), nil
+			}),
+		}
+	}
+
+	filterMap["hex"] = func(token string) Filter {
+		return &FuncFilter{
+			fn: stringFunc(func(s string, _ map[string]string) (string, error) {
+				return hex.EncodeToString([]byte(s)), nil
+			}),
+		}
+	}
+
+	filterMap["hex_decode"] = func(token string) Filter {
+		return &FuncFilter{
+			fn: stringFunc(func(s string, _ map[string]string) (string, error) {
+				decoded, err := hex.DecodeString(s)
+				// The error of the hex package quotes the invalid byte, which is part of the value
+				if err != nil {
+					return "", valueError(token, "the value is not valid hex", s)
+				}
+				return string(decoded), nil
+			}),
+		}
+	}
+
+	// one_of passes the value on unchanged if it is one of the values separated by |, e.g. one_of(debug|info)
+	filterMap["one_of"] = func(token string) Filter {
+		return &FuncFilter{
+			paramNames: oneOfParams,
+			fn: func(value any, params map[string]string) (any, error) {
+				values, err := requiredParam(token, params, "values", 0)
+				if err != nil {
+					return nil, err
+				}
+				allowed := strings.Split(values, "|")
+				// Each element of a list, e.g. of split, has to be allowed
+				list, isList := value.([]string)
+				if !isList {
+					list = []string{toString(value)}
+				}
+				for _, element := range list {
+					if !slices.Contains(allowed, element) {
+						// The allowed values are part of the config file, not secrets, so they are included
+						return nil, valueError(token, "the value is not one of "+strings.Join(allowed, ", "), element)
+					}
+				}
+				return value, nil
 			},
 		}
 	}
