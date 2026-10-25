@@ -4,9 +4,8 @@ on:
   push:
     branches:
       - main
+  # Every pull request, including those based on another pull request's branch, which merge into main eventually
   pull_request:
-    branches:
-      - main
   # Vulnerabilities are published without a change in this repository
   schedule:
     - cron: '23 4 * * *'
