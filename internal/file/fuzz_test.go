@@ -2,11 +2,15 @@ package file
 
 import (
 	"bytes"
-	"fmt"
+	"maps"
+	"math"
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/pelletier/go-toml/v2"
@@ -208,7 +212,7 @@ func FuzzTomlRoundTrip(f *testing.F) {
 // within an array and within an inline table, and that it is read as it was parsed on its own.
 // Fragments ending with a comment are only accepted as the value of a pair.
 func FuzzTomlFragment(f *testing.F) {
-	for _, seed := range []string{`"s"`, "[1, 2]", "{ a = 1 }", "[\n  1, # c\n  2,\n]", "1979-05-27", `"""a"""`, "'b' # c", "1\n# c", "1\nx = 2", ""} {
+	for _, seed := range []string{`"s"`, "[1, 2]", "{ a = 1 }", "nan", "[1979-05-27T07:32:00-07:00, 1.0]", "[\n  1, # c\n  2,\n]", "1979-05-27", `"""a"""`, "'b' # c", "1\n# c", "1\nx = 2", ""} {
 		f.Add(seed)
 	}
 	f.Fuzz(func(t *testing.T, text string) {
@@ -248,9 +252,33 @@ func FuzzTomlFragment(f *testing.F) {
 			values["c.d"] = c["d"]
 		}
 		for _, path := range accepted {
-			if fmt.Sprint(values[path]) != fmt.Sprint(want["v"]) {
+			if !tomlValuesEqual(values[path], want["v"]) {
 				t.Fatalf("fragment %q at %s is read differently: %v\n%s", text, path, got, output.String())
 			}
 		}
 	})
+}
+
+// tomlValuesEqual returns whether two decoded TOML values are equal, including their types, e.g. 1 and "1" differ.
+// NaN equals NaN, and times are equal if they are the same instant with the same offset, since each parsed time
+// gets its own location.
+func tomlValuesEqual(a, b any) bool {
+	switch x := a.(type) {
+	case float64:
+		y, ok := b.(float64)
+		return ok && (x == y || math.IsNaN(x) && math.IsNaN(y))
+	case time.Time:
+		y, ok := b.(time.Time)
+		_, xOffset := x.Zone()
+		_, yOffset := y.Zone()
+		return ok && x.Equal(y) && xOffset == yOffset
+	case []any:
+		y, ok := b.([]any)
+		return ok && slices.EqualFunc(x, y, tomlValuesEqual)
+	case map[string]any:
+		y, ok := b.(map[string]any)
+		return ok && maps.EqualFunc(x, y, tomlValuesEqual)
+	default:
+		return reflect.DeepEqual(a, b)
+	}
 }

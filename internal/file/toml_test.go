@@ -282,3 +282,17 @@ func TestTomlFragmentComments(t *testing.T) {
 	assert.Equal(t, "a = [\"x\"] # managed by ops\n# second comment # per environment\nb = [\"${X}\"]\nc = { d = \"${X}\" }\n",
 		writeToml(t, handler))
 }
+
+// TestTomlValuesEqual checks the comparison of the fragment fuzz test, which has to tell types apart
+func TestTomlValuesEqual(t *testing.T) {
+	var a, b map[string]any
+	assert.NoError(t, toml.Unmarshal([]byte("v = [1, nan, 1979-05-27T07:32:00-07:00, { s = \"x\" }]\n"), &a))
+	assert.NoError(t, toml.Unmarshal([]byte("v = [1, nan, 1979-05-27T07:32:00-07:00, { s = \"x\" }]\n"), &b))
+	assert.True(t, tomlValuesEqual(a, b))
+
+	for _, other := range []string{`["1", nan, 1979-05-27T07:32:00-07:00, { s = "x" }]`, `[1.0, nan, 1979-05-27T07:32:00-07:00, { s = "x" }]`,
+		`[1, nan, 1979-05-27T14:32:00Z, { s = "x" }]`, `[1, nan, 1979-05-27T07:32:00-07:00, { s = "y" }]`, `[1, nan]`} {
+		assert.NoError(t, toml.Unmarshal([]byte("v = "+other+"\n"), &b))
+		assert.False(t, tomlValuesEqual(a, b), other)
+	}
+}
