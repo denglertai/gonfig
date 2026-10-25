@@ -160,14 +160,30 @@ func loadPlugin(path string) error {
 	return nil
 }
 
-// registerGoPlugin registers the filters of a loaded Go plugin and records the plugin for Plugins.
-// Go plugins have no version, descriptions or declared params.
+// registerGoPlugin registers the filters of a loaded Go plugin and records the plugin for Plugins. Go plugins have no
+// version, but their filters may describe themselves and declare their params, which gonfig validates.
 func registerGoPlugin(path string, filters map[string]any) {
 	added := filter.AddPluginFilters(filters)
 	logging.Debug("Loaded filter plugin", "plugin", path, "filters", len(filters))
 
 	names := slices.Sorted(maps.Keys(filters))
-	found = append(found, Info{Path: path, Type: TypeGo, Filters: filterInfos(names, added, func(string) FilterInfo { return FilterInfo{} })})
+	found = append(found, Info{Path: path, Type: TypeGo, Filters: filterInfos(names, added, func(name string) FilterInfo {
+		return goFilterInfo(filters[name])
+	})})
+}
+
+// goFilterInfo returns the description and declared params of a filter of a Go plugin. The filters run within gonfig,
+// which validates the params of filters implementing filter.ParamsDeclarer and accepts none if they declare none, so
+// nil declared params are listed as an empty list. Filters without it accept any params.
+func goFilterInfo(f any) FilterInfo {
+	var info FilterInfo
+	if described, ok := f.(interface{ Description() string }); ok {
+		info.Description = described.Description()
+	}
+	if declarer, ok := f.(filter.ParamsDeclarer); ok {
+		info.Params = append([]string{}, declarer.DeclaredParams()...)
+	}
+	return info
 }
 
 // lookUpSymbol looks up the symbol in the plugin and ensures it is of the expected type
