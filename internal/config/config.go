@@ -70,6 +70,8 @@ type AppConfig struct {
 	FailOnMissing bool
 	// Templates are reusable filter chains and placeholders, which can only be defined in the config file
 	Templates Templates
+	// ConfigFile is the config file used, or empty if none was found
+	ConfigFile string
 }
 
 // LoadAppConfig loads configuration from multiple sources
@@ -84,6 +86,7 @@ func LoadAppConfig(v *viper.Viper) (*AppConfig, error) {
 		AllowUnknownFilters: v.GetBool("allow-unknown-filters"),
 		LogValues:           v.GetBool("log-values"),
 		FailOnMissing:       v.GetBool("fail-on-missing"),
+		ConfigFile:          v.ConfigFileUsed(),
 	}
 
 	// Template names are keys of the config file, which viper converts to lower case
@@ -125,14 +128,15 @@ func SetupViper(flags *pflag.FlagSet) (*viper.Viper, error) {
 	v.SetConfigName(".gonfig") // looks for .gonfig.yaml, .gonfig.json, etc.
 	v.SetConfigType("yaml")
 
-	// If a custom config path is provided, use only that path
-	// Otherwise, use default search paths
+	// If a custom config path is provided, use only that path. Otherwise, the most specific config file is used:
+	// the one of the current directory, e.g. of a project, before the user's and the system's. Viper uses the first
+	// config file found and doesn't merge them.
 	configPath := v.GetString("config-path")
 	if configPath != "" {
 		v.AddConfigPath(configPath)
 	} else {
-		v.AddConfigPath("$HOME")       // home directory
 		v.AddConfigPath(".")           // current directory
+		v.AddConfigPath("$HOME")       // home directory
 		v.AddConfigPath("/etc/gonfig") // system directory
 	}
 
