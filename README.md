@@ -39,6 +39,7 @@ czNjciZ0
 | Line endings and BOM preserved | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | [Fragments](./FILTERS.md#fragments) | ✅ values and keys | ✅ values and keys | ✅ element content | ❌ | ❌ | ❌ |
 | [Typed values](./FILTERS.md#types) | ✅ with `to_int`, `to_float`, `to_bool` | ✅ with `to_int`, `to_float`, `to_bool` | ❌ text | ❌ text | ✅ with `to_int`, `to_float`, `to_bool` | ❌ text |
+| [Schema validation](#schema-validation) | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
 
 ## Installation
 
@@ -440,6 +441,53 @@ Without `-w`, all output files are checked before any is written as well.
 Writing happens in two phases: first, the temporary files of all output files are written, and if one fails, e.g. because the disk is full, no file is changed. Then they replace the output files.
 Files that cannot be replaced and are written in place are written last. Errors of this phase name the files written already.
 
+#### Schema validation
+
+`--schema` validates the processed files against a [JSON Schema](https://json-schema.org/) before anything is written, e.g. to catch a port that is out of range before an application fails to start.
+
+`service.schema.json`:
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["database"],
+  "properties": {
+    "database": {
+      "type": "object",
+      "required": ["host", "port"],
+      "properties": {
+        "host": { "type": "string", "minLength": 1 },
+        "port": { "type": "integer", "maximum": 65535 }
+      },
+      "additionalProperties": false
+    }
+  }
+}
+```
+
+`service.yaml`:
+```yaml
+database:
+  host: ${DB_HOST}
+  port: ${DB_PORT | to_int}
+```
+
+```console
+$ DB_HOST=db.internal DB_PORT=99999 gonfig config process -f service.yaml --schema service.schema.json
+Error: service.yaml does not match the schema service.schema.json:
+  - database.port: value must be <= 65535
+$ DB_HOST=db.internal DB_PORT=5432 gonfig config process -f service.yaml --schema service.schema.json
+database:
+  host: db.internal
+  port: 5432
+```
+
+- **Processed output:** the result is validated, not the template, so placeholders need to produce the type the schema expects. Values are strings unless a [typed filter](./FILTERS.md#types) like `to_int` makes up the whole value: without it, the example fails with `database.port: got string, want integer`.
+- **File types:** JSON, YAML and TOML files. Every document of a YAML file is validated, and violations name the document, e.g. `document 2: database.port`. XML, properties and plain text files are rejected before any file is processed. TOML dates and times are validated as strings.
+- **Several files:** every file is validated against the same schema, and all files are validated before any is written, so a single violation leaves all files unchanged.
+- **Schemas:** any draft supported by the [validator](https://github.com/santhosh-tekuri/jsonschema), 2020-12 if `$schema` is not set. `$ref`s to other schema files are resolved relative to the schema file. Remote schemas are never fetched, so a `$ref` to an `http(s)` URL fails, except for the meta-schemas of json-schema.org, which are built in. `format` is asserted, e.g. `"format": "email"` rejects strings that are no email address.
+- **Values in messages:** values may be secrets, so messages name the failed requirement without the value, e.g. `value does not match pattern '^.{12,}$'`. Enable [`log-values`](#logging-notes) to include them.
+
 Testdata can be found within [cmd/testdata/](cmd/testdata/).
 
 For example processing [cmd/testdata/xml/customers_param.xml](cmd/testdata/xml/customers_param.xml) will print the following result
@@ -513,6 +561,23 @@ $ DB_USER=app DB_PORT=eighty gonfig config check -f check.yaml -o json | jq -c '
 {"files":[{"file":"check.yaml","missingVariables":1,"errors":1}],"missingVariables":1,"errors":1,"failed":true}
 Error: check failed: 1 missing variable, 1 error
 ```
+
+With `--schema`, each processed file is validated as [described above](#schema-validation), and each violation is reported as an error.
+Files that fail the check otherwise, e.g. because of a missing variable, are not validated.
+
+```console
+$ DB_HOST=db.internal DB_PORT=99999 gonfig config check -f service.yaml --schema service.schema.json
+service.yaml: 2 entries with placeholders
+  database.host
+    DB_HOST                  set
+  database.port
+    DB_PORT                  set
+  schema: database.port: value must be <= 65535
+0 missing variables, 1 error
+Error: check failed: 0 missing variables, 1 error
+```
+
+The JSON report lists them as `schemaViolations` with their `path` and `message`.
 
 #### Showing the changes
 
@@ -853,5 +918,5 @@ After the tag is pushed, monitor the workflow runs in GitHub Actions and verify 
 
 ## Roadmap
 
-Planned features and known limitations are tracked as [GitHub issues](https://github.com/denglertai/gonfig/issues), e.g. the [planned features](https://github.com/denglertai/gonfig/issues?q=is%3Aissue%20is%3Aopen%20label%3Atype%2Ffeature) like schema validation ([#163](https://github.com/denglertai/gonfig/issues/163)).
+Planned features and known limitations are tracked as [GitHub issues](https://github.com/denglertai/gonfig/issues), e.g. the [planned features](https://github.com/denglertai/gonfig/issues?q=is%3Aissue%20is%3Aopen%20label%3Atype%2Ffeature).
 Feature requests and bug reports are welcome as issues as well. See [CONTRIBUTING.md](./CONTRIBUTING.md) for how to report them and how to contribute changes.

@@ -4,12 +4,14 @@ Copyright © 2024 Daniel Englert
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
 
 	"github.com/denglertai/gonfig/internal/file"
+	"github.com/denglertai/gonfig/internal/schema"
 	"github.com/spf13/cobra"
 )
 
@@ -23,6 +25,9 @@ Several files are checked with -f per file or glob patterns like -f 'conf/*.yaml
 
 The check fails, with exit code 1, if processing a file would fail or if a variable is not set
 and the placeholder provides no default, independent of --fail-on-missing.
+
+--schema validates the processed JSON, YAML and TOML files against a JSON Schema and reports each part that does
+not match it as an error. Files that fail the check otherwise are not validated.
 
 --diff adds a unified diff of the changes processing would make to the report of each file. The results of
 placeholders and the values inserted by fragments are shown as *** unless --log-values is set.`,
@@ -41,14 +46,36 @@ placeholders and the values inserted by fragments are shown as *** unless --log-
 			return fmt.Errorf("unsupported output %q, use text or json", output)
 		}
 
+		sch, err := loadSchema(cmd, configSettings.Files, configSettings.FileType)
+		if err != nil {
+			return err
+		}
+		// Validating processes stdin a second time, so it is read once and kept
+		var stdin []byte
+		if sch != nil && configSettings.Files[0] == stdinFile {
+			if stdin, err = io.ReadAll(cmd.InOrStdin()); err != nil {
+				return fmt.Errorf("failed to read %s: %w", stdinName, err)
+			}
+		}
+		newProcessor := func(name string, output io.Writer) *file.FileProcessor {
+			processor := newFileProcessor(cmd, name, configSettings.FileType, output)
+			if stdin != nil {
+				processor.Input = bytes.NewReader(stdin)
+			}
+			return processor
+		}
+
 		// Files that cannot be read are reported as errors as well, so the other files are still checked
 		reports := make(checkReports, 0, len(configSettings.Files))
 		for _, name := range configSettings.Files {
-			processor := newFileProcessor(cmd, name, configSettings.FileType, io.Discard)
+			processor := newProcessor(name, io.Discard)
 			processor.Diff = showDiff
 			report, err := processor.Check()
 			if err != nil {
 				report = &file.CheckReport{File: processor.FileName, Entries: []file.EntryReport{}, Error: err.Error()}
+			}
+			if sch != nil && !report.Failed() {
+				validateChecked(report, newProcessor(name, nil), sch)
 			}
 			reports = append(reports, report)
 		}
@@ -67,6 +94,27 @@ placeholders and the values inserted by fragments are shown as *** unless --log-
 		}
 		return nil
 	},
+}
+
+// validateChecked processes the checked file with the processor and adds the violations of the schema to the report.
+// Checking masks the values, which the schema validates, so the file is processed again into memory. The violations
+// contain values only if values are allowed in errors. Files whose check failed are not validated, since processing
+// them fails or uses empty values for missing variables.
+func validateChecked(report *file.CheckReport, processor *file.FileProcessor, sch *schema.Schema) {
+	var processed bytes.Buffer
+	processor.Output = &processed
+	if err := processor.Process(); err != nil {
+		// The check found no problems, so processing only fails if the file changed in the meantime
+		report.Error = err.Error()
+		return
+	}
+
+	violations, err := sch.Validate(processor.FileType, processed.Bytes())
+	if err != nil {
+		report.Error = fmt.Sprintf("failed to validate %s: %v", report.File, err)
+		return
+	}
+	report.SchemaViolations = violations
 }
 
 // checkReports are the reports of the checked files
@@ -162,6 +210,9 @@ func writeCheckReportText(sb *strings.Builder, report *file.CheckReport) {
 			fmt.Fprintf(sb, "    error: %s\n", entry.Error)
 		}
 	}
+	for _, violation := range report.SchemaViolations {
+		fmt.Fprintf(sb, "  schema: %s\n", violation)
+	}
 
 	fmt.Fprintf(sb, "%s\n", checkSummary(report))
 	if report.Diff != nil {
@@ -201,6 +252,8 @@ func init() {
 	configCmd.AddCommand(checkCmd)
 
 	checkCmd.Flags().StringP("output", "o", "text", "Format of the report: text or json")
+
+	checkCmd.Flags().String("schema", "", "JSON Schema file the processed files have to match; JSON, YAML and TOML files only")
 
 	checkCmd.Flags().Bool("diff", false, "Show the changes processing would make as a unified diff, with values masked unless --log-values is set")
 }

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Application config",
+  "type": "object",
+  "required": ["database"],
+  "properties": {
+    "database": {
+      "type": "object",
+      "required": ["host", "port"],
+      "properties": {
+        "host": { "type": "string", "minLength": 1 },
+        "port": { "$ref": "port-schema.json" },
+        "password": { "type": "string", "minLength": 8 }
+      },
+      "additionalProperties": false
+    }
+  }
+}

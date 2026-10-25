@@ -7,6 +7,7 @@ import (
 
 	"github.com/denglertai/gonfig/internal/diff"
 	"github.com/denglertai/gonfig/internal/filter"
+	"github.com/denglertai/gonfig/internal/schema"
 	"github.com/denglertai/gonfig/internal/value"
 )
 
@@ -28,6 +29,8 @@ type CheckReport struct {
 	// Diff is the unified diff of the changes processing the file would make, with masked values unless values may be
 	// logged. It is only set if requested by FileProcessor.Diff, and empty if nothing would change.
 	Diff *string `json:"diff,omitempty"`
+	// SchemaViolations are the parts of the processed file that do not match the schema given by --schema
+	SchemaViolations []schema.Violation `json:"schemaViolations,omitempty"`
 }
 
 // EntryReport describes an entry containing placeholders
@@ -70,9 +73,9 @@ func (e *EntryReport) addVariable(lookup filter.VariableLookup) {
 	e.Variables = append(e.Variables, VariableReport{Name: lookup.Name, Status: status, HasDefault: lookup.HasDefault})
 }
 
-// Errors returns the number of entries that cannot be processed, plus one if the file cannot be read
+// Errors returns the number of entries that cannot be processed and of schema violations, plus one if the file cannot be read
 func (r *CheckReport) Errors() int {
-	count := 0
+	count := len(r.SchemaViolations)
 	if r.Error != "" {
 		count++
 	}
