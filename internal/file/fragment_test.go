@@ -46,6 +46,27 @@ func TestFragments(t *testing.T) {
 			want:     "logging:\n  level: info\n  appenders: # appenders\n    - type: console\n    - type: file\n      path: /var/log/app.log\n      port: \"123\"\n",
 		},
 		{
+			desc:     "yaml value replaced by an empty sequence keeps its line comment",
+			fileType: general.YAML,
+			content:  "appenders: ${FRAGMENT | fragment} # appenders\nlevel: info\n",
+			fragment: "[]",
+			want:     "appenders: [] # appenders\nlevel: info\n",
+		},
+		{
+			desc:     "yaml value replaced by an empty mapping keeps its line comment",
+			fileType: general.YAML,
+			content:  "pool: ${FRAGMENT | fragment} # pool\nlevel: info\n",
+			fragment: "{}",
+			want:     "pool: {} # pool\nlevel: info\n",
+		},
+		{
+			desc:     "yaml sequence item replaced by an empty sequence keeps its line comment",
+			fileType: general.YAML,
+			content:  "- ${FRAGMENT | fragment} # item\n- b\n",
+			fragment: "[]",
+			want:     "- [] # item\n- b\n",
+		},
+		{
 			desc:     "yaml value replaced by a YAML fragment keeping literal scalars",
 			fileType: general.YAML,
 			content:  "script: ${FRAGMENT | fragment}\n",

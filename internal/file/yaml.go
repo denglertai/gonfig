@@ -100,8 +100,10 @@ func (y *YamlConfigEntry) SetFragment(f filter.Fragment) ([]ConfigEntry, error) 
 		fragment = &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!null"}
 	}
 
-	// A line comment of a value belongs to its key if the value is written as a block below the key
-	if y.keyNode != nil && (fragment.Kind == yaml.MappingNode || fragment.Kind == yaml.SequenceNode) {
+	// A line comment of a value belongs to its key if the value is written as a block below the key. Empty mappings and
+	// sequences are written as {} and [] on the line of the key, so their comment stays on them, e.g. "a: [] #c".
+	isBlock := (fragment.Kind == yaml.MappingNode || fragment.Kind == yaml.SequenceNode) && len(fragment.Content) > 0
+	if y.keyNode != nil && isBlock {
 		y.keyNode.LineComment = cmp.Or(y.keyNode.LineComment, y.node.LineComment)
 		y.node.LineComment = ""
 	}
