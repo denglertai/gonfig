@@ -7,6 +7,17 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// TestValueRequiresValues checks that gonfig value fails without values, while an empty value prints nothing
+func TestValueRequiresValues(t *testing.T) {
+	// The output is not checked, since Cobra prints the usage unless an earlier execution silenced it
+	_, err := runGonfig(t, "value")
+	assert.EqualError(t, err, "no value given; pass the values to process, e.g. gonfig value '${VAR}'")
+
+	out, err := runGonfig(t, "value", "")
+	assert.NoError(t, err)
+	assert.Empty(t, out)
+}
+
 // TestValue checks that results of gonfig value, including non-string ones, are printed exactly as they are
 func TestValue(t *testing.T) {
 	testCases := []struct {

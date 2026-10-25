@@ -528,7 +528,7 @@ Entries of the file that cannot be processed keep their placeholders, while valu
 
 `gonfig value` basically does the same as `gonfig config process` but expects an input string instead. This may be useful if any transformation has to be done in scripts or other places where no file is directly involved.
 
-The output is always echoed to stdout.
+The output is always echoed to stdout. At least one value is required, so a variable of a script expanding to nothing, e.g. `gonfig value $TEMPLATE`, fails instead of printing nothing; an empty value (`gonfig value ''`) is allowed.
 
 Usage:
 
