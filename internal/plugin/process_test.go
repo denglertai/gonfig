@@ -530,6 +530,20 @@ func TestPluginInfoFailures(t *testing.T) {
 	}
 }
 
+// TestPluginInfoReset checks that every initialization lists only the plugins it found
+func TestPluginInfoReset(t *testing.T) {
+	t.Cleanup(ClosePlugins)
+	dir := t.TempDir()
+	assert.NoError(t, os.WriteFile(filepath.Join(dir, "broken.so"), []byte("not a plugin"), 0o644))
+
+	InitPlugins(dir)
+	assert.Len(t, Plugins(), 1)
+	empty := t.TempDir()
+	InitPlugins(empty)
+	assert.Empty(t, Plugins())
+	assert.Equal(t, []string{empty}, SearchedPaths())
+}
+
 // TestPluginInfoGoPlugin checks that a Go plugin failing to load is listed with its error
 func TestPluginInfoGoPlugin(t *testing.T) {
 	dir := t.TempDir()

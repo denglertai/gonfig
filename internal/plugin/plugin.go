@@ -46,7 +46,9 @@ func InitPlugins(pluginPath string) {
 	if pluginPath == "" {
 		paths = defaultPluginPaths(runtime.GOOS)
 	}
+	// The plugins found describe the latest initialization, see Plugins
 	searched = paths
+	found = nil
 	for _, path := range paths {
 		loadPluginDir(path)
 	}
