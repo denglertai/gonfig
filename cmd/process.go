@@ -30,7 +30,10 @@ with -i or into a directory with -o <dir>/. All files are processed before any i
 leaves all files unchanged.
 
 -f - reads the input from stdin, which needs -t, e.g. curl ... | gonfig config process -f - -t yaml.
-Its output goes to stdout, or to a file with -o <file>. New files get mode 0600 unless --mode is given.`,
+Its output goes to stdout, or to a file with -o <file>. New files get mode 0600 unless --mode is given.
+
+--schema validates every processed JSON, YAML or TOML file against a JSON Schema before anything is written,
+so a file that does not match it leaves all files unchanged.`,
 	Args:             noArgs,
 	TraverseChildren: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -82,6 +85,11 @@ Its output goes to stdout, or to a file with -o <file>. New files get mode 0600 
 			return err
 		}
 
+		sch, err := loadSchema(cmd, configSettings.Files, configSettings.FileType)
+		if err != nil {
+			return err
+		}
+
 		// Existing files are checked before any file is processed or written, so a single existing file writes nothing
 		if !overwriteExistingFile {
 			for _, name := range outputs {
@@ -96,8 +104,15 @@ Its output goes to stdout, or to a file with -o <file>. New files get mode 0600 
 		for i, input := range configSettings.Files {
 			var o = new(bytes.Buffer)
 			logging.Debug("Processing file", "file", input, "type", configSettings.FileType)
-			if err := newFileProcessor(cmd, input, configSettings.FileType, o).Process(); err != nil {
+			processor := newFileProcessor(cmd, input, configSettings.FileType, o)
+			if err := processor.Process(); err != nil {
 				return err
+			}
+			// Files are validated before any is written, so a file not matching the schema leaves all files unchanged
+			if sch != nil {
+				if err := sch.Check(processor.FileName, processor.FileType, o.Bytes()); err != nil {
+					return err
+				}
 			}
 			if outputs == nil {
 				// Dump the content to stdout, which is only used for a single file
@@ -181,6 +196,8 @@ func init() {
 	processCmd.Flags().BoolP("inline", "i", false, "Controls if the output should get written to the source files directly (defaults to false)")
 
 	processCmd.Flags().BoolP("overwrite", "w", false, "Controls if an already existing output file may be overwritten (defaults to false). Not needed for -i (--inline)")
+
+	processCmd.Flags().String("schema", "", "JSON Schema file the processed files have to match; JSON, YAML and TOML files only. Nothing is written if a file does not match")
 
 	processCmd.Flags().String("mode", "", "File mode of the output files in octal, e.g. 0600 (defaults to the mode of an existing output file, or of the input file for new ones)")
 

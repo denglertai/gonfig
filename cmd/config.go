@@ -15,6 +15,7 @@ import (
 	"github.com/denglertai/gonfig/internal/config"
 	"github.com/denglertai/gonfig/internal/file"
 	"github.com/denglertai/gonfig/internal/general"
+	"github.com/denglertai/gonfig/internal/schema"
 	"github.com/denglertai/gonfig/pkg/logging"
 	"github.com/spf13/cobra"
 )
@@ -75,6 +76,26 @@ func newFileProcessor(cmd *cobra.Command, name string, fileType general.FileType
 	processor := file.NewFileProcessor(stdinName, fileType, output)
 	processor.Input = cmd.InOrStdin()
 	return processor
+}
+
+// loadSchema loads the schema of --schema, or returns nil if it is not set. XML, properties and plain text files have
+// no structure a JSON Schema could describe, so they are rejected before any file is processed.
+// Files of unknown types are left to processing, which reports them.
+func loadSchema(cmd *cobra.Command, files []string, fileType general.FileType) (*schema.Schema, error) {
+	// The flag is defined for every command calling this, so reading it cannot fail
+	path, _ := cmd.Flags().GetString("schema")
+	if path == "" {
+		return nil, nil
+	}
+
+	for _, name := range files {
+		processor := newFileProcessor(cmd, name, fileType, io.Discard)
+		switch processor.FileType {
+		case general.XML, general.PROPERTIES, general.PLAIN:
+			return nil, fmt.Errorf("--schema validates JSON, YAML and TOML files only, not %s of type %s", processor.FileName, processor.FileType)
+		}
+	}
+	return schema.Load(path)
 }
 
 // expandFiles returns the files of the --file values in their order, without duplicates.

@@ -10,12 +10,14 @@ require (
 	github.com/bzick/tokenizer v1.5.1
 	github.com/gkampitakis/go-snaps v0.5.24
 	github.com/pelletier/go-toml/v2 v2.4.3
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.12.1
 	go.yaml.in/yaml/v3 v3.0.5
 	golang.org/x/crypto v0.58.0
+	golang.org/x/text v0.43.0
 )
 
 require (
@@ -38,5 +40,4 @@ require (
 	github.com/tidwall/pretty v1.2.2 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
 	golang.org/x/sys v0.49.0 // indirect
-	golang.org/x/text v0.43.0 // indirect
 )
