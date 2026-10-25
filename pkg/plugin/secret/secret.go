@@ -42,8 +42,15 @@ type Provider interface {
 	// Read reads the secret the reference without a field refers to, with the params of the usage. The result is
 	// either a string or a map[string]any, e.g. the data of a key/value secret.
 	Read(ctx context.Context, ref string, params map[string]string) (any, error)
-	// Params returns the names of the params Read accepts, e.g. "version". Other params fail the request.
+	// Params returns the names of the params Read accepts, e.g. "version". Other params fail the request. They are
+	// declared to gonfig as well, which rejects other params before sending a request.
 	Params() []string
+}
+
+// Describer is implemented by providers describing the filter for gonfig plugin list, e.g. "Reads a secret of the KV
+// secrets engine, e.g. secret/app/db#password"
+type Describer interface {
+	Description() string
 }
 
 // TimeoutEnv is the environment variable setting the time a request may take, including connecting, as a Go
@@ -84,6 +91,19 @@ func NewFilter(provider Provider) *Filter {
 // AcceptParams keeps the params of the usage
 func (f *Filter) AcceptParams(params map[string]string) {
 	f.params = params
+}
+
+// Params returns the params the provider accepts, which plugin.Serve declares to gonfig
+func (f *Filter) Params() []string {
+	return f.provider.Params()
+}
+
+// Description returns the description of the provider, if it implements Describer, for gonfig plugin list
+func (f *Filter) Description() string {
+	if describer, ok := f.provider.(Describer); ok {
+		return describer.Description()
+	}
+	return ""
 }
 
 // Process returns the secret the value refers to. A reference may end with "#field" to select a field of the secret.

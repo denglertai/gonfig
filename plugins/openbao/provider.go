@@ -16,6 +16,11 @@ type provider struct {
 	client *api.Client
 }
 
+// Description describes the filter for gonfig plugin list
+func (p *provider) Description() string {
+	return "Reads a secret of the KV secrets engine, e.g. secret/app/db#password"
+}
+
 // Params returns the params of the filter: the mount of the secrets engine, its KV version and the version of a secret
 func (p *provider) Params() []string {
 	return []string{"mount", "kv", "version"}

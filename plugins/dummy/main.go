@@ -10,7 +10,7 @@ import (
 
 // main serves the filters to gonfig until gonfig is done
 func main() {
-	if err := plugin.Serve(Filter.Filters()); err != nil {
+	if err := plugin.Serve(Filter.Filters(), plugin.WithDescription("Example plugin, see PLUGINS.md")); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -32,6 +32,16 @@ var Filter = DummyFilterRegister{}
 
 // ReverseFilter reverses the value, e.g. ${VAL | reverse}
 type ReverseFilter struct {
+}
+
+// Description describes the filter for gonfig plugin list
+func (ReverseFilter) Description() string {
+	return "Reverses the value"
+}
+
+// Params declares that the filter accepts no params, which gonfig validates
+func (ReverseFilter) Params() []string {
+	return []string{}
 }
 
 // Process executes the filter's function

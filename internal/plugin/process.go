@@ -57,6 +57,8 @@ type processPlugin struct {
 	exited chan struct{}
 	// filters are the names of the filters registered for the plugin
 	filters []string
+	// handshake is the handshake of the plugin, with its optional version, description and filter info
+	handshake pkgplugin.Handshake
 
 	// mu serializes requests, since responses are read in the order of the requests
 	mu     sync.Mutex
@@ -93,11 +95,12 @@ func startPlugin(path string) (*processPlugin, []string, error) {
 	}
 	go p.read(stdout)
 
-	handshake, err := p.handshake()
+	handshake, err := p.readHandshake()
 	if err != nil {
 		p.close()
 		return nil, nil, err
 	}
+	p.handshake = handshake
 	return p, handshake.Filters, nil
 }
 
@@ -135,8 +138,8 @@ func (p *processPlugin) receive(deadline <-chan time.Time, timeout time.Duration
 	}
 }
 
-// handshake reads and checks the handshake of the plugin
-func (p *processPlugin) handshake() (pkgplugin.Handshake, error) {
+// readHandshake reads and checks the handshake of the plugin
+func (p *processPlugin) readHandshake() (pkgplugin.Handshake, error) {
 	var handshake pkgplugin.Handshake
 
 	timer := time.NewTimer(handshakeTimeout)
@@ -269,4 +272,16 @@ func (f *remoteFilter) Process(value any) (any, error) {
 // AcceptParams keeps the params of the usage, which are sent with every request
 func (f *remoteFilter) AcceptParams(params map[string]string) {
 	f.params = params
+}
+
+// declaredRemoteFilter is a filter of an executable plugin declaring its params, which gonfig validates before sending
+// a request, like the params of its built-in filters, see filter.ValidateParams
+type declaredRemoteFilter struct {
+	remoteFilter
+	declared []string
+}
+
+// DeclaredParams returns the params the plugin declared for the filter
+func (f *declaredRemoteFilter) DeclaredParams() []string {
+	return f.declared
 }

@@ -3,6 +3,7 @@
 Plugins add custom [filters](./FILTERS.md) to gonfig without changing gonfig itself, e.g. filters for confidential encryption that cannot be part of gonfig.
 
 - [How plugins work](#how-plugins-work)
+- [Listing plugins](#listing-plugins)
 - [Writing a filter plugin](#writing-a-filter-plugin)
 - [Values and params](#values-and-params)
 - [The dummy plugin](#the-dummy-plugin)
@@ -53,6 +54,39 @@ A plugin that crashes, answers with an error or doesn't answer in time fails the
 The option [`allow-unknown-filters`](./FILTERS.md#order-of-operations) makes gonfig pass the values of unknown filters on unchanged instead.
 Avoid it for plugins that hash or encrypt secrets, since a plugin failing to start would then write the plain secrets.
 
+## Listing plugins
+
+`gonfig plugin list` lists the plugins found in the plugin path, in the order they were found, with their version, description and filters, if the plugins provide them.
+A filter shows its params in brackets if the plugin declares them, e.g. `openbao(mount, kv, version)`, or `()` if it accepts none. Plugins that failed to start and filters skipped because another filter has their name already are listed as well:
+
+```console
+$ gonfig plugin list
+{"time":"...","level":"ERROR","msg":"Failed to start plugin","path":"plugins/gonfig-plugin-broken","error":"no handshake: the plugin exited"}
+plugins/gonfig-plugin-azure-keyvault 0.3.0
+  Reads secrets from Azure Key Vault
+  azure_keyvault()
+      Reads a secret by reference, e.g. myvault/db-password
+plugins/gonfig-plugin-broken
+  failed to start: no handshake: the plugin exited
+plugins/gonfig-plugin-openbao 0.3.0
+  Reads secrets from OpenBao and HashiCorp Vault
+  openbao(mount, kv, version)
+      Reads a secret of the KV secrets engine, e.g. secret/app/db#password
+plugins/gonfig-plugin-shout
+  Shouts values
+  shout()
+      Converts the value to upper case and appends an exclamation mark
+```
+
+The error of a plugin failing to start is logged as well, on stderr, since gonfig starts the plugins before running any command.
+
+`--output json` lists the searched plugin directories and the plugins for scripts. Without plugins, the command names the directories it searched:
+
+```console
+$ gonfig --plugin-path ./none plugin list
+No plugins found in ./none
+```
+
 ## Writing a filter plugin
 
 Plugins written in Go use `plugin.Serve` from [pkg/plugin](./pkg/plugin/), which implements the [protocol](#the-protocol).
@@ -77,11 +111,14 @@ This guide creates a plugin providing a filter `shout`, which converts the value
     	"github.com/denglertai/gonfig/pkg/plugin"
     )
 
+    // version is the version of the plugin, set with go build -ldflags "-X main.version=1.0.0"
+    var version string
+
     // main serves the filters until gonfig is done
     func main() {
     	err := plugin.Serve(map[string]any{
     		"shout": ShoutFilter{},
-    	})
+    	}, plugin.WithVersion(version), plugin.WithDescription("Shouts values"))
     	if err != nil {
     		log.Fatal(err)
     	}
@@ -94,7 +131,19 @@ This guide creates a plugin providing a filter `shout`, which converts the value
     func (ShoutFilter) Process(value any) (any, error) {
     	return strings.ToUpper(fmt.Sprint(value)) + "!", nil
     }
+
+    // Description describes the filter for gonfig plugin list
+    func (ShoutFilter) Description() string {
+    	return "Converts the value to upper case and appends an exclamation mark"
+    }
+
+    // Params declares that the filter accepts no params, which gonfig validates
+    func (ShoutFilter) Params() []string {
+    	return []string{}
+    }
     ```
+
+    `WithVersion`, `WithDescription`, `Description` and `Params` are optional, see [values and params](#values-and-params). Without `WithVersion`, or if the version is empty, `Serve` uses the version of the module from the build info, e.g. `v1.2.0` for `go install example.com/gonfig-shout@v1.2.0`.
 
 1. Build the plugin with a name starting with `gonfig-plugin-`. Any Go version and build flags work:
     ```console
@@ -103,10 +152,14 @@ This guide creates a plugin providing a filter `shout`, which converts the value
 
 1. Copy `gonfig-plugin-shout` into the plugin directory, e.g. `./plugins` or the directory given by `--plugin-path`.
 
-1. Use the filter. The debug log shows which plugins were started:
+1. Use the filter. `gonfig plugin list` shows whether gonfig finds the plugin:
     ```console
-    $ NAME=gonfig gonfig --log-level debug value '${NAME | shout}'
-    {"time":"...","level":"DEBUG","msg":"Started filter plugin","plugin":"plugins/gonfig-plugin-shout","filters":1}
+    $ gonfig plugin list
+    plugins/gonfig-plugin-shout
+      Shouts values
+      shout()
+          Converts the value to upper case and appends an exclamation mark
+    $ NAME=gonfig gonfig value '${NAME | shout}'
     GONFIG!
     ```
 
@@ -121,12 +174,24 @@ Process(value any) (any, error)
 
 // Optional: receives the params given in brackets, e.g. sha256(encoding=base64)
 AcceptParams(params map[string]string)
+
+// Optional: describes the filter for gonfig plugin list
+Description() string
+
+// Optional: the names of the params in the order of their positions, e.g. []string{"encoding"}.
+// gonfig rejects other params like for its built-in filters. An empty list accepts no params.
+Params() []string
 ```
 
 - **Copies per usage:** Every value is processed by its own shallow copy of the filter, which receives the params of its usage, so params of one usage do not affect another one.
   Filters storing params have to be registered as pointers. Maps, slices and pointers within a filter are still shared between copies.
 - **Positional params:** Params given by position are passed with their position as key, e.g. `sha256(base64)` passes `{"0": "base64"}`.
-- **Validating params:** gonfig passes any params to plugin filters, unlike built-in filters, which reject params they do not accept. Return an error for unknown params, so typos don't go unnoticed.
+- **Validating params:** Filters declaring their params with `Params` get unknown params rejected by gonfig before the request, with the same errors as built-in filters, also in [templates](./FILTERS.md#templates) on startup:
+  ```console
+  $ DB=secret/app/db gonfig value '${DB | openbao(verison=1)}'
+  Error: filter openbao has no param "verison", it accepts mount, kv, version
+  ```
+  gonfig passes any params to filters without `Params`. Return an error for unknown params then, so typos don't go unnoticed, also since older versions of gonfig don't validate declared params.
 - **Results:** Filters may return the same types they receive. Other types, e.g. maps, fail the value.
 - **Errors** fail processing with the message prefixed by the filter name, e.g. `filter shout: ...`. A filter that panics fails the value with `the filter panicked`, the plugin keeps running.
 
@@ -368,6 +433,12 @@ Plugins written in other languages implement the protocol themselves. It consist
     ```json
     {"protocol":1,"filters":["sha256","hmac_sha256"]}
     ```
+    It may add its version and description, and the descriptions and params of its filters, which `gonfig plugin list` shows. Declared `params` are validated by gonfig; filters without them, or with `null`, receive any params, and `[]` accepts none:
+    ```json
+    {"protocol":1,"filters":["sha256","hmac_sha256"],"version":"1.0.0","description":"Hash filters",
+     "filter_info":{"sha256":{"description":"Hashes the value with SHA-256","params":["encoding"]}}}
+    ```
+    These fields are optional; older versions of gonfig ignore them.
 1. For every value, gonfig writes a request to the plugin's stdin. `params` is left out for usages without params:
     ```json
     {"id":0,"filter":"sha256","params":{"encoding":"base64"},"value":"hello"}

@@ -186,6 +186,25 @@ func TestCacheKey(t *testing.T) {
 	}
 }
 
+// describedProvider is a fakeProvider with a description
+type describedProvider struct {
+	*fakeProvider
+}
+
+// Description describes the provider
+func (describedProvider) Description() string {
+	return "Reads fake secrets"
+}
+
+// TestFilterInfo checks the params and description the filter declares to gonfig
+func TestFilterInfo(t *testing.T) {
+	f, provider := newFake(nil)
+	assert.Equal(t, []string{"version"}, f.Params())
+	assert.Empty(t, f.Description())
+
+	assert.Equal(t, "Reads fake secrets", NewFilter(describedProvider{provider}).Description())
+}
+
 // TestProcessDoesNotCacheErrors checks that a failed read is retried by the next request
 func TestProcessDoesNotCacheErrors(t *testing.T) {
 	f, provider := newFake(map[string]any{"a": "1"})

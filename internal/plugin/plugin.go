@@ -4,10 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"plugin"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/denglertai/gonfig/internal/filter"
@@ -44,6 +46,9 @@ func InitPlugins(pluginPath string) {
 	if pluginPath == "" {
 		paths = defaultPluginPaths(runtime.GOOS)
 	}
+	// The plugins found describe the latest initialization, see Plugins
+	searched = paths
+	found = nil
 	for _, path := range paths {
 		loadPluginDir(path)
 	}
@@ -67,6 +72,7 @@ func loadPluginDir(pluginPath string) {
 			logging.Debug("Loading deprecated Go plugin, see PLUGINS.md for migrating to an executable plugin", "path", path)
 			if err := loadPlugin(path); err != nil {
 				logging.Error("Failed to load plugin", "path", path, "error", err)
+				found = append(found, Info{Path: path, Type: TypeGo, Filters: []FilterInfo{}, Error: err.Error()})
 			}
 		case strings.HasPrefix(d.Name(), executablePrefix):
 			// Stat follows symbolic links, so linked plugins are started as well
@@ -100,23 +106,38 @@ func ClosePlugins() {
 		p.close()
 	}
 	running = nil
+	found = nil
+	searched = nil
 }
 
-// runPlugin starts an executable plugin and registers the filters it provides
+// runPlugin starts an executable plugin and registers the filters it provides. Filters with declared params get
+// their params validated by gonfig.
 func runPlugin(path string) error {
 	p, names, err := startPlugin(path)
 	if err != nil {
+		found = append(found, Info{Path: path, Type: TypeExecutable, Filters: []FilterInfo{}, Error: err.Error()})
 		return err
 	}
 	running = append(running, p)
+	handshake := p.handshake
 
 	filters := make(map[string]any, len(names))
 	for _, name := range names {
-		filters[name] = &remoteFilter{plugin: p, name: name}
+		remote := remoteFilter{plugin: p, name: name}
+		if info, ok := handshake.FilterInfo[name]; ok && info.Params != nil {
+			filters[name] = &declaredRemoteFilter{remoteFilter: remote, declared: info.Params}
+		} else {
+			filters[name] = &remote
+		}
 	}
 	p.filters = filter.AddPluginFilters(filters)
 	logging.Debug("Started filter plugin", "plugin", path, "filters", len(p.filters))
 
+	info := Info{Path: path, Type: TypeExecutable, Version: handshake.Version, Description: handshake.Description}
+	info.Filters = filterInfos(names, p.filters, func(name string) FilterInfo {
+		return FilterInfo{Description: handshake.FilterInfo[name].Description, Params: handshake.FilterInfo[name].Params}
+	})
+	found = append(found, info)
 	return nil
 }
 
@@ -135,11 +156,34 @@ func loadPlugin(path string) error {
 		return err
 	}
 
-	filters := pf.Filters()
-	filter.AddPluginFilters(filters)
+	registerGoPlugin(path, pf.Filters())
+	return nil
+}
+
+// registerGoPlugin registers the filters of a loaded Go plugin and records the plugin for Plugins. Go plugins have no
+// version, but their filters may describe themselves and declare their params, which gonfig validates.
+func registerGoPlugin(path string, filters map[string]any) {
+	added := filter.AddPluginFilters(filters)
 	logging.Debug("Loaded filter plugin", "plugin", path, "filters", len(filters))
 
-	return nil
+	names := slices.Sorted(maps.Keys(filters))
+	found = append(found, Info{Path: path, Type: TypeGo, Filters: filterInfos(names, added, func(name string) FilterInfo {
+		return goFilterInfo(filters[name])
+	})})
+}
+
+// goFilterInfo returns the description and declared params of a filter of a Go plugin. The filters run within gonfig,
+// which validates the params of filters implementing filter.ParamsDeclarer and accepts none if they declare none, so
+// nil declared params are listed as an empty list. Filters without it accept any params.
+func goFilterInfo(f any) FilterInfo {
+	var info FilterInfo
+	if described, ok := f.(interface{ Description() string }); ok {
+		info.Description = described.Description()
+	}
+	if declarer, ok := f.(filter.ParamsDeclarer); ok {
+		info.Params = append([]string{}, declarer.DeclaredParams()...)
+	}
+	return info
 }
 
 // lookUpSymbol looks up the symbol in the plugin and ensures it is of the expected type

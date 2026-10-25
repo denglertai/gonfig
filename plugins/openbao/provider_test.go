@@ -311,7 +311,8 @@ func TestUnwrapMessages(t *testing.T) {
 	}
 }
 
-// TestParams checks the params the filter accepts
+// TestParams checks the params the filter accepts, and its description
 func TestParams(t *testing.T) {
 	assert.Equal(t, []string{"mount", "kv", "version"}, (&provider{}).Params())
+	assert.Equal(t, "Reads a secret of the KV secrets engine, e.g. secret/app/db#password", secret.NewFilter(&provider{}).Description())
 }

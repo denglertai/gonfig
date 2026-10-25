@@ -72,8 +72,10 @@ builds:
         goarch: arm64
     flags:
       - -trimpath
-    ldflags:
+    # The plugins have gonfig's version, which gonfig plugin list shows
+    ldflags: &pluginLdflags
       - -s -w
+      - -X main.version={{ .Version }}
 
   - id: plugin-azure-keyvault
     dir: plugins/azure-keyvault
@@ -84,8 +86,7 @@ builds:
     ignore: *pluginIgnore
     flags:
       - -trimpath
-    ldflags:
-      - -s -w
+    ldflags: *pluginLdflags
 
 archives:
   - id: gonfig

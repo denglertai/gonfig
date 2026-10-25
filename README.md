@@ -555,6 +555,20 @@ Usage:
    With several values, `--newline` keeps them on separate lines, while the default joins them, e.g. `firstsecond`.
    If processing any value fails, nothing is printed.
 
+### plugin
+
+`gonfig plugin list` lists the plugins found in the plugin path with their version, description and filters, if the plugins provide them, and plugins that failed to start. Filters show their params if the plugin declares them, which gonfig then validates like the params of its built-in filters. `--output json` provides the same information for scripts:
+
+```console
+$ gonfig plugin list
+/usr/libexec/gonfig/plugins/gonfig-plugin-openbao 0.3.0
+  Reads secrets from OpenBao and HashiCorp Vault
+  openbao(mount, kv, version)
+      Reads a secret of the KV secrets engine, e.g. secret/app/db#password
+```
+
+See [listing plugins](./PLUGINS.md#listing-plugins).
+
 ## Filters
 
 Filters transform the values of environment variables. They are added to a placeholder with a pipe `|` and applied from left to right:
@@ -697,6 +711,7 @@ Plugins add custom filters. They are separate executables named `gonfig-plugin-*
 
 Plugins don't depend on the Go version or build flags of the gonfig binary and may be written in any language. Go plugins (`.so` files) are still loaded, but deprecated.
 See [PLUGINS.md](./PLUGINS.md) for how plugins work, a step-by-step guide, examples and the migration from Go plugins, and [plugins/dummy](./plugins/dummy/) for a minimal plugin.
+`gonfig plugin list` shows the plugins gonfig finds, see [plugin](#plugin).
 
 This repository provides plugins for secret managers, see [plugins for secret managers](./PLUGINS.md#plugins-for-secret-managers):
 

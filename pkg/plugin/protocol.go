@@ -17,10 +17,27 @@ import (
 // and the plugin exits.
 const ProtocolVersion = 1
 
-// Handshake is the first line a plugin writes, naming the protocol version and the filters it provides
+// Handshake is the first line a plugin writes, naming the protocol version and the filters it provides.
+// The other fields are optional, so gonfig shows them with gonfig plugin list if a plugin provides them. Older
+// versions of gonfig ignore them, as they ignore unknown fields.
 type Handshake struct {
 	Protocol int      `json:"protocol"`
 	Filters  []string `json:"filters"`
+	// Version is the version of the plugin, e.g. "1.2.0"
+	Version string `json:"version,omitempty"`
+	// Description describes the plugin, e.g. "Reads secrets from OpenBao and HashiCorp Vault"
+	Description string `json:"description,omitempty"`
+	// FilterInfo describes filters by name. Filters without info have no description and accept any params.
+	FilterInfo map[string]FilterInfo `json:"filter_info,omitempty"`
+}
+
+// FilterInfo describes a filter of a plugin
+type FilterInfo struct {
+	// Description describes the filter, e.g. "Reads a secret of the KV secrets engine"
+	Description string `json:"description,omitempty"`
+	// Params are the names of the params the filter accepts, in the order of their positions. gonfig rejects other
+	// params before sending a request, like for its built-in filters. nil accepts any params, an empty list none.
+	Params []string `json:"params"`
 }
 
 // Request asks a plugin to process a value with one of its filters

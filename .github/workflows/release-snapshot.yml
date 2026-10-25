@@ -106,6 +106,13 @@ jobs:
             docker run --rm -e DB=secret/app/db "$image" value '${DB | openbao}'
           expect_error 'filter azure_keyvault: failed to read the secret "myvault": invalid reference' \
             docker run --rm -e DB=myvault "$image" value '${DB | azure_keyvault}'
+          # The plugins have the version of the snapshot, which gonfig plugin list shows
+          version=$(jq -r .version dist/metadata.json)
+          listed=$(docker run --rm "$image" plugin list -o json)
+          echo "$listed"
+          for plugin in gonfig-plugin-openbao gonfig-plugin-azure-keyvault; do
+            test "$(jq -r --arg path "/usr/libexec/gonfig/plugins/$plugin" '.plugins[] | select(.path == $path) | .version' <<<"$listed")" = "$version"
+          done
 
       # Running the arm64 image would need QEMU, so its files are checked instead
       - name: Check the image for linux/arm64
