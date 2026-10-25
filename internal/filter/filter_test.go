@@ -373,6 +373,11 @@ func TestFragmentFilterWithLists(t *testing.T) {
 	result, err = NewFilter("fragment").Process([]string{})
 	assert.NoError(t, err)
 	assert.Equal(t, Fragment{Text: "[]", IsList: true}, result)
+
+	// JSON allows DEL within strings, YAML and TOML don't
+	result, err = NewFilter("fragment").Process([]string{"a\x7fb"})
+	assert.NoError(t, err)
+	assert.Equal(t, Fragment{Text: `["a\u007fb"]`, IsList: true}, result)
 }
 
 // TestDefaultAndRequiredFilters checks that default replaces and required rejects empty values, leaving other values unchanged

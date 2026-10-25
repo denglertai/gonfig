@@ -39,6 +39,14 @@ Traps found while working on this codebase. Check the relevant section before ch
 - Values keep the type of the original value unless a typed filter result replaces them; placeholders are always inside strings.
 - Keys containing `${` have entries (renamed via `SetValue`), other keys don't.
 
+## TOML (github.com/pelletier/go-toml/v2)
+
+- The handler edits files in place using the positions of the `unstable` parser, which doesn't check semantics (duplicate keys, redefined tables), so documents are also unmarshalled once to validate them.
+- **Nodes are only valid until the next `NextExpression`**, which reuses the parser's node storage: walk an expression completely before parsing the next one, or `Children()` panics.
+- **Arrays and inline tables have no `Raw` range** (empty, or just `{`). The range of the containing `KeyValue` expression is complete.
+- go-toml accepts TOML 1.1, e.g. line breaks within inline tables, which TOML 1.0 parsers like Python's `tomllib` reject.
+- A BOM is rejected by go-toml, so the handler strips and restores it.
+
 ## Plugins
 
 - A stale `.so` in `./plugins` of the working directory can crash the binary on startup (`runtime: no plugin module data`). Run manual tests from a scratch directory with `--plugin-path ./none`.

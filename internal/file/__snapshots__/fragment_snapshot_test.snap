@@ -258,7 +258,7 @@ FRAGMENT:
 a=1
 
 result:
-error: failed to process the value of key in config.properties: fragments are not supported here, only for YAML and JSON values and keys and the content of XML elements
+error: failed to process the value of key in config.properties: fragments are not supported here, only for YAML and JSON values and keys, TOML values and the content of XML elements
 ---
 
 [TestFragmentSnapshots/yaml_list_from_split - 1]
@@ -307,5 +307,119 @@ FRAGMENT:
 db-1,db-2
 
 result:
-error: failed to insert the fragment of /server/hosts in config.xml: lists can only be inserted into YAML and JSON files
+error: failed to insert the fragment of /server/hosts in config.xml: lists can only be inserted into YAML, JSON and TOML files
+---
+
+[TestFragmentSnapshots/toml_value_replaced_by_an_array_of_inline_tables - 1]
+file (config.toml):
+# Logging configuration
+[logging]
+level = "info" # default level
+appenders = "${FRAGMENT | fragment}" # set per environment
+
+FRAGMENT:
+[
+  { type = "console" },
+  { type = "file", path = "/var/log/app.log", maxSize = 100 }, # rotated daily
+]
+
+result:
+# Logging configuration
+[logging]
+level = "info" # default level
+appenders = [
+  { type = "console" },
+  { type = "file", path = "/var/log/app.log", maxSize = 100 }, # rotated daily
+] # set per environment
+---
+
+[TestFragmentSnapshots/toml_fragment_with_placeholders - 1]
+file (config.toml):
+[service]
+name = "api"
+settings = "${FRAGMENT | fragment}"
+
+FRAGMENT:
+{ port = "${FRAGMENT_PORT | to_int}", password = "${FRAGMENT_SECRET | base64}", url = "http://localhost:${FRAGMENT_PORT}/health" }
+
+result:
+[service]
+name = "api"
+settings = { port = 8080, password = "czNjcmV0", url = "http://localhost:8080/health" }
+---
+
+[TestFragmentSnapshots/toml_empty_fragments - 1]
+file (config.toml):
+optional = "${FRAGMENT | fragment}"
+[settings]
+a = 1
+  b = '${FRAGMENT | fragment}'
+c = """${FRAGMENT | fragment}""" # the comment is kept
+
+FRAGMENT:
+(empty)
+
+result:
+[settings]
+a = 1
+# the comment is kept
+---
+
+[TestFragmentSnapshots/toml_list_from_split - 1]
+file (config.toml):
+hosts = "${FRAGMENT | split | trim | fragment}"
+nested = { hosts = "${FRAGMENT | split | fragment}" }
+
+FRAGMENT:
+db-1, db-2
+
+result:
+hosts = ["db-1","db-2"]
+nested = { hosts = ["db-1"," db-2"] }
+---
+
+[TestFragmentSnapshots/error_for_a_toml_key - 1]
+file (config.toml):
+[database]
+"${FRAGMENT | fragment}" = ""
+
+FRAGMENT:
+host = "db.prod"
+
+result:
+error: failed to insert the fragment of database.${FRAGMENT | fragment} in config.toml: fragments are only supported as values in TOML files, not as keys
+---
+
+[TestFragmentSnapshots/error_for_an_empty_toml_fragment_in_an_array - 1]
+file (config.toml):
+hosts = ["db-1", "${FRAGMENT | fragment}"]
+
+FRAGMENT:
+(empty)
+
+result:
+error: failed to insert the fragment of hosts.1 in config.toml: an empty fragment can only remove a key/value pair, not a value within an array or inline table
+---
+
+[TestFragmentSnapshots/error_for_a_toml_fragment_with_several_values - 1]
+file (config.toml):
+settings = "${FRAGMENT | fragment}"
+
+FRAGMENT:
+1
+other = 2
+
+result:
+error: failed to insert the fragment of settings in config.toml: invalid TOML fragment: a fragment used as a value must consist of a single value
+---
+
+[TestFragmentSnapshots/error_for_an_invalid_toml_fragment - 1]
+file (config.toml):
+settings = "${FRAGMENT | fragment}"
+
+FRAGMENT:
+{ a = 1, a = 2 }
+
+result:
+error: failed to insert the fragment of settings in config.toml: invalid TOML fragment on line 1
 ---

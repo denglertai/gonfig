@@ -269,7 +269,7 @@ func NewFileInterceptorFilter() *FileInterceptorFilter {
 type Fragment struct {
 	Text string
 	// IsList marks fragments created from lists, e.g. of split, whose text is a JSON array.
-	// They can only be inserted into file types supporting lists, like YAML and JSON.
+	// They can only be inserted into file types supporting lists, like YAML, JSON and TOML.
 	IsList bool
 }
 
@@ -844,11 +844,12 @@ func init() {
 	filterMap["fragment"] = func(token string) Filter {
 		return &FuncFilter{
 			fn: func(value any, _ map[string]string) (any, error) {
-				// Lists, e.g. of split, become JSON arrays, which are valid YAML as well
+				// Lists, e.g. of split, become JSON arrays, which are valid YAML and TOML as well
 				if list, ok := value.([]string); ok {
-					// Encoding strings cannot fail, invalid UTF-8 is replaced
+					// Encoding strings cannot fail, invalid UTF-8 is replaced. JSON allows DEL within strings, YAML and TOML
+					// don't, so it is escaped like the other control characters, which every one of them reads alike.
 					data, _ := json.Marshal(list)
-					return Fragment{Text: string(data), IsList: true}, nil
+					return Fragment{Text: strings.ReplaceAll(string(data), "\x7f", `\u007f`), IsList: true}, nil
 				}
 
 				return Fragment{Text: toString(value)}, nil

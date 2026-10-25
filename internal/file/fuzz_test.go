@@ -2,14 +2,20 @@ package file
 
 import (
 	"bytes"
+	"maps"
+	"math"
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/pelletier/go-toml/v2"
 
+	"github.com/denglertai/gonfig/internal/filter"
 	"github.com/denglertai/gonfig/internal/general"
 )
 
@@ -200,4 +206,79 @@ func FuzzTomlRoundTrip(f *testing.F) {
 			}
 		}
 	})
+}
+
+// FuzzTomlFragment checks that a fragment accepted as a value is valid where it is accepted: as the value of a pair,
+// within an array and within an inline table, and that it is read as it was parsed on its own.
+// Fragments ending with a comment are only accepted as the value of a pair.
+func FuzzTomlFragment(f *testing.F) {
+	for _, seed := range []string{`"s"`, "[1, 2]", "{ a = 1 }", "nan", "[1979-05-27T07:32:00-07:00, 1.0]", "[\n  1, # c\n  2,\n]", "1979-05-27", `"""a"""`, "'b' # c", "1\n# c", "1\nx = 2", ""} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, text string) {
+		var want map[string]any
+		if toml.Unmarshal([]byte("v = "+text+"\n"), &want) != nil {
+			t.Skip("not a valid value")
+		}
+
+		handler := NewTomlConfigFileHandler()
+		if err := handler.Read(strings.NewReader("a = \"${X}\" # c\nb = [\"${X}\", 1]\nc = { d = \"${X}\" }\n")); err != nil {
+			t.Fatal(err)
+		}
+		entries, _ := handler.Process()
+		var accepted []string
+		for entry := range entries {
+			if _, err := entry.(FragmentConfigEntry).SetFragment(filter.Fragment{Text: text}); err == nil {
+				accepted = append(accepted, entry.Path())
+			}
+		}
+		if len(accepted) == 0 {
+			t.Skip("rejected")
+		}
+
+		var output bytes.Buffer
+		if err := handler.Write(&output); err != nil {
+			t.Fatal(err)
+		}
+		var got map[string]any
+		if err := toml.Unmarshal(output.Bytes(), &got); err != nil {
+			t.Fatalf("the output of fragment %q cannot be read: %v\n%s", text, err, output.String())
+		}
+		values := map[string]any{"a": got["a"]}
+		if b, ok := got["b"].([]any); ok && len(b) == 2 {
+			values["b.0"] = b[0]
+		}
+		if c, ok := got["c"].(map[string]any); ok {
+			values["c.d"] = c["d"]
+		}
+		for _, path := range accepted {
+			if !tomlValuesEqual(values[path], want["v"]) {
+				t.Fatalf("fragment %q at %s is read differently: %v\n%s", text, path, got, output.String())
+			}
+		}
+	})
+}
+
+// tomlValuesEqual returns whether two decoded TOML values are equal, including their types, e.g. 1 and "1" differ.
+// NaN equals NaN, and times are equal if they are the same instant with the same offset, since each parsed time
+// gets its own location.
+func tomlValuesEqual(a, b any) bool {
+	switch x := a.(type) {
+	case float64:
+		y, ok := b.(float64)
+		return ok && (x == y || math.IsNaN(x) && math.IsNaN(y))
+	case time.Time:
+		y, ok := b.(time.Time)
+		_, xOffset := x.Zone()
+		_, yOffset := y.Zone()
+		return ok && x.Equal(y) && xOffset == yOffset
+	case []any:
+		y, ok := b.([]any)
+		return ok && slices.EqualFunc(x, y, tomlValuesEqual)
+	case map[string]any:
+		y, ok := b.(map[string]any)
+		return ok && maps.EqualFunc(x, y, tomlValuesEqual)
+	default:
+		return reflect.DeepEqual(a, b)
+	}
 }

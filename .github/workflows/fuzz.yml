@@ -40,6 +40,8 @@ jobs:
             target: FuzzTOML
           - package: ./internal/file
             target: FuzzTomlRoundTrip
+          - package: ./internal/file
+            target: FuzzTomlFragment
 
     steps:
     - name: Checkout code

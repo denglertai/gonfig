@@ -299,7 +299,7 @@ func TestFragments(t *testing.T) {
 			fileType: general.XML,
 			content:  "<r><b>${FRAGMENT | split | fragment}</b></r>",
 			fragment: "alpha,beta",
-			wantErr:  "lists can only be inserted into YAML and JSON files",
+			wantErr:  "lists can only be inserted into YAML, JSON and TOML files",
 		},
 		{
 			desc:     "xml attribute",
@@ -396,5 +396,19 @@ func TestFragmentErrorsWithoutValues(t *testing.T) {
 			_, err = processFragment(t, tC.fileType, tC.content, tC.fragment)
 			assert.ErrorContains(t, err, tC.wantWithValues)
 		})
+	}
+}
+
+// TestListFragmentWithDel checks that a list element containing DEL, which YAML and TOML only allow escaped, is inserted
+// into every file type supporting lists
+func TestListFragmentWithDel(t *testing.T) {
+	for fileType, testCase := range map[general.FileType]struct{ content, want string }{
+		general.YAML: {"b: ${FRAGMENT | split | fragment}\n", "b:\n  - \"a\\x7Fb\"\n  - c\n"},
+		general.JSON: {`{"b": "${FRAGMENT | split | fragment}"}`, "{\n  \"b\": [\n    \"a\x7fb\",\n    \"c\"\n  ]\n}\n"},
+		general.TOML: {"b = \"${FRAGMENT | split | fragment}\"\n", "b = [\"a\\u007fb\",\"c\"]\n"},
+	} {
+		output, err := processFragment(t, fileType, testCase.content, "a\x7fb,c")
+		assert.NoError(t, err, fileType)
+		assert.Equal(t, testCase.want, output, fileType)
 	}
 }
