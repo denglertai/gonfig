@@ -2,10 +2,12 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -511,15 +513,18 @@ func TestInvalidConfigFile(t *testing.T) {
 // TestUnknownConfigKeysWarn checks that unknown top level keys of the config file are logged as warnings and ignored
 func TestUnknownConfigKeysWarn(t *testing.T) {
 	configDir := t.TempDir()
-	assert.NoError(t, os.WriteFile(path.Join(configDir, ".gonfig.yaml"), []byte("log-levl: debug\n"), 0o644))
+	configFile := filepath.Join(configDir, ".gonfig.yaml")
+	assert.NoError(t, os.WriteFile(configFile, []byte("log-levl: debug\n"), 0o644))
 
 	stderr := captureStderr(t, func() {
 		resetFlags(t)
 		rootCmd.SetArgs([]string{"--config-path", configDir, "value", "x"})
 		assert.NoError(t, rootCmd.Execute())
 	})
-	assert.Contains(t, stderr, `"level":"WARN","msg":"Unknown key in the config file, ignoring it","key":"log-levl","file":"`+
-		path.Join(configDir, ".gonfig.yaml")+`"`)
+	// The path is encoded like in the JSON log, which escapes the backslashes of Windows paths
+	encoded, err := json.Marshal(configFile)
+	assert.NoError(t, err)
+	assert.Contains(t, stderr, `"level":"WARN","msg":"Unknown key in the config file, ignoring it","key":"log-levl","file":`+string(encoded))
 }
 
 // TestFragmentFromTemplate checks that a placeholder template can read a fragment from a file referenced by its default

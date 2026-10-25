@@ -361,18 +361,19 @@ func TestLoadAppConfig_FailOnMissing(t *testing.T) {
 	}
 }
 
-// TestLoadAppConfig_UnknownKeys checks that unknown top level keys of the config file are returned sorted, while
-// options and templates are known, including keys of nested maps like a.b
+// TestLoadAppConfig_UnknownKeys checks that unknown top level keys of the config file are returned sorted, including
+// keys with empty values, which viper drops, while options and templates are known regardless of their case
 func TestLoadAppConfig_UnknownKeys(t *testing.T) {
 	dir := t.TempDir()
-	content := "log-levl: debug\nlog-level: warn\nfail-on-missing: true\nA.b: 1\ntemplates:\n  filters:\n    s:\n      filters: trim\n"
+	content := "log-levl: debug\nLog-Level: warn\nfail-on-missing: true\nA.b: 1\nempty:\nempty-map: {}\n" +
+		"templates:\n  Filters:\n    S:\n      Filters: trim\n"
 	if err := os.WriteFile(filepath.Join(dir, ".gonfig.yaml"), []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("GONFIG_CONFIG_PATH", dir)
 
 	cfg := mustLoadAppConfig(t, mustSetupViper(t, nil))
-	if want := []string{"a", "log-levl"}; !reflect.DeepEqual(cfg.UnknownKeys, want) {
+	if want := []string{"a.b", "empty", "empty-map", "log-levl"}; !reflect.DeepEqual(cfg.UnknownKeys, want) {
 		t.Fatalf("expected unknown keys %v, got %v", want, cfg.UnknownKeys)
 	}
 	if cfg.LogLevel != "warn" {
@@ -444,7 +445,7 @@ unknown key "templates.placeholders.b.envv", expected default or description or 
 	}
 }
 
-// TestLoadAppConfig_ConfigFileRemoved checks that a config file removed after it was found fails to be read
+// TestLoadAppConfig_ConfigFileRemoved checks that a config file removed or made invalid after it was found fails to be read
 func TestLoadAppConfig_ConfigFileRemoved(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, ".gonfig.yaml")
@@ -457,6 +458,14 @@ func TestLoadAppConfig_ConfigFileRemoved(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if _, err := LoadAppConfig(v); err == nil || !strings.Contains(err.Error(), "failed to read config file "+file) {
+		t.Fatalf("expected an error naming the config file, got %v", err)
+	}
+
+	// A config file that became invalid meanwhile fails as well
+	if err := os.WriteFile(file, []byte("log-level: [\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := LoadAppConfig(v); err == nil || !strings.Contains(err.Error(), "failed to read config file "+file) {
 		t.Fatalf("expected an error naming the config file, got %v", err)
 	}

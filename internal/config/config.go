@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"os"
 	"reflect"
 	"slices"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/denglertai/gonfig/internal/general"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"go.yaml.in/yaml/v3"
 )
 
 // Settings represents the configuration settings
@@ -120,23 +122,27 @@ func LoadAppConfig(v *viper.Viper) (*AppConfig, error) {
 // templates are an error instead, like other invalid templates, since a typo like filter: instead of filters: would
 // drop a template or its filters silently.
 func unknownKeys(file string) ([]string, error) {
-	// The config file is read on its own, since the settings of v include the defaults and flags
-	f := viper.New()
-	f.SetConfigFile(file)
-	f.SetConfigType("yaml")
-	if err := f.ReadInConfig(); err != nil {
+	// The config file is parsed on its own, since the settings of v include the defaults and flags, and viper drops
+	// keys with empty values like log-levl: or log-levl: {}
+	content, err := os.ReadFile(file) //nolint:gosec // the config file found by viper
+	if err != nil {
 		return nil, fmt.Errorf("failed to read config file %s: %w", file, err)
 	}
+	var settings map[string]any
+	if err := yaml.Unmarshal(content, &settings); err != nil {
+		return nil, fmt.Errorf("failed to read config file %s: %w", file, err)
+	}
+	settings = lowerKeys(settings)
 
 	var unknown []string
-	for _, key := range slices.Sorted(maps.Keys(f.AllSettings())) {
+	for _, key := range slices.Sorted(maps.Keys(settings)) {
 		if key != "templates" && !slices.Contains(optionKeys, key) {
 			unknown = append(unknown, key)
 		}
 	}
 
 	// Values that are no maps are reported by decoding the templates, which names the expected type
-	templates, _ := f.Get("templates").(map[string]any)
+	templates := lowerKeys(settings["templates"])
 	var errs []error
 	check := func(path string, values map[string]any, known []string) {
 		for _, key := range slices.Sorted(maps.Keys(values)) {
@@ -148,17 +154,28 @@ func unknownKeys(file string) ([]string, error) {
 	check("templates", templates, fieldKeys(Templates{}))
 	kinds := map[string][]string{"filters": fieldKeys(FilterTemplate{}), "placeholders": fieldKeys(PlaceholderTemplate{})}
 	for _, kind := range slices.Sorted(maps.Keys(kinds)) {
-		named, _ := templates[kind].(map[string]any)
+		named := lowerKeys(templates[kind])
 		for _, name := range slices.Sorted(maps.Keys(named)) {
-			if fields, ok := named[name].(map[string]any); ok {
-				check("templates."+kind+"."+name, fields, kinds[kind])
-			}
+			check("templates."+kind+"."+name, lowerKeys(named[name]), kinds[kind])
 		}
 	}
 	if len(errs) > 0 {
 		return nil, fmt.Errorf("invalid templates in config file %s: %w", file, errors.Join(errs...))
 	}
 	return unknown, nil
+}
+
+// lowerKeys returns the map with lower case keys, like viper reads them, or nil if the value is no map
+func lowerKeys(value any) map[string]any {
+	values, ok := value.(map[string]any)
+	if !ok {
+		return nil
+	}
+	lowered := make(map[string]any, len(values))
+	for key, v := range values {
+		lowered[strings.ToLower(key)] = v
+	}
+	return lowered
 }
 
 // fieldKeys returns the config file keys of the fields of a struct, i.e. their mapstructure tags, sorted
