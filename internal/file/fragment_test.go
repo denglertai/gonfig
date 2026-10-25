@@ -398,3 +398,17 @@ func TestFragmentErrorsWithoutValues(t *testing.T) {
 		})
 	}
 }
+
+// TestListFragmentWithDel checks that a list element containing DEL, which YAML and TOML only allow escaped, is inserted
+// into every file type supporting lists
+func TestListFragmentWithDel(t *testing.T) {
+	for fileType, testCase := range map[general.FileType]struct{ content, want string }{
+		general.YAML: {"b: ${FRAGMENT | split | fragment}\n", "b:\n  - \"a\\x7Fb\"\n  - c\n"},
+		general.JSON: {`{"b": "${FRAGMENT | split | fragment}"}`, "{\n  \"b\": [\n    \"a\x7fb\",\n    \"c\"\n  ]\n}\n"},
+		general.TOML: {"b = \"${FRAGMENT | split | fragment}\"\n", "b = [\"a\\u007fb\",\"c\"]\n"},
+	} {
+		output, err := processFragment(t, fileType, testCase.content, "a\x7fb,c")
+		assert.NoError(t, err, fileType)
+		assert.Equal(t, testCase.want, output, fileType)
+	}
+}
