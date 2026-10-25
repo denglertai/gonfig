@@ -23,7 +23,7 @@ import (
 var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Work with configuration files",
-	Long: `Work with configuration files in JSON, YAML, XML, properties or plain text format.
+	Long: `Work with configuration files in JSON, YAML, XML, properties, TOML or plain text format.
 The format is inferred from the file extension unless set via --file-type.`,
 	TraverseChildren: true,
 }

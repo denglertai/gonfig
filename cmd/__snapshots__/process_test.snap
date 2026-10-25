@@ -1085,3 +1085,122 @@ else
     exit 1
 fi
 ---
+
+[TestStdout/TOML_AutoDiscover - 1]
+# Application settings
+title = "YOYOYO"
+
+[database]
+url = "jdbc:mysql://localhost:3306/mydatabase"
+port = 123 # written as an integer
+ratio = 123.123
+enabled = true
+special = "%^&*()_+"
+
+[[servers]]
+name = "string"
+ports = ["123", 8080]
+
+---
+
+[TestStdout/TOML_Explicit - 1]
+# Application settings
+title = "YOYOYO"
+
+[database]
+url = "jdbc:mysql://localhost:3306/mydatabase"
+port = 123 # written as an integer
+ratio = 123.123
+enabled = true
+special = "%^&*()_+"
+
+[[servers]]
+name = "string"
+ports = ["123", 8080]
+
+---
+
+[TestFile/TOML_AutoDiscover - 1]
+# Application settings
+title = "YOYOYO"
+
+[database]
+url = "jdbc:mysql://localhost:3306/mydatabase"
+port = 123 # written as an integer
+ratio = 123.123
+enabled = true
+special = "%^&*()_+"
+
+[[servers]]
+name = "string"
+ports = ["123", 8080]
+
+---
+
+[TestFile/TOML_Explicit - 1]
+# Application settings
+title = "YOYOYO"
+
+[database]
+url = "jdbc:mysql://localhost:3306/mydatabase"
+port = 123 # written as an integer
+ratio = 123.123
+enabled = true
+special = "%^&*()_+"
+
+[[servers]]
+name = "string"
+ports = ["123", 8080]
+
+---
+
+[TestPassingExtension/TOML_Explicit - 1]
+# Application settings
+title = "YOYOYO"
+
+[database]
+url = "jdbc:mysql://localhost:3306/mydatabase"
+port = 123 # written as an integer
+ratio = 123.123
+enabled = true
+special = "%^&*()_+"
+
+[[servers]]
+name = "string"
+ports = ["123", 8080]
+
+---
+
+[TestFileOverwrite/TOML_AutoDiscover - 1]
+# Application settings
+title = "YOYOYO"
+
+[database]
+url = "jdbc:mysql://localhost:3306/mydatabase"
+port = 123 # written as an integer
+ratio = 123.123
+enabled = true
+special = "%^&*()_+"
+
+[[servers]]
+name = "string"
+ports = ["123", 8080]
+
+---
+
+[TestFileOverwrite/TOML_Explicit - 1]
+# Application settings
+title = "YOYOYO"
+
+[database]
+url = "jdbc:mysql://localhost:3306/mydatabase"
+port = 123 # written as an integer
+ratio = 123.123
+enabled = true
+special = "%^&*()_+"
+
+[[servers]]
+name = "string"
+ports = ["123", 8080]
+
+---

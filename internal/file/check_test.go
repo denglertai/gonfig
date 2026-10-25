@@ -348,7 +348,7 @@ func TestCheckDiffWriteError(t *testing.T) {
 // TestCheckUnsupportedFileType checks that a file of an unsupported type cannot be checked
 func TestCheckUnsupportedFileType(t *testing.T) {
 	_, err := NewFileProcessor("config.abc", general.Undefined, nil).Check()
-	assert.EqualError(t, err, `unsupported file type "abc" of config.abc; supported are json, yaml, yml, xml, properties and plain; `+
+	assert.EqualError(t, err, `unsupported file type "abc" of config.abc; supported are json, yaml, yml, xml, properties, toml and plain; `+
 		"use -t plain to process any text file line by line")
 }
 

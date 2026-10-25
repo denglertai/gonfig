@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
+
+	"github.com/pelletier/go-toml/v2"
 
 	"github.com/denglertai/gonfig/internal/general"
 )
@@ -162,5 +165,39 @@ func FuzzPropertiesRoundTrip(f *testing.F) {
 func FuzzPlain(f *testing.F) {
 	fuzzHandler(f, general.PLAIN, "plain", func(value string) string {
 		return "line " + value + "\n" + value + "\n"
+	})
+}
+
+// FuzzTOML checks processing TOML files, see fuzzHandler
+func FuzzTOML(f *testing.F) {
+	fuzzHandler(f, general.TOML, "toml", func(value string) string {
+		return "# comment\na = \"" + value + "\"\n\"" + value + "\" = 'c'\nl = [\"\"\"" + value + "\"\"\", '''" + value + "''']\n"
+	})
+}
+
+// FuzzTomlRoundTrip checks that strings and keys written to TOML files are read as they were, whatever quotes
+// they were written with before, so escaping never changes them. Invalid UTF-8 is replaced, so it is skipped.
+func FuzzTomlRoundTrip(f *testing.F) {
+	for _, seed := range []string{"", "'", "\"", `"""`, "'''", "a\nb\r\n\tc", "\\", "\x00\x7f", "\"\"\"\"", "x'", "\n"} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, text string) {
+		if !utf8.ValidString(text) {
+			t.Skip("invalid UTF-8 is replaced")
+		}
+		for _, raw := range []string{`"a"`, `'a'`, `"""a"""`, `'''a'''`, "\"\"\"\na\"\"\"", "'''\na'''"} {
+			value := (&TomlConfigEntry{raw: raw, val: text}).encode()
+			key := (&TomlConfigEntry{raw: raw[:1] + "k" + raw[:1], val: text}).encode()
+			var document map[string]any
+			if err := toml.Unmarshal([]byte("v = "+value+"\n[keys]\n"+key+" = 1\n"), &document); err != nil {
+				t.Fatalf("cannot read %q written as %s: %v\n%s\n%s", text, raw, err, value, key)
+			}
+			if document["v"] != text {
+				t.Fatalf("%q written as %s is read as %q: %s", text, raw, document["v"], value)
+			}
+			if keys, _ := document["keys"].(map[string]any); keys[text] == nil {
+				t.Fatalf("key %q is read differently: %v", text, document)
+			}
+		}
 	})
 }

@@ -19,7 +19,7 @@ import (
 )
 
 // ConfigEntry represents a single configuration entry, i.e. a value that may contain placeholders.
-// Depending on the file type this is a scalar or key (YAML), a scalar (JSON, properties),
+// Depending on the file type this is a scalar or key (YAML), a scalar (JSON, properties), a string or key (TOML),
 // an element's text or an attribute (XML) or a line (plain).
 type ConfigEntry interface {
 	// Key returns the key of the configuration entry
@@ -446,6 +446,8 @@ func (fp *FileProcessor) getFileProcessor() (ConfigFileHandler, error) {
 		return NewXmlConfigFileHandler(), nil
 	case general.PROPERTIES:
 		return NewPropertiesConfigFileHandler(), nil
+	case general.TOML:
+		return NewTomlConfigFileHandler(), nil
 	case general.PLAIN:
 		return NewPlainFileProcessor(), nil
 	case general.Undefined:
@@ -453,7 +455,7 @@ func (fp *FileProcessor) getFileProcessor() (ConfigFileHandler, error) {
 			"e.g. -t plain to process any text file line by line", fp.FileName)
 	default:
 		// Unknown extensions are not processed as plain text automatically, so typos like c.yam fail
-		return nil, fmt.Errorf("unsupported file type %q of %s; supported are json, yaml, yml, xml, properties and plain; "+
+		return nil, fmt.Errorf("unsupported file type %q of %s; supported are json, yaml, yml, xml, properties, toml and plain; "+
 			"use -t plain to process any text file line by line", fp.FileType, fp.FileName)
 	}
 }

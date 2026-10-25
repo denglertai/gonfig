@@ -154,6 +154,20 @@ list: ["${PORT | to_int}", "${ENABLED | to_bool}"]
 			content:  "port=${PORT | to_int}\nwhole=${WHOLE | to_float}\nenabled=${ENABLED | to_bool}\n",
 		},
 		{
+			name:     "toml",
+			fileType: general.TOML,
+			env:      env,
+			content: `port = "${PORT | to_int}"
+ratio = '${RATIO | to_float}'
+whole = "${WHOLE | to_float}"
+enabled = "${ENABLED | to_bool}"
+zip = "${ZIP}"
+ports = ["${PORT | to_int}", "${PORT}"]
+url = "http://localhost:${PORT | to_int}/api"
+"${PORT | to_int}" = "keys are always text"
+`,
+		},
+		{
 			name:     "error for an invalid number",
 			fileType: general.YAML,
 			env:      map[string]string{"PORT": "eighty"},
@@ -292,6 +306,12 @@ $${NAME}: keys are unescaped as well
 			fileType: general.PROPERTIES,
 			env:      env,
 			content:  "spring.name=$${NAME}\nname=${NAME}\n",
+		},
+		{
+			name:     "toml",
+			fileType: general.TOML,
+			env:      env,
+			content:  "escaped = \"$${NAME}\"\nmixed = '$${NAME} is ${NAME}'\n\"$${NAME}\" = \"keys are unescaped as well\"\n",
 		},
 		{
 			name:     "plain text",

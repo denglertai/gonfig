@@ -1,0 +1,24 @@
+# Application settings
+title = "${TITLE}"   # trailing comment
+version = 2
+
+[database]
+host = '${DB_HOST}'
+port = "${DB_PORT | to_int}"
+ports = [ "${DB_PORT}", 2, [ "nested" ] ]
+inline = { user = "${DB_USER}", "${KEY}" = "value" }
+cert = """
+${CERT}"""
+pattern = '''^\d+$'''
+
+[[servers]]
+name = "${NAME}"
+[servers.tls]
+mode = "strict"
+
+[[servers]]
+name = "backup"
+a."${KEY}".c = "dotted"
+
+["${ENVIRONMENT}".cache]
+size = "small"

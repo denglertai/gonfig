@@ -418,3 +418,47 @@ echo "${NAME:-default} $$ $NAME"
 name="gonfig"
 location / { proxy_set_header Host $host; set $x "${host}"; }
 ---
+
+[TestTypedValueSnapshots/toml - 1]
+environment:
+ENABLED="1"
+PORT="8080"
+RATIO="0.75"
+WHOLE="2"
+ZIP="01701"
+
+file (config.toml):
+port = "${PORT | to_int}"
+ratio = '${RATIO | to_float}'
+whole = "${WHOLE | to_float}"
+enabled = "${ENABLED | to_bool}"
+zip = "${ZIP}"
+ports = ["${PORT | to_int}", "${PORT}"]
+url = "http://localhost:${PORT | to_int}/api"
+"${PORT | to_int}" = "keys are always text"
+
+result:
+port = 8080
+ratio = 0.75
+whole = 2.0
+enabled = true
+zip = "01701"
+ports = [8080, "8080"]
+url = "http://localhost:8080/api"
+"8080" = "keys are always text"
+---
+
+[TestEscapeSnapshots/toml - 1]
+environment:
+NAME="gonfig"
+
+file (config.toml):
+escaped = "$${NAME}"
+mixed = '$${NAME} is ${NAME}'
+"$${NAME}" = "keys are unescaped as well"
+
+result:
+escaped = "${NAME}"
+mixed = '${NAME} is gonfig'
+"${NAME}" = "keys are unescaped as well"
+---
