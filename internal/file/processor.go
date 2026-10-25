@@ -51,6 +51,8 @@ type FileProcessor struct {
 	FileType general.FileType
 	// Output represents the output writer
 	Output io.Writer
+	// Input is read instead of the file if set, e.g. stdin; FileName then only names it in messages
+	Input io.Reader
 	// Diff adds the changes processing the file would make to the report of Check
 	Diff bool
 	// report collects the problems of all entries while checking the file, see Check
@@ -147,14 +149,25 @@ func (fp *FileProcessor) open(handler ConfigFileHandler) (io.ReadCloser, error) 
 	fp.format = textFormat{}
 
 	var source io.ReadCloser
-	if fp.Diff {
+	switch {
+	case fp.Input != nil && fp.Diff:
+		content, err := io.ReadAll(fp.Input)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read %s: %w", fp.FileName, err)
+		}
+		fp.source = content
+		source = io.NopCloser(bytes.NewReader(content))
+	case fp.Input != nil:
+		// The input is owned by the caller, e.g. stdin, so it is not closed
+		source = io.NopCloser(fp.Input)
+	case fp.Diff:
 		content, err := os.ReadFile(fp.FileName)
 		if err != nil {
 			return nil, err
 		}
 		fp.source = content
 		source = io.NopCloser(bytes.NewReader(content))
-	} else {
+	default:
 		file, err := os.Open(fp.FileName)
 		if err != nil {
 			return nil, err

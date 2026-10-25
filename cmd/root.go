@@ -57,12 +57,15 @@ It provides a flexible plugin system for extending functionality and a filtering
 		cmd.SetContext(ctx)
 
 		// Initialize logging first so plugin loading is logged as configured
-		if err := logging.InitLogging(cfg.LogLevel, cfg.LogSource); err != nil {
+		if err := logging.InitLogging(cfg.LogLevel, cfg.LogFormat, cfg.LogSource); err != nil {
 			return err
 		}
 		// Only one config file is used, the first one found, so the log shows which one
 		if cfg.ConfigFile != "" {
 			pkglogging.Debug("Using config file", "file", cfg.ConfigFile)
+		}
+		for _, key := range cfg.UnknownKeys {
+			pkglogging.Warn("Unknown key in the config file, ignoring it", "key", key, "file", cfg.ConfigFile)
 		}
 
 		// Initialize the Plugin system
@@ -98,6 +101,7 @@ func GetAppConfig(cmd *cobra.Command) *config.AppConfig {
 	// Fallback to defaults if not found
 	return &config.AppConfig{
 		LogLevel:   "info",
+		LogFormat:  "json",
 		LogSource:  false,
 		ConfigPath: "",
 		PluginPath: "",
@@ -126,6 +130,7 @@ func init() {
 	rootCmd.SetVersionTemplate("{{.Name}} version {{.Version}}\n")
 
 	rootCmd.PersistentFlags().StringP("log-level", "l", "info", "Log level (trace, debug, info, warn, error, fatal)")
+	rootCmd.PersistentFlags().String("log-format", "json", "Log format: json, text, or auto for text if stderr is a terminal (env var: GONFIG_LOG_FORMAT)")
 	rootCmd.PersistentFlags().BoolP("log-source", "s", false, "Whether to include source location in log output or not")
 	rootCmd.PersistentFlags().String("config-path", "", "Path to the directory containing .gonfig config file (env var: GONFIG_CONFIG_PATH)")
 	// Empty by default, so the default plugin paths are searched, see plugin.InitPlugins

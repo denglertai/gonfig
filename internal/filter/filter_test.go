@@ -1,6 +1,8 @@
 package filter
 
 import (
+	"math"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -519,6 +521,55 @@ func TestLookupRecorder(t *testing.T) {
 	_, err := NewEnvVarFilter("RECORDER_SET", false).Process(nil)
 	assert.NoError(t, err)
 	assert.Len(t, lookups, 3)
+}
+
+// TestMultiply checks that multiply returns an int for integers and a float64 otherwise, and fails on invalid
+// multipliers and overflows with errors naming the filter
+func TestMultiply(t *testing.T) {
+	testCases := []struct {
+		desc     string
+		input    any
+		params   map[string]string
+		expected any
+		wantErr  string
+	}{
+		{desc: "int by int", input: 4, params: map[string]string{"m": "2"}, expected: 8},
+		{desc: "numeric string by position", input: "4", params: map[string]string{"0": "3"}, expected: 12},
+		{desc: "default multiplier", input: "4", expected: 4},
+		{desc: "negative", input: -4, params: map[string]string{"m": "2"}, expected: -8},
+		{desc: "int by float", input: 1024, params: map[string]string{"m": "0.75"}, expected: 768.0},
+		{desc: "float string by int", input: "1.5", params: map[string]string{"m": "2"}, expected: 3.0},
+		{desc: "float by int", input: 1.5, params: map[string]string{"m": "2"}, expected: 3.0},
+		{desc: "float precision", input: 3, params: map[string]string{"m": "0.1"}, expected: 0.30000000000000004},
+		{desc: "exponent multiplier", input: 2, params: map[string]string{"m": "1e3"}, expected: 2000.0},
+		{desc: "invalid multiplier", input: 3, params: map[string]string{"m": "abc"}, wantErr: `filter multiply: invalid param m "abc", expected a number`},
+		{desc: "infinite multiplier", input: 3, params: map[string]string{"m": "Inf"}, wantErr: `filter multiply: invalid param m "Inf", expected a number`},
+		{desc: "NaN multiplier", input: 3, params: map[string]string{"m": "NaN"}, wantErr: `filter multiply: invalid param m "NaN", expected a number`},
+		{desc: "non-numeric value", input: "abc", params: map[string]string{"m": "2"}, wantErr: "filter multiply: the value is not a number"},
+		{desc: "bool value", input: true, wantErr: "filter multiply: a value of type bool cannot be converted to a number"},
+		{desc: "int overflow", input: math.MaxInt, params: map[string]string{"m": "2"}, wantErr: "filter multiply: the result does not fit into an integer"},
+		{desc: "min int by -1", input: math.MinInt, params: map[string]string{"m": "-1"}, wantErr: "filter multiply: the result does not fit into an integer"},
+		{desc: "-1 by min int", input: -1, params: map[string]string{"m": strconv.Itoa(math.MinInt)}, wantErr: "filter multiply: the result does not fit into an integer"},
+		{desc: "zero by min int", input: 0, params: map[string]string{"m": strconv.Itoa(math.MinInt)}, expected: 0},
+		{desc: "multiplier out of range", input: 1, params: map[string]string{"m": "9223372036854775809"}, wantErr: `filter multiply: invalid param m "9223372036854775809", the integer is out of range`},
+		{desc: "value out of range", input: "9223372036854775809", params: map[string]string{"m": "1"}, wantErr: "filter multiply: the value is an integer out of range"},
+		{desc: "float overflow", input: 1e308, params: map[string]string{"m": "10"}, wantErr: "filter multiply: the result is not a finite number"},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			filter := NewFilter("multiply")
+			if tC.params != nil {
+				filter.(FilterParams).AcceptParams(tC.params)
+			}
+			result, err := filter.Process(tC.input)
+			if tC.wantErr != "" {
+				assert.EqualError(t, err, tC.wantErr)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tC.expected, result)
+		})
+	}
 }
 
 // TestHashAndHexFilters checks sha256, sha512, hex and hex_decode, including lists, whose elements are processed each

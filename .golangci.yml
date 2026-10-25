@@ -3,6 +3,26 @@ version: "2"
 linters:
   # errcheck, govet, ineffassign, staticcheck and unused
   default: standard
+  enable:
+    # Unclosed HTTP response bodies, e.g. of the secret manager plugins
+    - bodyclose
+    # Comparisons and type assertions on errors instead of errors.Is / errors.As, and %v instead of %w
+    - errorlint
+    # Common bugs and simplifications, with the default checks
+    - gocritic
+    # Spelling in comments, messages and strings
+    - misspell
+    # Security problems like file permissions, command execution of plugins and weak crypto
+    - gosec
+    # Errors that are checked but nil is returned
+    - nilerr
+
+  exclusions:
+    rules:
+      # Tests write temporary files, start test plugins and use fake secrets
+      - path: _test\.go
+        linters:
+          - gosec
 
 issues:
   # Report every finding instead of only the first ones of each kind

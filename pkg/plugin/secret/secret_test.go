@@ -224,8 +224,9 @@ func TestProcessDoesNotCacheErrors(t *testing.T) {
 func TestProcessParams(t *testing.T) {
 	f, provider := newFake(map[string]any{"a": "1"})
 
-	_, err := process(f, map[string]string{"verison": "2"}, "a")
-	assert.EqualError(t, err, `unknown param "verison", it accepts version`)
+	// The param name is misspelled on purpose
+	_, err := process(f, map[string]string{"verison": "2"}, "a")             //nolint:misspell
+	assert.EqualError(t, err, `unknown param "verison", it accepts version`) //nolint:misspell
 
 	provider.params = nil
 	_, err = process(f, map[string]string{"version": "2"}, "a")

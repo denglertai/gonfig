@@ -44,11 +44,11 @@ placeholders and the values inserted by fragments are shown as *** unless --log-
 		// Files that cannot be read are reported as errors as well, so the other files are still checked
 		reports := make(checkReports, 0, len(configSettings.Files))
 		for _, name := range configSettings.Files {
-			processor := file.NewFileProcessor(name, configSettings.FileType, io.Discard)
+			processor := newFileProcessor(cmd, name, configSettings.FileType, io.Discard)
 			processor.Diff = showDiff
 			report, err := processor.Check()
 			if err != nil {
-				report = &file.CheckReport{File: name, Entries: []file.EntryReport{}, Error: err.Error()}
+				report = &file.CheckReport{File: processor.FileName, Entries: []file.EntryReport{}, Error: err.Error()}
 			}
 			reports = append(reports, report)
 		}

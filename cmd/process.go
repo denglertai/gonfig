@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/denglertai/gonfig/internal/file"
 	"github.com/denglertai/gonfig/internal/output"
 	"github.com/denglertai/gonfig/pkg/logging"
 	"github.com/spf13/cobra"
@@ -28,7 +27,10 @@ to the desired output. Defaults to stdout, which only works for a single file.
 
 Several files are processed with -f per file or glob patterns like -f 'conf/*.yaml', and written back
 with -i or into a directory with -o <dir>/. All files are processed before any is written, so an error
-leaves all files unchanged.`,
+leaves all files unchanged.
+
+-f - reads the input from stdin, which needs -t, e.g. curl ... | gonfig config process -f - -t yaml.
+Its output goes to stdout, or to a file with -o <file>. New files get mode 0600 unless --mode is given.`,
 	Args:             noArgs,
 	TraverseChildren: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -62,6 +64,14 @@ leaves all files unchanged.`,
 		// Successful runs are silent by default, so their details are only logged at debug level
 		logging.Debug("Running command", "command", cmd.Name(), "args", args, "configSettings", configSettings)
 
+		stdin := configSettings.Files[0] == stdinFile
+		if stdin && inline {
+			return errors.New("-i cannot write back to stdin; the output goes to stdout, or to a file with -o <file>")
+		}
+		if stdin && outputFile != "-" && isDirectory(outputFile) {
+			return fmt.Errorf("-o %s is a directory, which needs the name of an input file; use -o <file> for stdin", outputFile)
+		}
+
 		// In case we want to write the output to the source files directly
 		if inline {
 			logging.Debug("Inline processing enabled")
@@ -86,7 +96,7 @@ leaves all files unchanged.`,
 		for i, input := range configSettings.Files {
 			var o = new(bytes.Buffer)
 			logging.Debug("Processing file", "file", input, "type", configSettings.FileType)
-			if err := file.NewFileProcessor(input, configSettings.FileType, o).Process(); err != nil {
+			if err := newFileProcessor(cmd, input, configSettings.FileType, o).Process(); err != nil {
 				return err
 			}
 			if outputs == nil {
@@ -98,9 +108,10 @@ leaves all files unchanged.`,
 			// New files get the mode of their input file unless --mode is given, so restricting a template restricts its output
 			opts := output.Options{Mode: mode, ForceMode: modeFlag != ""}
 			if !opts.ForceMode {
-				// The input file has just been read, so this only fails if it was removed meanwhile, using a safe mode then
+				// The input file has just been read, so this only fails if it was removed meanwhile, using a safe mode then.
+				// stdin has no mode to take, so its output gets the safe mode as well.
 				opts.Mode = 0o600
-				if info, err := os.Stat(input); err == nil {
+				if info, err := os.Stat(input); err == nil && !stdin {
 					opts.Mode = info.Mode().Perm()
 				}
 			}
@@ -110,7 +121,8 @@ leaves all files unchanged.`,
 
 		if outputDir != "" {
 			// --mode applies to files only, as a directory without the execute permission cannot be entered
-			if err := os.MkdirAll(outputDir, 0o755); err != nil {
+			// The files within it have their own modes, and applications running as other users need to enter it
+			if err := os.MkdirAll(outputDir, 0o755); err != nil { //nolint:gosec
 				return fmt.Errorf("failed to create the output directory: %w", err)
 			}
 		}

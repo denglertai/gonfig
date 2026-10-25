@@ -2,10 +2,12 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -485,6 +487,7 @@ func TestInvalidTemplatesKeepFileUnchanged(t *testing.T) {
 	assert.Equal(t, content, string(result))
 }
 
+// TestInvalidConfigFile checks that invalid config files fail before anything is processed
 func TestInvalidConfigFile(t *testing.T) {
 	testCases := []struct {
 		desc    string
@@ -493,6 +496,7 @@ func TestInvalidConfigFile(t *testing.T) {
 	}{
 		{desc: "invalid YAML", content: "templates:\n  filters:\n    a:\n      filters: @b\n", wantErr: "failed to read config file"},
 		{desc: "invalid templates", content: "templates:\n  filters: not a map\n", wantErr: "invalid templates in config file"},
+		{desc: "unknown template key", content: "templates:\n  filter: {}\n", wantErr: `unknown key "templates.filter"`},
 	}
 	for _, tC := range testCases {
 		t.Run(tC.desc, func(t *testing.T) {
@@ -504,6 +508,23 @@ func TestInvalidConfigFile(t *testing.T) {
 			assert.ErrorContains(t, rootCmd.Execute(), tC.wantErr)
 		})
 	}
+}
+
+// TestUnknownConfigKeysWarn checks that unknown top level keys of the config file are logged as warnings and ignored
+func TestUnknownConfigKeysWarn(t *testing.T) {
+	configDir := t.TempDir()
+	configFile := filepath.Join(configDir, ".gonfig.yaml")
+	assert.NoError(t, os.WriteFile(configFile, []byte("log-levl: debug\n"), 0o644))
+
+	stderr := captureStderr(t, func() {
+		resetFlags(t)
+		rootCmd.SetArgs([]string{"--config-path", configDir, "value", "x"})
+		assert.NoError(t, rootCmd.Execute())
+	})
+	// The path is encoded like in the JSON log, which escapes the backslashes of Windows paths
+	encoded, err := json.Marshal(configFile)
+	assert.NoError(t, err)
+	assert.Contains(t, stderr, `"level":"WARN","msg":"Unknown key in the config file, ignoring it","key":"log-levl","file":`+string(encoded))
 }
 
 // TestFragmentFromTemplate checks that a placeholder template can read a fragment from a file referenced by its default
@@ -588,7 +609,7 @@ func captureStderr(t *testing.T, run func()) string {
 	t.Cleanup(func() {
 		os.Stderr = stderr
 		// Logging was initialized with the pipe, so initialize it with the real stderr again
-		assert.NoError(t, logging.InitLogging("info", false))
+		assert.NoError(t, logging.InitLogging("info", "json", false))
 	})
 
 	run()

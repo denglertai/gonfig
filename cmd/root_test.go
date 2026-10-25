@@ -41,6 +41,7 @@ func TestDefaultAppConfig(t *testing.T) {
 
 	want := &config.AppConfig{
 		LogLevel:            "info",
+		LogFormat:           "json",
 		LogSource:           false,
 		ConfigPath:          "",
 		PluginPath:          "",
@@ -64,6 +65,7 @@ func TestDefaultAppConfig(t *testing.T) {
 	// The config defaults take precedence over the flag defaults, which are only shown by --help, so check them separately
 	flagDefaults := map[string]string{
 		"log-level":             "info",
+		"log-format":            "json",
 		"log-source":            "false",
 		"config-path":           "",
 		"plugin-path":           "",

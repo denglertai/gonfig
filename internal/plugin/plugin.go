@@ -79,7 +79,7 @@ func loadPluginDir(pluginPath string) {
 			info, err := os.Stat(path)
 			if err != nil || !isExecutablePlugin(d.Name(), info.Mode(), runtime.GOOS) {
 				logging.Debug("Skipping file that is not executable", "path", path)
-				return nil
+				return nil //nolint:nilerr // e.g. broken links are skipped like other files that are no plugins
 			}
 			if err := runPlugin(path); err != nil {
 				logging.Error("Failed to start plugin", "path", path, "error", err)

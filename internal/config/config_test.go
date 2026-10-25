@@ -1,9 +1,11 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -197,6 +199,7 @@ func TestLoadAppConfig_Defaults(t *testing.T) {
 
 	want := AppConfig{
 		LogLevel:            "info",
+		LogFormat:           "json",
 		LogSource:           false,
 		ConfigPath:          "",
 		PluginPath:          "",
@@ -356,5 +359,143 @@ func TestLoadAppConfig_FailOnMissing(t *testing.T) {
 				t.Fatalf("expected FailOnMissing %v, got %v", tC.want, cfg.FailOnMissing)
 			}
 		})
+	}
+}
+
+// TestLoadAppConfig_UnknownKeys checks that unknown top level keys of the config file are returned sorted, including
+// keys with empty values, which viper drops, while options and templates are known regardless of their case
+func TestLoadAppConfig_UnknownKeys(t *testing.T) {
+	dir := t.TempDir()
+	content := "log-levl: debug\nLog-Level: warn\nfail-on-missing: true\nA.b: 1\nempty:\nempty-map: {}\n" +
+		"templates:\n  Filters:\n    S:\n      Filters: trim\n"
+	if err := os.WriteFile(filepath.Join(dir, ".gonfig.yaml"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GONFIG_CONFIG_PATH", dir)
+
+	cfg := mustLoadAppConfig(t, mustSetupViper(t, nil))
+	if want := []string{"a.b", "empty", "empty-map", "log-levl"}; !reflect.DeepEqual(cfg.UnknownKeys, want) {
+		t.Fatalf("expected unknown keys %v, got %v", want, cfg.UnknownKeys)
+	}
+	if cfg.LogLevel != "warn" {
+		t.Fatalf("expected the known options to be read, got log level %q", cfg.LogLevel)
+	}
+}
+
+// TestLoadAppConfig_NoUnknownKeys checks that no keys are unknown without a config file and with every option set,
+// which fails if an option is added without adding it to optionKeys
+func TestLoadAppConfig_NoUnknownKeys(t *testing.T) {
+	cfg := mustLoadAppConfig(t, mustSetupViper(t, nil))
+	if cfg.UnknownKeys != nil {
+		t.Fatalf("expected no unknown keys without a config file, got %v", cfg.UnknownKeys)
+	}
+
+	// The defaults name every option, so a config file setting each of them has no unknown keys
+	var content strings.Builder
+	for key, value := range mustSetupViper(t, nil).AllSettings() {
+		content.WriteString(key + ": " + fmtValue(value) + "\n")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".gonfig.yaml"), []byte(content.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GONFIG_CONFIG_PATH", dir)
+
+	cfg = mustLoadAppConfig(t, mustSetupViper(t, nil))
+	if cfg.UnknownKeys != nil {
+		t.Fatalf("expected the options to be known, got unknown keys %v", cfg.UnknownKeys)
+	}
+}
+
+// fmtValue formats a default value as a YAML value
+func fmtValue(value any) string {
+	if s, ok := value.(string); ok {
+		return strconv.Quote(s)
+	}
+	return fmt.Sprint(value)
+}
+
+// TestLoadAppConfig_UnknownTemplateKeys checks that unknown keys within the templates fail, naming each key with its
+// path, the config file and the expected keys
+func TestLoadAppConfig_UnknownTemplateKeys(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, ".gonfig.yaml")
+	content := `templates:
+  filter:
+    secret:
+      filters: trim
+  filters:
+    a:
+      filter: trim
+      description: ok
+  placeholders:
+    b:
+      envv: B
+`
+	if err := os.WriteFile(file, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GONFIG_CONFIG_PATH", dir)
+
+	_, err := LoadAppConfig(mustSetupViper(t, nil))
+	want := "invalid templates in config file " + file + `: unknown key "templates.filter", expected filters or placeholders
+unknown key "templates.filters.a.filter", expected description or filters
+unknown key "templates.placeholders.b.envv", expected default or description or env or filters or value`
+	if err == nil || err.Error() != want {
+		t.Fatalf("expected error\n%s\ngot\n%v", want, err)
+	}
+}
+
+// TestLoadAppConfig_ConfigFileRemoved checks that a config file removed or made invalid after it was found fails to be read
+func TestLoadAppConfig_ConfigFileRemoved(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, ".gonfig.yaml")
+	if err := os.WriteFile(file, []byte("log-level: info\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GONFIG_CONFIG_PATH", dir)
+	v := mustSetupViper(t, nil)
+	if err := os.Remove(file); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := LoadAppConfig(v); err == nil || !strings.Contains(err.Error(), "failed to read config file "+file) {
+		t.Fatalf("expected an error naming the config file, got %v", err)
+	}
+
+	// A config file that became invalid meanwhile fails as well
+	if err := os.WriteFile(file, []byte("log-level: [\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadAppConfig(v); err == nil || !strings.Contains(err.Error(), "failed to read config file "+file) {
+		t.Fatalf("expected an error naming the config file, got %v", err)
+	}
+}
+
+// TestLoadAppConfig_KeysDifferingInCase checks that keys differing only in case fail at every level checked, since
+// viper keeps only one of them, which would leave the other one unchecked
+func TestLoadAppConfig_KeysDifferingInCase(t *testing.T) {
+	testCases := []struct {
+		content string
+		want    string
+	}{
+		{"log-level: info\nLog-Level: debug\n", `the file contains keys differing only in case, e.g. "Log-Level" and "log-level"`},
+		{"templates: {}\nTemplates:\n  filters:\n    a:\n      filter: x\n", `the file contains keys differing only in case, e.g. "Templates" and "templates"`},
+		{"templates:\n  filters: {}\n  Filters: {}\n", `templates contains keys differing only in case, e.g. "Filters" and "filters"`},
+		{"templates:\n  filters:\n    a: {}\n    A: {}\n", `templates.filters contains keys differing only in case, e.g. "A" and "a"`},
+		{"templates:\n  placeholders:\n    a:\n      env: A\n      ENV: B\n", `templates.placeholders.a contains keys differing only in case, e.g. "ENV" and "env"`},
+	}
+	for _, tC := range testCases {
+		dir := t.TempDir()
+		file := filepath.Join(dir, ".gonfig.yaml")
+		if err := os.WriteFile(file, []byte(tC.content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("GONFIG_CONFIG_PATH", dir)
+
+		_, err := LoadAppConfig(mustSetupViper(t, nil))
+		if want := "invalid config file " + file + ": " + tC.want; err == nil || err.Error() != want {
+			t.Errorf("expected error\n%s\ngot\n%v", want, err)
+		}
 	}
 }
