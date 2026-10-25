@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -78,6 +79,21 @@ func TestFileNamedDash(t *testing.T) {
 	out, err := runWithStdin(t, "", "config", "process", "-f", "./-", "-t", "yaml")
 	assert.NoError(t, err)
 	assert.Equal(t, "key: value\n", out)
+}
+
+// TestGlobMatchNamedDash checks that a pattern matching a file named - processes the file instead of reading stdin
+func TestGlobMatchNamedDash(t *testing.T) {
+	t.Setenv("STDIN_TEST_VALUE", "value")
+	t.Chdir(t.TempDir())
+	assert.NoError(t, os.WriteFile("-", []byte("key: ${STDIN_TEST_VALUE}\n"), 0o644))
+
+	out, err := runWithStdin(t, "key: stdin\n", "config", "process", "-f", "*", "-t", "yaml")
+	assert.NoError(t, err)
+	assert.Equal(t, "key: value\n", out)
+
+	files, err := expandFiles([]string{"?"})
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"." + string(filepath.Separator) + "-"}, files)
 }
 
 // TestStdinUsageErrors checks the combinations stdin doesn't support, which fail before stdin is read

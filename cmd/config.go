@@ -110,6 +110,10 @@ func expandFiles(values []string) ([]string, error) {
 			if info, err := os.Stat(match); err == nil && info.IsDir() {
 				continue
 			}
+			// A match named - is a file, which must not be read from stdin like -f -
+			if match == stdinFile {
+				match = "." + string(filepath.Separator) + match
+			}
 			add(match)
 			matched = true
 		}

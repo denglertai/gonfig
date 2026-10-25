@@ -30,7 +30,7 @@ with -i or into a directory with -o <dir>/. All files are processed before any i
 leaves all files unchanged.
 
 -f - reads the input from stdin, which needs -t, e.g. curl ... | gonfig config process -f - -t yaml.
-Its output goes to stdout, or to a file with -o <file>, which gets mode 0600 unless --mode is given.`,
+Its output goes to stdout, or to a file with -o <file>. New files get mode 0600 unless --mode is given.`,
 	Args:             noArgs,
 	TraverseChildren: true,
 	RunE: func(cmd *cobra.Command, args []string) error {

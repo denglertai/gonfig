@@ -366,7 +366,7 @@ Usage:
     replicas: 3
     ```
    The file type of stdin cannot be inferred, so `-t` is required. `-f -` cannot be combined with other files or `-i`;
-   the output goes to stdout, or to a file with `-o <file>`, which gets mode `0600` unless `--mode` is given.
+   the output goes to stdout, or to a file with `-o <file>`. A new output file gets mode `0600` unless `--mode` is given, and an existing one keeps its mode.
    `config check -f -` reports stdin as `<stdin>`. A file named `-` is processed with `-f ./-`.
 
 1. Process several files (`-f` per file or glob patterns), see [several files](#several-files)
