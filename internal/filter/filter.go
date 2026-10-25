@@ -227,7 +227,7 @@ func (f *FileInterceptorFilter) Process(value any) (any, error) {
 	if !isExplicitPath(path) {
 		if _, err := os.Stat(path); err != nil {
 			// Not a file, so the value is kept including the "@"
-			return value, nil
+			return value, nil //nolint:nilerr // values like @admin are no file references
 		}
 	}
 

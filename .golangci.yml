@@ -12,6 +12,8 @@ linters:
     - gocritic
     # Spelling in comments, messages and strings
     - misspell
+    # Errors that are checked but nil is returned
+    - nilerr
 
 issues:
   # Report every finding instead of only the first ones of each kind
