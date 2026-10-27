@@ -8,7 +8,7 @@ toolchain go1.27.3
 require (
 	github.com/beevik/etree v1.8.1
 	github.com/bzick/tokenizer v1.5.1
-	github.com/gkampitakis/go-snaps v0.5.24
+	github.com/gkampitakis/go-snaps v0.5.25
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	github.com/spf13/cobra v1.10.2
