@@ -563,7 +563,6 @@ Error: check failed: 1 missing variable, 1 error
 ```
 
 With `--schema`, each processed file is validated as [described above](#schema-validation), and each violation is reported as an error.
-Files that fail the check otherwise, e.g. because of a missing variable, are not validated.
 
 ```console
 $ DB_HOST=db.internal DB_PORT=99999 gonfig config check -f service.yaml --schema service.schema.json
@@ -577,7 +576,28 @@ service.yaml: 2 entries with placeholders
 Error: check failed: 0 missing variables, 1 error
 ```
 
-The JSON report lists them as `schemaViolations` with their `path` and `message`.
+Files that fail the check otherwise, e.g. because of a missing variable, are not validated, since their output would contain empty values or fail to process.
+The report says so, so fix the other problems and check again to see their violations:
+
+```console
+$ DB_PORT=99999 gonfig config check -f service.yaml --schema service.schema.json
+service.yaml: 2 entries with placeholders
+  database.host
+    DB_HOST                  missing
+  database.port
+    DB_PORT                  set
+  schema: not validated, since the file has other problems
+1 missing variable, 0 errors
+Error: check failed: 1 missing variable, 0 errors
+```
+
+The JSON report lists the violations as `schemaViolations` with their `path` and `message`, and `schemaValidated` tells whether a file was validated, so scripts can tell a valid file from one that was not validated:
+
+```console
+$ DB_PORT=99999 gonfig config check -f service.yaml --schema service.schema.json -o json | jq -c '.files[] | {file, schemaValidated}'
+{"file":"service.yaml","schemaValidated":false}
+Error: check failed: 1 missing variable, 0 errors
+```
 
 #### Showing the changes
 

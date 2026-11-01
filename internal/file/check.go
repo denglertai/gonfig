@@ -31,6 +31,9 @@ type CheckReport struct {
 	Diff *string `json:"diff,omitempty"`
 	// SchemaViolations are the parts of the processed file that do not match the schema given by --schema
 	SchemaViolations []schema.Violation `json:"schemaViolations,omitempty"`
+	// SchemaValidated tells whether the processed file was validated against the schema given by --schema. It is only
+	// set if a schema is given, so a file without violations can be told apart from a file that was not validated.
+	SchemaValidated *bool `json:"schemaValidated,omitempty"`
 }
 
 // EntryReport describes an entry containing placeholders
