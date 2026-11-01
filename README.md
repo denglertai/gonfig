@@ -484,9 +484,46 @@ database:
 
 - **Processed output:** the result is validated, not the template, so placeholders need to produce the type the schema expects. Values are strings unless a [typed filter](./FILTERS.md#types) like `to_int` makes up the whole value: without it, the example fails with `database.port: got string, want integer`.
 - **File types:** JSON, YAML and TOML files. Every document of a YAML file is validated, and violations name the document, e.g. `document 2: database.port`. XML, properties and plain text files are rejected before any file is processed. TOML dates and times are validated as strings.
-- **Several files:** every file is validated against the same schema, and all files are validated before any is written, so a single violation leaves all files unchanged.
+- **Several files:** every file is validated against the same schema, and all files are validated before any is written, so a single violation leaves all files unchanged. To validate files against different schemas, map them to their schemas as described [below](#different-schemas-per-file).
 - **Schemas:** any draft supported by the [validator](https://github.com/santhosh-tekuri/jsonschema), 2020-12 if `$schema` is not set. `$ref`s to other schema files are resolved relative to the schema file. Remote schemas are never fetched, so a `$ref` to an `http(s)` URL fails, except for the meta-schemas of json-schema.org, which are built in. `format` is asserted, e.g. `"format": "email"` rejects strings that are no email address.
 - **Values in messages:** values may be secrets, so messages name the failed requirement without the value, e.g. `value does not match pattern '^.{12,}$'`. Enable [`log-values`](#logging-notes) to include them.
+
+##### Different schemas per file
+
+`--schema '<pattern>=<schema>'` validates only the files matching the pattern against the schema. It can be repeated, so a run over different files validates each against its own schema:
+
+`logging.schema.json`:
+```json
+{
+  "type": "object",
+  "properties": {
+    "level": { "enum": ["debug", "info", "warn", "error"] }
+  }
+}
+```
+
+`logging.yaml`:
+```yaml
+level: ${LOG_LEVEL}
+```
+
+```console
+$ DB_HOST=db.internal DB_PORT=5432 LOG_LEVEL=verbose gonfig config process -f service.yaml -f logging.yaml -o out/ --schema 'service.yaml=service.schema.json' --schema 'logging.yaml=logging.schema.json'
+Error: logging.yaml does not match the schema logging.schema.json:
+  - level: value must be one of 'debug', 'info', 'warn', 'error'
+```
+
+- **Patterns:** [glob patterns](https://pkg.go.dev/path/filepath#Match) without a path separator match the file name, e.g. `app*.yaml` matches `conf.d/app-prod.yaml`. Patterns with a path separator match the path, e.g. `conf.d/*.yaml`, relative to the working directory. `*` doesn't match `/`, so `conf.d/*.yaml` doesn't match files in subdirectories of `conf.d`.
+- **Matching:** a file is validated against every schema whose pattern it matches, and files matching no pattern are not validated, of any type. Only XML, properties and plain text files matching a pattern are rejected. A pattern matching no file is logged as a warning. `--schema <schema>` without a pattern applies to every file, including stdin, which no pattern matches.
+- **Config file:** `schemas` in [`.gonfig.yaml`](#config-file) maps files to schemas the same way for every run without `--schema`, e.g. in a container image always rendering the same files. `--schema` replaces them. Relative patterns with a path separator and relative schema paths are resolved from the directory of the config file, and schemas are only loaded when a file of the run matches them:
+
+```yaml
+schemas:
+  - files: service.yaml
+    schema: schemas/service.schema.json
+  - files: /etc/app/conf.d/*.yaml
+    schema: schemas/logging.schema.json
+```
 
 Testdata can be found within [cmd/testdata/](cmd/testdata/).
 
@@ -779,6 +816,10 @@ log-values: false
 fail-on-missing: false
 # Fail on unknown filters instead of passing values on unchanged (default)
 allow-unknown-filters: false
+# JSON Schemas the processed files matching a pattern are validated against, see "Different schemas per file"
+schemas:
+  - files: service.yaml
+    schema: schemas/service.schema.json
 # Reusable filter chains and placeholders, used as ${VAR | @secret} and ${@db_url}
 templates:
   filters:
@@ -796,7 +837,7 @@ templates:
 
 `plugin-path` can be configured in `.gonfig.yaml` and is resolved relative to the current working directory when provided as a relative path.
 
-`templates` can only be configured in `.gonfig.yaml`, see [templates](./FILTERS.md#templates).
+`templates` and `schemas` can only be configured in `.gonfig.yaml`, see [templates](./FILTERS.md#templates) and [different schemas per file](#different-schemas-per-file).
 
 Unknown keys, e.g. typos like `log-levl`, are logged as warnings and ignored, so config files shared between gonfig versions keep working when a newer version adds options:
 

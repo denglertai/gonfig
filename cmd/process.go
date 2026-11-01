@@ -33,7 +33,9 @@ leaves all files unchanged.
 Its output goes to stdout, or to a file with -o <file>. New files get mode 0600 unless --mode is given.
 
 --schema validates every processed JSON, YAML or TOML file against a JSON Schema before anything is written,
-so a file that does not match it leaves all files unchanged.`,
+so a file that does not match it leaves all files unchanged. --schema '<pattern>=<schema>' validates only the files
+matching the pattern, e.g. --schema 'app*.yaml=app.schema.json' --schema 'logging.yaml=logging.schema.json', and can be
+repeated. Without --schema, the schemas of the config file apply.`,
 	Args:             noArgs,
 	TraverseChildren: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -85,7 +87,7 @@ so a file that does not match it leaves all files unchanged.`,
 			return err
 		}
 
-		sch, err := loadSchema(cmd, configSettings.Files, configSettings.FileType)
+		schemas, err := loadSchemas(cmd, configSettings.Files, configSettings.FileType)
 		if err != nil {
 			return err
 		}
@@ -109,7 +111,7 @@ so a file that does not match it leaves all files unchanged.`,
 				return err
 			}
 			// Files are validated before any is written, so a file not matching the schema leaves all files unchanged
-			if sch != nil {
+			for _, sch := range schemas[input] {
 				if err := sch.Check(processor.FileName, processor.FileType, o.Bytes()); err != nil {
 					return err
 				}
@@ -197,7 +199,7 @@ func init() {
 
 	processCmd.Flags().BoolP("overwrite", "w", false, "Controls if an already existing output file may be overwritten (defaults to false). Not needed for -i (--inline)")
 
-	processCmd.Flags().String("schema", "", "JSON Schema file the processed files have to match; JSON, YAML and TOML files only. Nothing is written if a file does not match")
+	processCmd.Flags().StringArray("schema", nil, "JSON Schema file the processed files have to match, or <pattern>=<schema> for the files matching the pattern; can be repeated. JSON, YAML and TOML files only. Nothing is written if a file does not match")
 
 	processCmd.Flags().String("mode", "", "File mode of the output files in octal, e.g. 0600 (defaults to the mode of an existing output file, or of the input file for new ones)")
 

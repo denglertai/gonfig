@@ -499,3 +499,66 @@ func TestLoadAppConfig_KeysDifferingInCase(t *testing.T) {
 		}
 	}
 }
+
+// TestLoadAppConfig_Schemas checks that schema mappings keep the case of their patterns and that relative paths are
+// resolved from the directory of the config file, except for patterns matching base names
+func TestLoadAppConfig_Schemas(t *testing.T) {
+	dir := t.TempDir()
+	// Paths like /etc are relative on Windows, which needs a drive, so the absolute paths are taken from another directory
+	abs := filepath.ToSlash(t.TempDir())
+	content := `schemas:
+  - files: App*.yaml
+    schema: schemas/app.schema.json
+  - Files: conf.d/*.toml
+    Schema: ` + abs + `/schemas/logging.schema.json
+  - files: ` + abs + `/app/*.json
+    schema: app.schema.json
+`
+	if err := os.WriteFile(filepath.Join(dir, ".gonfig.yaml"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GONFIG_CONFIG_PATH", dir)
+
+	cfg := mustLoadAppConfig(t, mustSetupViper(t, nil))
+
+	want := []SchemaMapping{
+		{Files: "App*.yaml", Schema: filepath.Join(dir, "schemas/app.schema.json")},
+		{Files: filepath.Join(dir, "conf.d/*.toml"), Schema: abs + "/schemas/logging.schema.json"},
+		{Files: abs + "/app/*.json", Schema: filepath.Join(dir, "app.schema.json")},
+	}
+	if !reflect.DeepEqual(cfg.Schemas, want) {
+		t.Fatalf("expected schemas %+v, got %+v", want, cfg.Schemas)
+	}
+	if len(cfg.UnknownKeys) > 0 {
+		t.Fatalf("expected no unknown keys, got %v", cfg.UnknownKeys)
+	}
+}
+
+// TestLoadAppConfig_InvalidSchemas checks that invalid schema mappings fail, naming the mapping
+func TestLoadAppConfig_InvalidSchemas(t *testing.T) {
+	for _, tc := range []struct {
+		content string
+		want    string
+	}{
+		{"schemas: app.schema.json\n", "invalid schemas in config file: "},
+		{"schemas:\n  - files: '*.yaml'\n", "invalid schemas in config file: schemas[0] needs files and schema"},
+		{"schemas:\n  - files: '*.yaml'\n    schema: a.json\n  - schema: b.json\n", "invalid schemas in config file: schemas[1] needs files and schema"},
+		{"schemas:\n  - files: '[a'\n    schema: a.json\n", `invalid schemas in config file: invalid pattern "[a" of schemas[0]: syntax error in pattern`},
+		{"schemas:\n  - file: '*.yaml'\n    schema: a.json\n    Schemas: b.json\n", `unknown key "schemas[0].file", expected files or schema
+unknown key "schemas[0].schemas", expected files or schema`},
+		{"schemas:\n  - schema: a.json\n    Schema: b.json\n", `schemas[0] contains keys differing only in case, e.g. "Schema" and "schema"`},
+	} {
+		t.Run(tc.content, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, ".gonfig.yaml"), []byte(tc.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("GONFIG_CONFIG_PATH", dir)
+
+			_, err := LoadAppConfig(mustSetupViper(t, nil))
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("expected an error containing %q, got %v", tc.want, err)
+			}
+		})
+	}
+}

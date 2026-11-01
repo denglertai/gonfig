@@ -180,7 +180,7 @@ func TestCheckSchemaErrors(t *testing.T) {
 	assert.NoError(t, err)
 	removed := filepath.Join(t.TempDir(), "removed.yaml")
 	report := &file.CheckReport{File: "removed.yaml"}
-	validateChecked(report, file.NewFileProcessor(removed, general.Undefined, nil), sch)
+	validateChecked(report, file.NewFileProcessor(removed, general.Undefined, nil), []*schema.Schema{sch})
 	// The message of a missing file depends on the operating system, e.g. "The system cannot find the file specified." on Windows
 	_, openErr := os.Open(removed)
 	assert.Equal(t, openErr.Error(), report.Error)
@@ -193,4 +193,175 @@ func TestCheckSchemaStdinReadError(t *testing.T) {
 	t.Cleanup(func() { rootCmd.SetIn(nil) })
 	rootCmd.SetArgs([]string{"config", "check", "-f", "-", "-t", "yaml", "--schema", configSchemaPath(t)})
 	assert.ErrorIs(t, rootCmd.Execute(), assert.AnError)
+}
+
+// loggingSchema is a second schema for the tests of schema mappings, which config files don't match
+const loggingSchema = `{"type": "object", "required": ["level"], "properties": {"level": {"enum": ["debug", "info"]}}}`
+
+// writeSchemaFiles writes the files into a new directory, which becomes the working directory, and returns it
+func writeSchemaFiles(t *testing.T, files map[string]string) string {
+	t.Helper()
+
+	dir := t.TempDir()
+	for name, content := range files {
+		assert.NoError(t, os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755))
+		assert.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644))
+	}
+	t.Chdir(dir)
+	return dir
+}
+
+// runSchemaCommand runs the command with the arguments and returns the output and error
+func runSchemaCommand(t *testing.T, args ...string) (string, error) {
+	t.Helper()
+
+	var out bytes.Buffer
+	rootCmd.SetOut(&out)
+	t.Cleanup(func() { rootCmd.SetOut(nil) })
+	resetFlags(t)
+	rootCmd.SetArgs(args)
+	err := rootCmd.Execute()
+	return out.String(), err
+}
+
+// TestProcessSchemaMappings checks that each file is validated against the schemas whose patterns it matches, by base
+// name or by path, and that files matching no pattern, of any type, are not validated
+func TestProcessSchemaMappings(t *testing.T) {
+	// The working directory changes, so the path is taken before
+	configSchema := configSchemaPath(t)
+	t.Setenv("SCHEMA_TEST_LEVEL", "info")
+	writeSchemaFiles(t, map[string]string{
+		"logging.schema.json": loggingSchema,
+		"app.yaml":            "database:\n  host: db\n  port: 5432\n",
+		"conf.d/logging.yaml": "level: ${SCHEMA_TEST_LEVEL}\n",
+		"notes.xml":           "<notes/>",
+	})
+	run := func(args ...string) error {
+		_, err := runSchemaCommand(t, append([]string{"config", "process", "-i", "-f", "*", "-f", "conf.d/*"}, args...)...)
+		return err
+	}
+
+	assert.NoError(t, run("--schema", "app*.yaml="+configSchema, "--schema", "conf.d/*.yaml=logging.schema.json"))
+
+	t.Setenv("SCHEMA_TEST_LEVEL", "trace")
+	assert.NoError(t, os.WriteFile("conf.d/logging.yaml", []byte("level: ${SCHEMA_TEST_LEVEL}\n"), 0o644))
+	err := run("--schema", "app*.yaml="+configSchema, "--schema", "conf.d/*.yaml=logging.schema.json")
+	// Errors name the file with the separator of the OS
+	loggingFile := filepath.FromSlash("conf.d/logging.yaml")
+	assert.EqualError(t, err, loggingFile+` does not match the schema logging.schema.json:
+  - level: value must be one of 'debug', 'info'`)
+
+	// Every matching schema applies, so the config schema rejects the logging file as well
+	err = run("--schema", "*.yaml="+configSchema, "--schema", "conf.d/*.yaml=logging.schema.json")
+	assert.EqualError(t, err, loggingFile+" does not match the schema "+configSchema+`:
+  - (root): missing property 'database'`)
+
+	// A pattern matching no file validates nothing, while a schema for every file includes the XML file
+	assert.NoError(t, run("--schema", "none*.yaml=none.schema.json"))
+	assert.EqualError(t, run("--schema", configSchema),
+		"--schema validates JSON, YAML and TOML files only, not notes.xml of type xml")
+	assert.EqualError(t, run("--schema", "*.xml="+configSchema),
+		"--schema *.xml="+configSchema+" validates JSON, YAML and TOML files only, not notes.xml of type xml")
+}
+
+// TestCheckSchemaMappings checks that check validates each file against its schemas and leaves out schemaValidated
+// for files without a schema
+func TestCheckSchemaMappings(t *testing.T) {
+	// The working directory changes, so the path is taken before
+	configSchema := configSchemaPath(t)
+	writeSchemaFiles(t, map[string]string{
+		"logging.schema.json": loggingSchema,
+		"app.yaml":            "database:\n  host: db\n  port: 70000\n",
+		"logging.yaml":        "level: info\n",
+		"other.yaml":          "a: 1\n",
+	})
+
+	out, err := runSchemaCommand(t, "config", "check", "-f", "*.yaml", "-o", "json",
+		"--schema", "app.yaml="+configSchema, "--schema", "logging.yaml=logging.schema.json",
+		// The same schema twice validates the file once
+		"--schema", "log*.yaml=logging.schema.json")
+	assert.EqualError(t, err, "check failed: 0 missing variables, 1 error")
+
+	var result struct {
+		Files []file.CheckReport `json:"files"`
+	}
+	assert.NoError(t, json.Unmarshal([]byte(out), &result), out)
+	if assert.Len(t, result.Files, 3) {
+		assert.Equal(t, "app.yaml", result.Files[0].File)
+		assert.Equal(t, new(true), result.Files[0].SchemaValidated)
+		assert.Equal(t, []schema.Violation{{Path: "database.port", Message: "value must be <= 65535"}}, result.Files[0].SchemaViolations)
+		assert.Equal(t, new(true), result.Files[1].SchemaValidated)
+		assert.Empty(t, result.Files[1].SchemaViolations)
+		assert.Nil(t, result.Files[2].SchemaValidated)
+	}
+}
+
+// TestSchemaMappingsOfConfigFile checks that the schemas of the config file apply without --schema, with paths
+// relative to the config file, and that --schema replaces them
+func TestSchemaMappingsOfConfigFile(t *testing.T) {
+	// The working directory changes, so the path is taken before
+	configSchema := configSchemaPath(t)
+	configDir := t.TempDir()
+	assert.NoError(t, os.WriteFile(filepath.Join(configDir, "logging.schema.json"), []byte(loggingSchema), 0o644))
+	assert.NoError(t, os.WriteFile(filepath.Join(configDir, ".gonfig.yaml"), []byte(`schemas:
+  - files: logging.yaml
+    schema: logging.schema.json
+  - files: other.yaml
+    schema: missing.schema.json
+`), 0o644))
+	t.Setenv("GONFIG_CONFIG_PATH", configDir)
+	writeSchemaFiles(t, map[string]string{"logging.yaml": "level: trace\n", "app.yaml": "a: 1\n"})
+
+	// The schema of other.yaml is not loaded, since no file of the run matches it
+	_, err := runSchemaCommand(t, "config", "process", "-f", "logging.yaml")
+	assert.EqualError(t, err, `logging.yaml does not match the schema `+filepath.Join(configDir, "logging.schema.json")+`:
+  - level: value must be one of 'debug', 'info'`)
+
+	out, err := runSchemaCommand(t, "config", "check", "-f", "logging.yaml", "-f", "app.yaml")
+	assert.EqualError(t, err, "check failed: 0 missing variables, 1 error")
+	assert.Contains(t, out, `  schema: level: value must be one of 'debug', 'info'`)
+
+	out, err = runSchemaCommand(t, "config", "process", "-f", "logging.yaml", "--schema", "app.yaml="+configSchema)
+	assert.NoError(t, err)
+	assert.Equal(t, "level: trace\n", out)
+}
+
+// TestSchemaMappingUsageErrors checks that invalid --schema values fail, and that patterns don't match stdin
+func TestSchemaMappingUsageErrors(t *testing.T) {
+	writeSchemaFiles(t, map[string]string{"app.yaml": "a: 1\n"})
+
+	for _, value := range []string{"=a.json", "*.yaml=", "="} {
+		_, err := runSchemaCommand(t, "config", "process", "-f", "app.yaml", "--schema", value)
+		assert.EqualError(t, err, `invalid --schema "`+value+`", use <schema> or <pattern>=<schema>`)
+	}
+	_, err := runSchemaCommand(t, "config", "check", "-f", "app.yaml", "--schema", "[a=a.json")
+	assert.EqualError(t, err, `invalid pattern "[a" of --schema "[a=a.json": syntax error in pattern`)
+
+	out, err := runWithStdin(t, "a: 1\n", "config", "process", "-f", "-", "-t", "yaml", "--schema", "*=none.schema.json")
+	assert.NoError(t, err)
+	assert.Equal(t, "a: 1\n", out)
+}
+
+// TestSchemaRuleMatches checks the matching of base names and paths, including files given with relative paths
+func TestSchemaRuleMatches(t *testing.T) {
+	dir := writeSchemaFiles(t, nil)
+
+	rule, err := parseSchemaFlag("conf.d/*.yaml=s.json")
+	assert.NoError(t, err)
+	assert.Equal(t, filepath.Join(dir, "conf.d", "*.yaml"), rule.pattern)
+	assert.True(t, rule.matches("conf.d/app.yaml"))
+	assert.True(t, rule.matches("./conf.d/app.yaml"))
+	assert.True(t, rule.matches(filepath.Join(dir, "conf.d", "app.yaml")))
+	assert.False(t, rule.matches("app.yaml"))
+	assert.False(t, rule.matches("other/conf.d/app.yaml"))
+
+	rule, err = parseSchemaFlag("app.yaml=s.json")
+	assert.NoError(t, err)
+	assert.True(t, rule.matches("conf.d/app.yaml"))
+	assert.True(t, rule.matches("app.yaml"))
+	assert.False(t, rule.matches(stdinFile))
+
+	rule, err = parseSchemaFlag("s.json")
+	assert.NoError(t, err)
+	assert.True(t, rule.matches(stdinFile))
 }

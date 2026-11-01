@@ -27,7 +27,8 @@ The check fails, with exit code 1, if processing a file would fail or if a varia
 and the placeholder provides no default, independent of --fail-on-missing.
 
 --schema validates the processed JSON, YAML and TOML files against a JSON Schema and reports each part that does
-not match it as an error. Files that fail the check otherwise are not validated, which the report states.
+not match it as an error. --schema '<pattern>=<schema>' validates only the files matching the pattern, and can be
+repeated to validate different files against different schemas; without --schema, the schemas of the config file apply. Files that fail the check otherwise are not validated, which the report states.
 
 --diff adds a unified diff of the changes processing would make to the report of each file. The results of
 placeholders and the values inserted by fragments are shown as *** unless --log-values is set.`,
@@ -46,13 +47,13 @@ placeholders and the values inserted by fragments are shown as *** unless --log-
 			return fmt.Errorf("unsupported output %q, use text or json", output)
 		}
 
-		sch, err := loadSchema(cmd, configSettings.Files, configSettings.FileType)
+		schemas, err := loadSchemas(cmd, configSettings.Files, configSettings.FileType)
 		if err != nil {
 			return err
 		}
 		// Validating processes stdin a second time, so it is read once and kept
 		var stdin []byte
-		if sch != nil && configSettings.Files[0] == stdinFile {
+		if schemas.any() && configSettings.Files[0] == stdinFile {
 			if stdin, err = io.ReadAll(cmd.InOrStdin()); err != nil {
 				return fmt.Errorf("failed to read %s: %w", stdinName, err)
 			}
@@ -74,11 +75,11 @@ placeholders and the values inserted by fragments are shown as *** unless --log-
 			if err != nil {
 				report = &file.CheckReport{File: processor.FileName, Entries: []file.EntryReport{}, Error: err.Error()}
 			}
-			if sch != nil {
+			if len(schemas[name]) > 0 {
 				validated := false
 				report.SchemaValidated = &validated
 				if !report.Failed() {
-					validateChecked(report, newProcessor(name, nil), sch)
+					validateChecked(report, newProcessor(name, nil), schemas[name])
 				}
 			}
 			reports = append(reports, report)
@@ -100,11 +101,11 @@ placeholders and the values inserted by fragments are shown as *** unless --log-
 	},
 }
 
-// validateChecked processes the checked file with the processor and adds the violations of the schema to the report.
+// validateChecked processes the checked file with the processor and adds the violations of the schemas to the report.
 // Checking masks the values, which the schema validates, so the file is processed again into memory. The violations
 // contain values only if values are allowed in errors. Files whose check failed are not validated, since processing
 // them fails or uses empty values for missing variables. SchemaValidated is set once the file has been validated.
-func validateChecked(report *file.CheckReport, processor *file.FileProcessor, sch *schema.Schema) {
+func validateChecked(report *file.CheckReport, processor *file.FileProcessor, schemas []*schema.Schema) {
 	var processed bytes.Buffer
 	processor.Output = &processed
 	if err := processor.Process(); err != nil {
@@ -113,12 +114,14 @@ func validateChecked(report *file.CheckReport, processor *file.FileProcessor, sc
 		return
 	}
 
-	violations, err := sch.Validate(processor.FileType, processed.Bytes())
-	if err != nil {
-		report.Error = fmt.Sprintf("failed to validate %s: %v", report.File, err)
-		return
+	for _, sch := range schemas {
+		violations, err := sch.Validate(processor.FileType, processed.Bytes())
+		if err != nil {
+			report.Error = fmt.Sprintf("failed to validate %s: %v", report.File, err)
+			return
+		}
+		report.SchemaViolations = append(report.SchemaViolations, violations...)
 	}
-	report.SchemaViolations = violations
 	validated := true
 	report.SchemaValidated = &validated
 }
@@ -270,7 +273,7 @@ func init() {
 
 	checkCmd.Flags().StringP("output", "o", "text", "Format of the report: text or json")
 
-	checkCmd.Flags().String("schema", "", "JSON Schema file the processed files have to match; JSON, YAML and TOML files only")
+	checkCmd.Flags().StringArray("schema", nil, "JSON Schema file the processed files have to match, or <pattern>=<schema> for the files matching the pattern; can be repeated. JSON, YAML and TOML files only")
 
 	checkCmd.Flags().Bool("diff", false, "Show the changes processing would make as a unified diff, with values masked unless --log-values is set")
 }

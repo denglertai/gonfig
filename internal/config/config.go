@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
@@ -60,6 +61,15 @@ type Templates struct {
 	Placeholders map[string]PlaceholderTemplate `mapstructure:"placeholders"`
 }
 
+// SchemaMapping assigns a JSON Schema to the processed files matching a pattern, see AppConfig.Schemas
+type SchemaMapping struct {
+	// Files is a glob pattern, see filepath.Match. A pattern without a path separator matches the base name of a file,
+	// e.g. app*.yaml, any other the path of the file, relative to the directory of the config file unless absolute.
+	Files string `mapstructure:"files"`
+	// Schema is the path of the schema file, relative to the directory of the config file unless absolute
+	Schema string `mapstructure:"schema"`
+}
+
 // AppConfig holds all global application settings
 type AppConfig struct {
 	LogLevel string
@@ -77,6 +87,9 @@ type AppConfig struct {
 	FailOnMissing bool
 	// Templates are reusable filter chains and placeholders, which can only be defined in the config file
 	Templates Templates
+	// Schemas assign JSON Schemas to processed files, which can only be defined in the config file. A file is validated
+	// against every schema whose pattern it matches. Relative paths are resolved from the directory of the config file.
+	Schemas []SchemaMapping
 	// ConfigFile is the config file used, or empty if none was found
 	ConfigFile string
 	// UnknownKeys are the top level keys of the config file that are no options, sorted. They are ignored, so config
@@ -118,6 +131,27 @@ func LoadAppConfig(v *viper.Viper) (*AppConfig, error) {
 		return nil, fmt.Errorf("invalid templates in config file: %w", err)
 	}
 
+	if err := v.UnmarshalKey("schemas", &cfg.Schemas); err != nil {
+		return nil, fmt.Errorf("invalid schemas in config file: %w", err)
+	}
+	for i := range cfg.Schemas {
+		mapping := &cfg.Schemas[i]
+		if mapping.Files == "" || mapping.Schema == "" {
+			return nil, fmt.Errorf("invalid schemas in config file: schemas[%d] needs files and schema", i)
+		}
+		if _, err := filepath.Match(mapping.Files, ""); err != nil {
+			return nil, fmt.Errorf("invalid schemas in config file: invalid pattern %q of schemas[%d]: %w", mapping.Files, i, err)
+		}
+		// Paths are relative to the config file, so a config file in /etc/gonfig works from every working directory
+		dir := filepath.Dir(cfg.ConfigFile)
+		if strings.ContainsAny(mapping.Files, "/"+string(filepath.Separator)) && !filepath.IsAbs(mapping.Files) {
+			mapping.Files = filepath.Join(dir, mapping.Files)
+		}
+		if !filepath.IsAbs(mapping.Schema) {
+			mapping.Schema = filepath.Join(dir, mapping.Schema)
+		}
+	}
+
 	return cfg, nil
 }
 
@@ -149,7 +183,7 @@ func unknownKeys(file string) ([]string, error) {
 
 	var unknown []string
 	for _, key := range slices.Sorted(maps.Keys(settings)) {
-		if key != "templates" && !slices.Contains(optionKeys, key) {
+		if key != "templates" && key != "schemas" && !slices.Contains(optionKeys, key) {
 			unknown = append(unknown, key)
 		}
 	}
@@ -173,11 +207,27 @@ func unknownKeys(file string) ([]string, error) {
 			check(path, lower(path, named[name]), kinds[kind])
 		}
 	}
+	// Values that are no lists or maps are reported by decoding the schemas as well
+	var schemaErrs []error
+	if mappings, ok := settings["schemas"].([]any); ok {
+		known := fieldKeys(SchemaMapping{})
+		for i, mapping := range mappings {
+			path := fmt.Sprintf("schemas[%d]", i)
+			for _, key := range slices.Sorted(maps.Keys(lower(path, mapping))) {
+				if !slices.Contains(known, key) {
+					schemaErrs = append(schemaErrs, fmt.Errorf("unknown key %q, expected %s", path+"."+key, strings.Join(known, " or ")))
+				}
+			}
+		}
+	}
 	if len(duplicates) > 0 {
 		return nil, fmt.Errorf("invalid config file %s: %w", file, errors.Join(duplicates...))
 	}
 	if len(errs) > 0 {
 		return nil, fmt.Errorf("invalid templates in config file %s: %w", file, errors.Join(errs...))
+	}
+	if len(schemaErrs) > 0 {
+		return nil, fmt.Errorf("invalid schemas in config file %s: %w", file, errors.Join(schemaErrs...))
 	}
 	return unknown, nil
 }
