@@ -78,7 +78,7 @@ func TestSchemaUsageErrors(t *testing.T) {
 }
 
 // TestCheckSchema checks that violations are reported as errors without values, and that files failing the check
-// otherwise are not validated
+// otherwise are reported as not validated
 func TestCheckSchema(t *testing.T) {
 	t.Setenv("SCHEMA_TEST_HOST", "db")
 	t.Setenv("SCHEMA_TEST_PORT", "70000")
@@ -96,7 +96,49 @@ func TestCheckSchema(t *testing.T) {
 
 	output, err = runCheck(t, "database:\n  host: ${SCHEMA_TEST_MISSING}\n  port: 1\n", "--schema", configSchemaPath(t))
 	assert.EqualError(t, err, "check failed: 1 missing variable, 0 errors")
+	assert.Contains(t, output, `    SCHEMA_TEST_MISSING      missing
+  schema: not validated, since the file has other problems
+1 missing variable, 0 errors
+`)
+	assert.NotContains(t, output, "schema: database")
+
+	output, err = runCheck(t, "database: [\n", "--schema", configSchemaPath(t))
+	assert.EqualError(t, err, "check failed: 0 missing variables, 1 error")
+	assert.Regexp(t, `cannot be checked\n  error: .+\n  schema: not validated, since the file has other problems\n0 missing variables, 1 error\n$`, output)
+
+	output, err = runCheck(t, "database:\n  host: ${SCHEMA_TEST_HOST}\n  port: 1\n", "--schema", configSchemaPath(t))
+	assert.NoError(t, err)
 	assert.NotContains(t, output, "schema:")
+}
+
+// TestCheckSchemaValidatedJson checks that JSON reports tell validated files from files that were not validated, and
+// that the field is left out without --schema
+func TestCheckSchemaValidatedJson(t *testing.T) {
+	t.Setenv("SCHEMA_TEST_PORT", "80")
+
+	for _, tc := range []struct {
+		name     string
+		input    string
+		args     []string
+		expected *bool
+	}{
+		{"validated", `{"database": {"host": "db", "port": "${SCHEMA_TEST_PORT | to_int}"}}`, []string{"--schema", configSchemaPath(t)}, new(true)},
+		{"not validated", `{"database": {"host": "${SCHEMA_TEST_MISSING}", "port": 1}}`, []string{"--schema", configSchemaPath(t)}, new(false)},
+		{"cannot be read", `{"database": `, []string{"--schema", configSchemaPath(t)}, new(false)},
+		{"without schema", `{"database": {"host": "db", "port": 1}}`, nil, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := runWithStdin(t, tc.input, append([]string{"config", "check", "-f", "-", "-t", "json", "-o", "json"}, tc.args...)...)
+
+			var result struct {
+				Files []file.CheckReport `json:"files"`
+			}
+			assert.NoError(t, json.Unmarshal([]byte(out), &result), out)
+			if assert.Len(t, result.Files, 1) {
+				assert.Equal(t, tc.expected, result.Files[0].SchemaValidated)
+			}
+		})
+	}
 }
 
 // TestCheckSchemaStdin checks that stdin is validated in JSON reports, although it is processed twice
