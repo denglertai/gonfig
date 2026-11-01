@@ -37,6 +37,14 @@ jobs:
           - package: ./internal/file
             target: FuzzPlain
           - package: ./internal/file
+            target: FuzzDotenv
+          - package: ./internal/file
+            target: FuzzDotenvRoundTrip
+          - package: ./internal/file
+            target: FuzzIni
+          - package: ./internal/file
+            target: FuzzIniRoundTrip
+          - package: ./internal/file
             target: FuzzTOML
           - package: ./internal/file
             target: FuzzTomlRoundTrip

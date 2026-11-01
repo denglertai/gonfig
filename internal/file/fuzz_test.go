@@ -174,6 +174,62 @@ func FuzzPlain(f *testing.F) {
 	})
 }
 
+// FuzzDotenv checks processing dotenv files, see fuzzHandler
+func FuzzDotenv(f *testing.F) {
+	fuzzHandler(f, general.ENV, "env", func(value string) string {
+		return "# comment\nexport A=" + value + " # c\nB=\"" + value + "\"\nC='" + value + "'\n"
+	})
+}
+
+// FuzzDotenvRoundTrip checks that values written to dotenv files are read as they were, whatever quotes the value had
+func FuzzDotenvRoundTrip(f *testing.F) {
+	for _, seed := range []string{"", "'", "\"", "\\", "a #b", " lead", "a\nb\r\n", "\\n", "#", "x'y\"z"} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, text string) {
+		for _, quote := range []byte{0, '\'', '"'} {
+			encoded, err := encodeDotenv(&LineConfigEntry{val: text}, quote)
+			if err != nil {
+				t.Fatal(err)
+			}
+			lines, err := parseDotenvLines("A=" + encoded + " # c\n")
+			if err != nil {
+				t.Fatalf("%q written as %s cannot be read: %v", text, encoded, err)
+			}
+			if lines[0].entry.val != text {
+				t.Fatalf("%q written as %s is read as %q", text, encoded, lines[0].entry.val)
+			}
+		}
+	})
+}
+
+// FuzzIni checks processing INI files, see fuzzHandler
+func FuzzIni(f *testing.F) {
+	fuzzHandler(f, general.INI, "ini", func(value string) string {
+		return "; comment\na = " + value + "\n[s]\nb = \"" + value + "\" ; c\n"
+	})
+}
+
+// FuzzIniRoundTrip checks that values written to double-quoted INI values are read as they were
+func FuzzIniRoundTrip(f *testing.F) {
+	for _, seed := range []string{"", "\"", "\\", "a ; b", " lead ", "a\nb\r\n", "\\n", "\\\""} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, text string) {
+		encoded, err := encodeIni(&LineConfigEntry{val: text}, '"')
+		if err != nil {
+			t.Fatal(err)
+		}
+		lines, err := parseIniLines("[s]\na = " + encoded + " ; c\n")
+		if err != nil {
+			t.Fatalf("%q written as %s cannot be read: %v", text, encoded, err)
+		}
+		if lines[1].entry == nil || lines[1].entry.val != text {
+			t.Fatalf("%q written as %s is read as %+v", text, encoded, lines[1].entry)
+		}
+	})
+}
+
 // FuzzTOML checks processing TOML files, see fuzzHandler
 func FuzzTOML(f *testing.F) {
 	fuzzHandler(f, general.TOML, "toml", func(value string) string {

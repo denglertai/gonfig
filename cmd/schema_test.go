@@ -69,7 +69,7 @@ func TestSchemaUsageErrors(t *testing.T) {
 	for _, command := range []string{"process", "check"} {
 		resetFlags(t)
 		rootCmd.SetArgs([]string{"config", command, "-f", xmlFile, "--schema", configSchemaPath(t)})
-		assert.EqualError(t, rootCmd.Execute(), "--schema validates JSON, YAML and TOML files only, not "+xmlFile+" of type xml")
+		assert.EqualError(t, rootCmd.Execute(), "--schema validates JSON, YAML, TOML, dotenv and INI files only, not "+xmlFile+" of type xml")
 
 		resetFlags(t)
 		rootCmd.SetArgs([]string{"config", command, "-f", yamlFile, "--schema", filepath.Join(dir, "none.json")})
@@ -259,9 +259,9 @@ func TestProcessSchemaMappings(t *testing.T) {
 	// A pattern matching no file validates nothing, while a schema for every file includes the XML file
 	assert.NoError(t, run("--schema", "none*.yaml=none.schema.json"))
 	assert.EqualError(t, run("--schema", configSchema),
-		"--schema validates JSON, YAML and TOML files only, not notes.xml of type xml")
+		"--schema validates JSON, YAML, TOML, dotenv and INI files only, not notes.xml of type xml")
 	assert.EqualError(t, run("--schema", "*.xml="+configSchema),
-		"--schema *.xml="+configSchema+" validates JSON, YAML and TOML files only, not notes.xml of type xml")
+		"--schema *.xml="+configSchema+" validates JSON, YAML, TOML, dotenv and INI files only, not notes.xml of type xml")
 }
 
 // TestCheckSchemaMappings checks that check validates each file against its schemas and leaves out schemaValidated
@@ -364,4 +364,27 @@ func TestSchemaRuleMatches(t *testing.T) {
 	rule, err = parseSchemaFlag("s.json")
 	assert.NoError(t, err)
 	assert.True(t, rule.matches(stdinFile))
+}
+
+// TestSchemaDotenvAndIni checks that dotenv files are validated as objects of strings and INI files as objects of
+// sections, which are objects of strings
+func TestSchemaDotenvAndIni(t *testing.T) {
+	t.Setenv("SCHEMA_TEST_PORT", "eighty")
+	writeSchemaFiles(t, map[string]string{
+		"env.schema.json": `{"type": "object", "required": ["DB_HOST"], "properties": {"DB_PORT": {"type": "string", "pattern": "^[0-9]+$"}}}`,
+		"ini.schema.json": `{"type": "object", "properties": {"name": {"const": "app"}, "database": {"type": "object", "required": ["host"],
+			"properties": {"port": {"type": "string", "pattern": "^[0-9]+$"}}}}}`,
+		".env":    "DB_PORT=${SCHEMA_TEST_PORT}\n",
+		"app.ini": "name = app\n[database]\nport = \"${SCHEMA_TEST_PORT}\"\n",
+	})
+
+	out, err := runSchemaCommand(t, "config", "check", "-f", ".env", "-f", "app.ini",
+		"--schema", ".env=env.schema.json", "--schema", "*.ini=ini.schema.json")
+	assert.EqualError(t, err, "check failed: 0 missing variables, 4 errors")
+	assert.Contains(t, out, `  schema: (root): missing property 'DB_HOST'
+  schema: DB_PORT: value does not match pattern '^[0-9]+$'
+`)
+	assert.Contains(t, out, `  schema: database: missing property 'host'
+  schema: database.port: value does not match pattern '^[0-9]+$'
+`)
 }

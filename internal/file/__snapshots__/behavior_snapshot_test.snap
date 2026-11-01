@@ -462,3 +462,69 @@ escaped = "${NAME}"
 mixed = '${NAME} is gonfig'
 "${NAME}" = "keys are unescaped as well"
 ---
+
+[TestTypedValueSnapshots/dotenv - 1]
+environment:
+ENABLED="1"
+PORT="8080"
+RATIO="0.75"
+WHOLE="2"
+ZIP="01701"
+
+file (config.env):
+PORT=${PORT | to_int}
+WHOLE="${WHOLE | to_float}"
+ENABLED='${ENABLED | to_bool}'
+
+result:
+PORT=8080
+WHOLE="2"
+ENABLED='true'
+---
+
+[TestTypedValueSnapshots/ini - 1]
+environment:
+ENABLED="1"
+PORT="8080"
+RATIO="0.75"
+WHOLE="2"
+ZIP="01701"
+
+file (config.ini):
+[server]
+port = ${PORT | to_int}
+whole = "${WHOLE | to_float}"
+
+result:
+[server]
+port = 8080
+whole = "2"
+---
+
+[TestEscapeSnapshots/dotenv - 1]
+environment:
+NAME="gonfig"
+
+file (config.env):
+ESCAPED=$${NAME}
+MIXED="$${NAME} is ${NAME}"
+
+result:
+ESCAPED=${NAME}
+MIXED="${NAME} is gonfig"
+---
+
+[TestEscapeSnapshots/ini - 1]
+environment:
+NAME="gonfig"
+
+file (config.ini):
+[app]
+escaped = $${NAME}
+mixed = "$${NAME} is ${NAME}"
+
+result:
+[app]
+escaped = ${NAME}
+mixed = "${NAME} is gonfig"
+---
