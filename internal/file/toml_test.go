@@ -296,3 +296,81 @@ func TestTomlValuesEqual(t *testing.T) {
 		assert.False(t, tomlValuesEqual(a, b), other)
 	}
 }
+
+// TestTomlKeyFragmentEntries checks the entries of a fragment used as a key: the values of overridden and added pairs
+// and the keys of added pairs with their paths, positioned relative to their text, and that masking keeps the keys
+func TestTomlKeyFragmentEntries(t *testing.T) {
+	handler, entries := readToml(t, "[t]\na = \"x\"\n\"${F}\" = \"\"\n")
+	inserted, err := entries[1].(FragmentConfigEntry).SetFragment(filter.Fragment{Text: "b = [\"${V}\", 1]\na = \"${V}\"\n\"${K}\" = \"y\""})
+	assert.NoError(t, err)
+
+	var paths []string
+	for _, entry := range inserted {
+		paths = append(paths, entry.Path())
+	}
+	assert.Equal(t, []string{"t.b.0", "t.b.1", "t.a", "t.${K}", "t.${K}"}, paths)
+
+	inserted[0].SetValue("v")
+	inserted[2].SetValue("w")
+	inserted[3].SetValue("k")
+	assert.Equal(t, "[t]\na = \"w\"\nb = [\"v\", 1]\n\"k\" = \"y\"\n", writeToml(t, handler))
+
+	for _, entry := range inserted {
+		entry.(maskableConfigEntry).mask()
+	}
+	assert.Equal(t, "[t]\na = \"***\"\nb = [\"***\", \"***\"]\n\"k\" = \"***\"\n", writeToml(t, handler))
+}
+
+// TestTomlKeyFragmentLayout checks that added pairs get the indentation of the key's pair and the line breaks of the
+// document, and that a fragment overriding pairs only removes the key's pair
+func TestTomlKeyFragmentLayout(t *testing.T) {
+	handler, entries := readToml(t, "[t]\r\na = 1\r\n  \"${F}\" = \"\" # overrides\r\nz = 2\r\n")
+	_, err := entries[0].(FragmentConfigEntry).SetFragment(filter.Fragment{Text: "b = 2\nc = 3\n"})
+	assert.NoError(t, err)
+	assert.Equal(t, "[t]\r\na = 1\r\n  b = 2\r\n  c = 3 # overrides\r\nz = 2\r\n", writeToml(t, handler))
+
+	_, err = entries[0].(FragmentConfigEntry).SetFragment(filter.Fragment{Text: "z = 3\na = { b = 1 }"})
+	assert.NoError(t, err)
+	assert.Equal(t, "[t]\r\na = { b = 1 }\r\n  # overrides\r\nz = 3\r\n", writeToml(t, handler))
+}
+
+// TestTomlKeyFragmentErrors checks that invalid fragments used as keys fail, with the parser's message only if values
+// are allowed in errors, and that a key of a fragment defined elsewhere is named only then
+func TestTomlKeyFragmentErrors(t *testing.T) {
+	handler, entries := readToml(t, "[t]\n\"${F}\" = \"\"\n[t.pool]\nsize = 1\n")
+	fragment := entries[0].(FragmentConfigEntry)
+
+	_, err := fragment.SetFragment(filter.Fragment{Text: "a = 1\na = 2"})
+	assert.EqualError(t, err, "invalid TOML fragment on line 2")
+
+	_, err = fragment.SetFragment(filter.Fragment{Text: "pool = 1"})
+	assert.NoError(t, err)
+	assert.EqualError(t, handler.Write(&bytes.Buffer{}), "the renamed keys or the fragments used as keys make the TOML "+
+		"document invalid on line 3, e.g. because a key of a fragment is also defined by a table header")
+
+	filter.SetValuesInErrors(true)
+	t.Cleanup(func() { filter.SetValuesInErrors(false) })
+	assert.ErrorContains(t, handler.Write(&bytes.Buffer{}), "the renamed keys or the fragments used as keys make the TOML document invalid: toml: ")
+	_, err = fragment.SetFragment(filter.Fragment{Text: "a = 1\na = 2"})
+	assert.ErrorContains(t, err, "invalid TOML fragment: toml: ")
+}
+
+// TestTomlKeyFragmentNotMergeable checks that keys which no fragment can be merged at fail: dotted keys, keys within
+// inline tables and keys of fragments
+func TestTomlKeyFragmentNotMergeable(t *testing.T) {
+	_, entries := readToml(t, "a.\"${F}\" = \"\"\nb = { \"${F}\" = \"\" }\nc = \"${V}\"\n")
+	keys := 0
+	for _, entry := range entries {
+		if entry.(*TomlConfigEntry).isKey {
+			keys++
+			_, err := entry.(FragmentConfigEntry).SetFragment(filter.Fragment{Text: "x = 1"})
+			assert.ErrorIs(t, err, errTomlKeyFragment, entry.Path())
+		}
+	}
+	assert.Equal(t, 2, keys)
+
+	inserted, err := entries[len(entries)-1].(FragmentConfigEntry).SetFragment(filter.Fragment{Text: `{ "${F}" = "" }`})
+	assert.NoError(t, err)
+	_, err = inserted[0].(FragmentConfigEntry).SetFragment(filter.Fragment{Text: "x = 1"})
+	assert.ErrorIs(t, err, errTomlKeyFragment)
+}

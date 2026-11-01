@@ -45,9 +45,13 @@ type TomlConfigEntry struct {
 	typed string
 	isKey bool
 	// pair is the position of the key/value pair of a string that is the value of a key/value pair outside arrays and
-	// inline tables, which an empty fragment removes. It is empty otherwise, since a pair is never empty.
+	// inline tables, which an empty fragment removes, or of the pair of a key a fragment can be merged into, see
+	// tomlKeyPair. It is empty otherwise, since a pair is never empty.
 	// It is no pointer, since most strings have one and allocating each of them takes noticeable time.
 	pair tomlRange
+	// keyPair is set for a key that is the only key of a key/value pair with an empty string as its value outside
+	// inline tables, e.g. "${X | fragment}" = "", which a fragment can be merged into the table containing it
+	keyPair *tomlKeyPair
 	// fragment is the fragment set by SetFragment, which replaces the string or removes the pair, or nil
 	fragment *tomlFragment
 }
@@ -58,12 +62,32 @@ type tomlRange struct {
 	end   int
 }
 
-// tomlFragment is a fragment replacing a string, see TomlConfigEntry.SetFragment
+// tomlFragment is a fragment replacing a string, or the key/value pair of a key, see TomlConfigEntry.SetFragment
 type tomlFragment struct {
-	// text is the TOML value of the fragment, or empty if the fragment removes the key/value pair
+	// text is the TOML value of the fragment, or the key/value pairs a fragment used as a key adds to the table,
+	// or empty if the fragment removes the key/value pair
 	text []byte
 	// entries are the values and keys containing placeholders within text, with their positions relative to text
 	entries []*TomlConfigEntry
+	// overrides are the values of the table's key/value pairs a fragment used as a key replaces
+	overrides []tomlOverride
+}
+
+// tomlOverride replaces the value of a key/value pair of the table by the value of the pair with the same key in
+// a fragment used as a key
+type tomlOverride struct {
+	// span is the range of the replaced value in the document
+	span tomlRange
+	// value is the value of the fragment's pair, with the entries of its strings
+	value *tomlFragment
+}
+
+// tomlKeyPair is the context of a key a fragment can be merged into, see TomlConfigEntry.keyPair
+type tomlKeyPair struct {
+	// data is the document, which is parsed again to find the key/value pairs of the table when a fragment is merged
+	data []byte
+	// table is the path of the table containing the pair
+	table string
 }
 
 // Key returns the key of the configuration entry, or the index of an array item
@@ -96,16 +120,21 @@ func (t *TomlConfigEntry) mask() {
 	}
 }
 
-// errTomlKeyFragment is the error of a fragment used as a key, since merging it into a table would have to override
-// keys anywhere in the file, which is not supported for TOML yet
-var errTomlKeyFragment = errors.New("fragments are only supported as values in TOML files, not as keys")
+// errTomlKeyFragment is the error of a fragment used as a key that cannot be merged into a table, e.g. a key of a
+// table header or inline table
+var errTomlKeyFragment = errors.New(`a fragment used as a key in a TOML file must be the only key of a key/value pair ` +
+	`outside inline tables, with an empty string as its value, e.g. "${X | fragment}" = ""`)
 
 // SetFragment replaces the string by the fragment, which must be a single TOML value, e.g. an array or an inline table.
 // An empty fragment removes the key/value pair, which is only possible outside arrays and inline tables, since TOML
-// has no null. It returns the entries of the values and keys of the fragment, so their placeholders can be processed.
+// has no null. A fragment used as a key is merged into the table, see setKeyFragment.
+// It returns the entries of the values and keys of the fragment, so their placeholders can be processed.
 func (t *TomlConfigEntry) SetFragment(f filter.Fragment) ([]ConfigEntry, error) {
 	if t.isKey {
-		return nil, errTomlKeyFragment
+		if t.keyPair == nil {
+			return nil, errTomlKeyFragment
+		}
+		return t.setKeyFragment(strings.TrimSpace(f.Text))
 	}
 
 	text := strings.TrimSpace(f.Text)
@@ -131,6 +160,168 @@ func (t *TomlConfigEntry) SetFragment(f filter.Fragment) ([]ConfigEntry, error) 
 	return inserted, nil
 }
 
+// tomlTablePair is a key/value pair of a table, see tablePairs
+type tomlTablePair struct {
+	// keys are the parts of the key, e.g. pool and size for pool.size
+	keys []string
+	// pair is the range of the key/value pair and value the range of its value
+	pair  tomlRange
+	value tomlRange
+}
+
+// setKeyFragment merges the key/value pairs of the fragment into the table containing the key, which is a shallow
+// override within the table's section: a pair of the fragment replaces the value of the pair with the same key in the
+// section, other pairs replace the pair of the key in their order. Keys defined elsewhere, e.g. by another header like
+// [database.pool], are detected when the document is written. The fragment must consist of key/value pairs only.
+// An empty fragment removes the pair of the key.
+func (t *TomlConfigEntry) setKeyFragment(text string) ([]ConfigEntry, error) {
+	fragment := &tomlFragment{}
+	if text == "" {
+		t.fragment = fragment
+		return nil, nil
+	}
+
+	var decoded map[string]any
+	if err := toml.Unmarshal([]byte(text), &decoded); err != nil {
+		return nil, fragmentError("TOML", fmt.Sprintf("on line %d", tomlLine(err)), err)
+	}
+
+	source := t.keyPair.data
+	pairs := tablePairs(source, t.pair.start)
+	lineBreak, indent := pairLayout(source, t.pair.start)
+
+	var added bytes.Buffer
+	var inserted []ConfigEntry
+	parser := unstable.Parser{}
+	parser.Reset([]byte(text))
+	for parser.NextExpression() {
+		node := parser.Expression()
+		if node.Kind != unstable.KeyValue {
+			return nil, errors.New("invalid TOML fragment: a fragment used as a key must consist of key/value pairs, without table headers")
+		}
+		keys := tomlKeys(node)
+		pairRange, valueRange := pairRanges(node, []byte(text))
+
+		target, err := overriddenPair(pairs, keys)
+		if err != nil {
+			return nil, err
+		}
+		collector := tomlCollector{parser: &parser, arrayTables: map[string]int{}, fragment: true}
+		if target != nil {
+			// Only the value is written, so the key of the table is kept as written
+			collector.base = valueRange.start
+			collector.value(node.Value(), appendToPath(t.keyPair.table, strings.Join(keys, ".")), keys[len(keys)-1])
+			override := &tomlFragment{text: []byte(text[valueRange.start:valueRange.end]), entries: collector.entries}
+			fragment.overrides = append(fragment.overrides, tomlOverride{span: target.value, value: override})
+		} else {
+			if added.Len() > 0 {
+				added.WriteString(lineBreak)
+				added.WriteString(indent)
+			}
+			collector.base = pairRange.start - added.Len()
+			collector.keyValue(node, t.keyPair.table)
+			added.WriteString(text[pairRange.start:pairRange.end])
+			fragment.entries = append(fragment.entries, collector.entries...)
+		}
+		for _, entry := range collector.entries {
+			inserted = append(inserted, entry)
+		}
+	}
+
+	// Without added pairs, the pair of the key is removed, see span
+	if added.Len() > 0 {
+		fragment.text = added.Bytes()
+	}
+	t.fragment = fragment
+	return inserted, nil
+}
+
+// tablePairs returns the key/value pairs of the section of the document containing the pair starting at offset: the
+// pairs between the table header before it and the next one
+func tablePairs(source []byte, offset int) []tomlTablePair {
+	var pairs []tomlTablePair
+	found := false
+	parser := unstable.Parser{}
+	parser.Reset(source)
+	for parser.NextExpression() {
+		node := parser.Expression()
+		if node.Kind != unstable.KeyValue {
+			if found {
+				break
+			}
+			pairs = pairs[:0]
+			continue
+		}
+		pairRange, valueRange := pairRanges(node, source)
+		if pairRange.start == offset {
+			found = true
+			continue
+		}
+		pairs = append(pairs, tomlTablePair{keys: tomlKeys(node), pair: pairRange, value: valueRange})
+	}
+	return pairs
+}
+
+// overriddenPair returns the pair of the table with the keys, or nil if the table has none. Pairs with dotted keys,
+// e.g. pool.size, and inline tables define subtables, which a fragment used as a key cannot be merged into, so a pair
+// whose keys start with the other's keys is an error. The common keys are part of the file, so the error names them.
+func overriddenPair(pairs []tomlTablePair, keys []string) (*tomlTablePair, error) {
+	for i, pair := range pairs {
+		if slices.Equal(pair.keys, keys) {
+			return &pairs[i], nil
+		}
+		shorter := min(len(pair.keys), len(keys))
+		if slices.Equal(pair.keys[:shorter], keys[:shorter]) {
+			return nil, fmt.Errorf("the fragment and the table both define %s, one of them with dotted keys within it; "+
+				"a fragment used as a key in a TOML file only replaces the values of keys written the same way",
+				strings.Join(keys[:shorter], "."))
+		}
+	}
+	return nil, nil
+}
+
+// singleKey returns whether the key of the key/value pair has one part only, i.e. is no dotted key
+func singleKey(node *unstable.Node) bool {
+	keys := node.Key()
+	return keys.Next() && keys.IsLast()
+}
+
+// tomlKeys returns the parts of the key of a key/value pair, e.g. pool and size for pool.size
+func tomlKeys(node *unstable.Node) []string {
+	var keys []string
+	for it := node.Key(); it.Next(); {
+		keys = append(keys, string(it.Node().Data))
+	}
+	return keys
+}
+
+// pairRanges returns the range of the key/value pair and of its value. Arrays and inline tables have no range,
+// so the value starts after the = following the last key and ends with the pair.
+func pairRanges(node *unstable.Node, source []byte) (pair tomlRange, value tomlRange) {
+	pair = tomlRange{start: int(node.Raw.Offset), end: int(node.Raw.Offset + node.Raw.Length)}
+	var last *unstable.Node
+	for it := node.Key(); it.Next(); {
+		last = it.Node()
+	}
+	// The raw range of a quoted key includes its quotes
+	start := int(last.Raw.Offset + last.Raw.Length)
+	for start < pair.end && (source[start] == ' ' || source[start] == '\t' || source[start] == '=') {
+		start++
+	}
+	return pair, tomlRange{start: start, end: pair.end}
+}
+
+// pairLayout returns the line break of the document and the indentation of the pair starting at offset, which
+// separate the key/value pairs a fragment used as a key adds
+func pairLayout(source []byte, offset int) (lineBreak string, indent string) {
+	lineStart := bytes.LastIndexByte(source[:offset], '\n') + 1
+	lineBreak = "\n"
+	if i := bytes.IndexByte(source, '\n'); i > 0 && source[i-1] == '\r' {
+		lineBreak = "\r\n"
+	}
+	return lineBreak, string(source[lineStart:offset])
+}
+
 // tomlFragmentKey is the key a fragment is parsed with, since a TOML document consists of key/value pairs
 const tomlFragmentKey = "v = "
 
@@ -152,7 +343,7 @@ func parseTomlFragment(text string, path string, key string, pairValue bool) (*t
 	parser.NextExpression()
 	pair := parser.Expression()
 	end := int(pair.Raw.Offset + pair.Raw.Length)
-	collector := tomlCollector{parser: &parser, arrayTables: map[string]int{}, fragment: true}
+	collector := tomlCollector{parser: &parser, arrayTables: map[string]int{}, fragment: true, base: len(tomlFragmentKey)}
 	collector.value(pair.Value(), path, key)
 
 	if parser.NextExpression() {
@@ -186,11 +377,14 @@ func (t *TomlConfigEntry) changed() bool {
 	return t.fragment != nil || t.typed != "" || t.val != t.original
 }
 
-// span returns the range of the source that is replaced by the entry: the string or key,
-// or the whole key/value pair for an empty fragment, see removedPair
+// span returns the range of the source that is replaced by the entry: the string or key, the whole key/value pair
+// for an empty fragment, see removedPair, or the key/value pair of a key replaced by the pairs a fragment adds
 func (t *TomlConfigEntry) span(source []byte) tomlRange {
-	if t.fragment != nil && t.fragment.text == nil {
+	switch {
+	case t.fragment != nil && t.fragment.text == nil:
 		return removedPair(source, t.pair)
+	case t.fragment != nil && t.isKey:
+		return t.pair
 	}
 	return tomlRange{start: t.offset, end: t.offset + len(t.raw)}
 }
@@ -249,7 +443,7 @@ func (t *TomlFileHandler) Read(source io.Reader) error {
 
 	parser := unstable.Parser{}
 	parser.Reset(t.data)
-	collector := tomlCollector{parser: &parser, arrayTables: map[string]int{}}
+	collector := tomlCollector{parser: &parser, arrayTables: map[string]int{}, data: t.data}
 	for parser.NextExpression() {
 		collector.expression(parser.Expression())
 	}
@@ -279,14 +473,38 @@ func (t *TomlFileHandler) Write(destination io.Writer) error {
 		result.Write(utf8BOM)
 	}
 
+	keyFragments, err := t.checkOverrides()
+	if err != nil {
+		return err
+	}
 	if keyChanged := spliceToml(&result, t.data, t.entries); keyChanged {
-		if err := checkRenamedKeys(bytes.TrimPrefix(result.Bytes(), utf8BOM)); err != nil {
+		if err := checkRenamedKeys(bytes.TrimPrefix(result.Bytes(), utf8BOM), keyFragments); err != nil {
 			return err
 		}
 	}
 
-	_, err := destination.Write(result.Bytes())
+	_, err = destination.Write(result.Bytes())
 	return err
+}
+
+// checkOverrides returns whether fragments are merged into tables, and an error if two of them replace the same value,
+// since only one of them could be written
+func (t *TomlFileHandler) checkOverrides() (bool, error) {
+	keyFragments := false
+	overridden := map[int]bool{}
+	for _, entry := range t.entries {
+		if entry.fragment == nil || !entry.isKey {
+			continue
+		}
+		keyFragments = true
+		for _, override := range entry.fragment.overrides {
+			if overridden[override.span.start] {
+				return true, fmt.Errorf("two fragments used as keys replace the value on line %d", bytes.Count(t.data[:override.span.start], []byte("\n"))+1)
+			}
+			overridden[override.span.start] = true
+		}
+	}
+	return keyFragments, nil
 }
 
 // spliceToml writes the source with the changed entries replaced to the result and returns whether a key changed,
@@ -297,15 +515,24 @@ func spliceToml(result *bytes.Buffer, source []byte, entries []*TomlConfigEntry)
 	type replacement struct {
 		entry *TomlConfigEntry
 		span  tomlRange
+		// override is the value replacing the span for the overrides of a fragment used as a key, see tomlOverride
+		override *tomlFragment
 	}
 	var replacements []replacement
 	for _, entry := range entries {
 		if entry.changed() {
-			replacements = append(replacements, replacement{entry, entry.span(source)})
+			replacements = append(replacements, replacement{entry: entry, span: entry.span(source)})
+			if entry.fragment != nil {
+				for _, override := range entry.fragment.overrides {
+					replacements = append(replacements, replacement{entry: entry, span: override.span, override: override.value})
+				}
+			}
 		}
 	}
+	// A replaced value contains the entry of its string, which has the same span, so overrides come first
 	slices.SortStableFunc(replacements, func(a, b replacement) int {
-		return cmp.Or(cmp.Compare(a.span.start, b.span.start), cmp.Compare(b.span.end, a.span.end))
+		return cmp.Or(cmp.Compare(a.span.start, b.span.start), cmp.Compare(b.span.end, a.span.end),
+			cmp.Compare(boolRank(a.override == nil), boolRank(b.override == nil)))
 	})
 
 	keyChanged := false
@@ -315,27 +542,43 @@ func spliceToml(result *bytes.Buffer, source []byte, entries []*TomlConfigEntry)
 			continue
 		}
 		result.Write(source[written:r.span.start])
-		keyChanged = r.entry.write(result) || r.entry.isKey || keyChanged
+		if r.override != nil {
+			keyChanged = spliceToml(result, r.override.text, r.override.entries) || keyChanged
+		} else {
+			keyChanged = r.entry.write(result) || r.entry.isKey || keyChanged
+		}
 		written = r.span.end
 	}
 	result.Write(source[written:])
 	return keyChanged
 }
 
-// checkRenamedKeys returns an error if the document with renamed keys is invalid, e.g. because a key is defined twice.
-// The keys may contain values of placeholders, so the message of go-toml naming the key is only included if values
-// are allowed in errors, see filter.SetValuesInErrors.
-func checkRenamedKeys(data []byte) error {
+// boolRank returns 0 for false and 1 for true, to sort by a condition
+func boolRank(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// checkRenamedKeys returns an error if the document with renamed keys or with fragments merged into tables is invalid,
+// e.g. because a key is defined twice. The keys may contain values of placeholders, so the message of go-toml naming
+// the key is only included if values are allowed in errors, see filter.SetValuesInErrors.
+func checkRenamedKeys(data []byte, keyFragments bool) error {
 	var document map[string]any
 	err := toml.Unmarshal(data, &document)
 	if err == nil {
 		return nil
 	}
 
-	if filter.ValuesInErrors() {
-		return fmt.Errorf("the renamed keys make the TOML document invalid: %w", err)
+	subject, reason := "the renamed keys", "a key is defined twice"
+	if keyFragments {
+		subject, reason = "the renamed keys or the fragments used as keys", "a key of a fragment is also defined by a table header"
 	}
-	return fmt.Errorf("the renamed keys make the TOML document invalid on line %d, e.g. because a key is defined twice", tomlLine(err))
+	if filter.ValuesInErrors() {
+		return fmt.Errorf("%s make the TOML document invalid: %w", subject, err)
+	}
+	return fmt.Errorf("%s make the TOML document invalid on line %d, e.g. because %s", subject, tomlLine(err), reason)
 }
 
 // tomlLine returns the line of an error of go-toml, which returns a DecodeError for every invalid document
@@ -360,6 +603,10 @@ type tomlCollector struct {
 	// fragment is set while collecting the entries of a fragment, which are collected for every value and positioned
 	// relative to the fragment's text, see parseTomlFragment
 	fragment bool
+	// base is subtracted from the offsets of the entries, so the entries of fragments are relative to their text
+	base int
+	// data is the document, which keys fragments can be merged into refer to, or nil for fragments
+	data []byte
 }
 
 // expression collects the entries of a top-level expression: a table header, an array of tables header or a key/value pair
@@ -373,7 +620,15 @@ func (c *tomlCollector) expression(node *unstable.Node) {
 		c.keyValue(node, c.table)
 		// The value is collected after the keys, so the last entry is the string, which an empty fragment may remove with its pair
 		if node.Value().Kind == unstable.String {
-			c.entries[len(c.entries)-1].pair = tomlRange{start: int(node.Raw.Offset), end: int(node.Raw.Offset + node.Raw.Length)}
+			pair := tomlRange{start: int(node.Raw.Offset), end: int(node.Raw.Offset + node.Raw.Length)}
+			c.entries[len(c.entries)-1].pair = pair
+			// A key a fragment can be merged into is the only key of its pair, so its entry directly precedes the value's
+			if len(node.Value().Data) == 0 && c.data != nil && len(c.entries) > 1 {
+				if key := c.entries[len(c.entries)-2]; key.isKey && key.offset == int(node.Raw.Offset) && singleKey(node) {
+					key.pair = pair
+					key.keyPair = &tomlKeyPair{data: c.data, table: c.table}
+				}
+			}
 		}
 	}
 }
@@ -447,10 +702,7 @@ func (c *tomlCollector) add(node *unstable.Node, key string, path string, isKey 
 	if node.Kind == unstable.String || isKey {
 		text = string(node.Data)
 	}
-	offset := int(node.Raw.Offset)
-	if c.fragment {
-		offset -= len(tomlFragmentKey)
-	}
+	offset := int(node.Raw.Offset) - c.base
 	c.entries = append(c.entries, &TomlConfigEntry{
 		key:      key,
 		path:     path,
