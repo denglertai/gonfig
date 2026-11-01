@@ -32,10 +32,10 @@ leaves all files unchanged.
 -f - reads the input from stdin, which needs -t, e.g. curl ... | gonfig config process -f - -t yaml.
 Its output goes to stdout, or to a file with -o <file>. New files get mode 0600 unless --mode is given.
 
---schema validates every processed JSON, YAML or TOML file against a JSON Schema before anything is written,
-so a file that does not match it leaves all files unchanged. --schema '<pattern>=<schema>' validates only the files
-matching the pattern, e.g. --schema 'app*.yaml=app.schema.json' --schema 'logging.yaml=logging.schema.json', and can be
-repeated. Without --schema, the schemas of the config file apply.`,
+--schema validates every processed JSON, YAML, TOML, dotenv or INI file against a JSON Schema before anything is
+written, so a file that does not match it leaves all files unchanged. --schema '<pattern>=<schema>' validates only the
+files matching the pattern, e.g. --schema 'app*.yaml=app.schema.json' --schema 'logging.yaml=logging.schema.json', and
+can be repeated. Without --schema, the schemas of the config file apply.`,
 	Args:             noArgs,
 	TraverseChildren: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -199,7 +199,7 @@ func init() {
 
 	processCmd.Flags().BoolP("overwrite", "w", false, "Controls if an already existing output file may be overwritten (defaults to false). Not needed for -i (--inline)")
 
-	processCmd.Flags().StringArray("schema", nil, "JSON Schema file the processed files have to match, or <pattern>=<schema> for the files matching the pattern; can be repeated. JSON, YAML and TOML files only. Nothing is written if a file does not match")
+	processCmd.Flags().StringArray("schema", nil, "JSON Schema file the processed files have to match, or <pattern>=<schema> for the files matching the pattern; can be repeated. JSON, YAML, TOML, dotenv and INI files only. Nothing is written if a file does not match")
 
 	processCmd.Flags().String("mode", "", "File mode of the output files in octal, e.g. 0600 (defaults to the mode of an existing output file, or of the input file for new ones)")
 

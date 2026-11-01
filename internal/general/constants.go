@@ -20,4 +20,10 @@ const (
 	PLAIN FileType = "plain"
 	// TOML represents a TOML file
 	TOML FileType = "toml"
+	// ENV represents a dotenv file, e.g. .env
+	ENV FileType = "env"
+	// DOTENV is another name of ENV for -t
+	DOTENV FileType = "dotenv"
+	// INI represents an INI file
+	INI FileType = "ini"
 )

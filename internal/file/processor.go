@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path"
+	"slices"
 	"strings"
 
 	"github.com/denglertai/gonfig/internal/filter"
@@ -69,6 +70,10 @@ func NewFileProcessor(fileName string, fileType general.FileType, output io.Writ
 		// strip the leading dot; files without an extension yield an undefined type
 		ext := strings.TrimPrefix(path.Ext(fileName), ".")
 		fileType = general.FileType(ext)
+		// Dotenv files per environment are named like .env.production, unless their extension is a known type
+		if strings.HasPrefix(path.Base(fileName), ".env.") && !slices.Contains(supportedTypes, general.FileType(strings.ToLower(ext))) {
+			fileType = general.ENV
+		}
 		logging.Debug("File type not provided, using the file's extension", "file", fileName, "type", fileType)
 	}
 	// Types and extensions are matched case-insensitively, e.g. C.YAML or -t JSON
@@ -433,6 +438,10 @@ func appendToPath(path string, key string) string {
 	return path + "." + key
 }
 
+// supportedTypes are the file types getFileProcessor has a handler for
+var supportedTypes = []general.FileType{general.JSON, general.YAML, general.YML, general.XML, general.PROPERTIES,
+	general.TOML, general.ENV, general.DOTENV, general.INI, general.PLAIN}
+
 // getFileProcessor returns the file processor based on the file type
 func (fp *FileProcessor) getFileProcessor() (ConfigFileHandler, error) {
 	switch fp.FileType {
@@ -448,6 +457,10 @@ func (fp *FileProcessor) getFileProcessor() (ConfigFileHandler, error) {
 		return NewPropertiesConfigFileHandler(), nil
 	case general.TOML:
 		return NewTomlConfigFileHandler(), nil
+	case general.ENV, general.DOTENV:
+		return NewDotenvConfigFileHandler(), nil
+	case general.INI:
+		return NewIniConfigFileHandler(), nil
 	case general.PLAIN:
 		return NewPlainFileProcessor(), nil
 	case general.Undefined:
@@ -455,7 +468,7 @@ func (fp *FileProcessor) getFileProcessor() (ConfigFileHandler, error) {
 			"e.g. -t plain to process any text file line by line", fp.FileName)
 	default:
 		// Unknown extensions are not processed as plain text automatically, so typos like c.yam fail
-		return nil, fmt.Errorf("unsupported file type %q of %s; supported are json, yaml, yml, xml, properties, toml and plain; "+
+		return nil, fmt.Errorf("unsupported file type %q of %s; supported are json, yaml, yml, xml, properties, toml, env, ini and plain; "+
 			"use -t plain to process any text file line by line", fp.FileType, fp.FileName)
 	}
 }

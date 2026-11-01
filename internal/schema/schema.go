@@ -24,7 +24,7 @@ import (
 	"golang.org/x/text/message"
 )
 
-// Schema is a compiled JSON Schema, which processed JSON, YAML and TOML files are validated against
+// Schema is a compiled JSON Schema, which processed JSON, YAML, TOML, dotenv and INI files are validated against
 type Schema struct {
 	schema *jsonschema.Schema
 	// name is the path of the schema file as given, which names it in messages
@@ -238,8 +238,24 @@ func decode(fileType general.FileType, data []byte) ([]any, error) {
 		}
 		return []any{normalize(document)}, nil
 	default:
-		return nil, fmt.Errorf("files of type %s cannot be validated, only JSON, YAML and TOML files", fileType)
+		if decoder, ok := decoders[fileType]; ok {
+			document, err := decoder(data)
+			if err != nil {
+				return nil, err
+			}
+			return []any{document}, nil
+		}
+		return nil, fmt.Errorf("files of type %s cannot be validated, only JSON, YAML, TOML, dotenv and INI files", fileType)
 	}
+}
+
+// decoders decode the file types whose parsers belong to the file package, which depends on this package
+var decoders = map[general.FileType]func(data []byte) (any, error){}
+
+// RegisterDecoder registers the decoder of a file type, which returns the document as the values the validator expects,
+// see decode. It is called by the packages parsing the type when they are initialized.
+func RegisterDecoder(fileType general.FileType, decoder func(data []byte) (any, error)) {
+	decoders[fileType] = decoder
 }
 
 // normalize converts the decoded values the validator does not support: mappings with keys other than strings,

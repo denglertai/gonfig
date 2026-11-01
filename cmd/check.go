@@ -26,9 +26,10 @@ Several files are checked with -f per file or glob patterns like -f 'conf/*.yaml
 The check fails, with exit code 1, if processing a file would fail or if a variable is not set
 and the placeholder provides no default, independent of --fail-on-missing.
 
---schema validates the processed JSON, YAML and TOML files against a JSON Schema and reports each part that does
-not match it as an error. --schema '<pattern>=<schema>' validates only the files matching the pattern, and can be
-repeated to validate different files against different schemas; without --schema, the schemas of the config file apply. Files that fail the check otherwise are not validated, which the report states.
+--schema validates the processed JSON, YAML, TOML, dotenv and INI files against a JSON Schema and reports each part
+that does not match it as an error. Files that fail the check otherwise are not validated, which the report states.
+--schema '<pattern>=<schema>' validates only the files matching the pattern, and can be repeated to validate different
+files against different schemas; without --schema, the schemas of the config file apply.
 
 --diff adds a unified diff of the changes processing would make to the report of each file. The results of
 placeholders and the values inserted by fragments are shown as *** unless --log-values is set.`,
@@ -273,7 +274,7 @@ func init() {
 
 	checkCmd.Flags().StringP("output", "o", "text", "Format of the report: text or json")
 
-	checkCmd.Flags().StringArray("schema", nil, "JSON Schema file the processed files have to match, or <pattern>=<schema> for the files matching the pattern; can be repeated. JSON, YAML and TOML files only")
+	checkCmd.Flags().StringArray("schema", nil, "JSON Schema file the processed files have to match, or <pattern>=<schema> for the files matching the pattern; can be repeated. JSON, YAML, TOML, dotenv and INI files only")
 
 	checkCmd.Flags().Bool("diff", false, "Show the changes processing would make as a unified diff, with values masked unless --log-values is set")
 }

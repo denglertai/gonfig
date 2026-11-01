@@ -145,7 +145,27 @@ func TestValidateErrors(t *testing.T) {
 	}
 
 	_, err := s.Validate(general.PROPERTIES, nil)
-	assert.EqualError(t, err, "files of type properties cannot be validated, only JSON, YAML and TOML files")
+	assert.EqualError(t, err, "files of type properties cannot be validated, only JSON, YAML, TOML, dotenv and INI files")
+}
+
+// TestRegisterDecoder checks that registered decoders validate their file type, with their errors returned
+func TestRegisterDecoder(t *testing.T) {
+	const fileType general.FileType = "test"
+	RegisterDecoder(fileType, func(data []byte) (any, error) {
+		if len(data) == 0 {
+			return nil, assert.AnError
+		}
+		return map[string]any{"value": string(data)}, nil
+	})
+	t.Cleanup(func() { delete(decoders, fileType) })
+
+	s := writeSchema(t, `{"properties": {"value": {"const": "a"}}}`)
+	violations, err := s.Validate(fileType, []byte("b"))
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"value: value must be 'a'"}, violationStrings(violations))
+
+	_, err = s.Validate(fileType, nil)
+	assert.ErrorIs(t, err, assert.AnError)
 }
 
 // TestDescribe checks that values are only part of the messages if values are allowed in errors

@@ -154,6 +154,18 @@ list: ["${PORT | to_int}", "${ENABLED | to_bool}"]
 			content:  "port=${PORT | to_int}\nwhole=${WHOLE | to_float}\nenabled=${ENABLED | to_bool}\n",
 		},
 		{
+			name:     "dotenv",
+			fileType: general.ENV,
+			env:      env,
+			content:  "PORT=${PORT | to_int}\nWHOLE=\"${WHOLE | to_float}\"\nENABLED='${ENABLED | to_bool}'\n",
+		},
+		{
+			name:     "ini",
+			fileType: general.INI,
+			env:      env,
+			content:  "[server]\nport = ${PORT | to_int}\nwhole = \"${WHOLE | to_float}\"\n",
+		},
+		{
 			name:     "toml",
 			fileType: general.TOML,
 			env:      env,
@@ -306,6 +318,18 @@ $${NAME}: keys are unescaped as well
 			fileType: general.PROPERTIES,
 			env:      env,
 			content:  "spring.name=$${NAME}\nname=${NAME}\n",
+		},
+		{
+			name:     "dotenv",
+			fileType: general.ENV,
+			env:      env,
+			content:  "ESCAPED=$${NAME}\nMIXED=\"$${NAME} is ${NAME}\"\n",
+		},
+		{
+			name:     "ini",
+			fileType: general.INI,
+			env:      env,
+			content:  "[app]\nescaped = $${NAME}\nmixed = \"$${NAME} is ${NAME}\"\n",
 		},
 		{
 			name:     "toml",

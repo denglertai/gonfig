@@ -132,7 +132,7 @@ func loadSchemas(cmd *cobra.Command, files []string, fileType general.FileType) 
 			processor := newFileProcessor(cmd, name, fileType, io.Discard)
 			switch processor.FileType {
 			case general.XML, general.PROPERTIES, general.PLAIN:
-				return nil, fmt.Errorf("%s validates JSON, YAML and TOML files only, not %s of type %s", rule.source, processor.FileName, processor.FileType)
+				return nil, fmt.Errorf("%s validates JSON, YAML, TOML, dotenv and INI files only, not %s of type %s", rule.source, processor.FileName, processor.FileType)
 			}
 
 			sch, ok := loaded[rule.path]

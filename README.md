@@ -27,19 +27,19 @@ czNjciZ0
 
 ## Features
 
-| | YAML | JSON | XML | Properties | TOML | Plain text |
-| --- | --- | --- | --- | --- | --- | --- |
-| File extensions | `.yaml`, `.yml` | `.json` | `.xml` | `.properties` | `.toml` | any, with `-t plain` |
-| Placeholders in values | ✅ | ✅ | ✅ element text, CDATA and attributes | ✅ | ✅ strings, also within arrays and inline tables | ✅ every line |
-| Placeholders in keys | ✅ | ✅ | ❌ | ❌ | ✅ including table headers | ✅ |
-| [Filters](./FILTERS.md) and [plugins](./PLUGINS.md) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Comments preserved | ✅ | – | ✅ | ✅ | ✅ | ✅ |
-| Key order preserved | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Formatting preserved | ✅ including multiple documents | ❌ indented with 2 spaces | ✅ | ✅ except values with placeholders spanning several lines | ✅ | ✅ |
-| Line endings and BOM preserved | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| [Fragments](./FILTERS.md#fragments) | ✅ values and keys | ✅ values and keys | ✅ element content | ❌ | ✅ values | ❌ |
-| [Typed values](./FILTERS.md#types) | ✅ with `to_int`, `to_float`, `to_bool` | ✅ with `to_int`, `to_float`, `to_bool` | ❌ text | ❌ text | ✅ with `to_int`, `to_float`, `to_bool` | ❌ text |
-| [Schema validation](#schema-validation) | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
+| | YAML | JSON | XML | Properties | TOML | dotenv | INI | Plain text |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| File extensions | `.yaml`, `.yml` | `.json` | `.xml` | `.properties` | `.toml` | `.env`, `.env.*`, `*.env` | `.ini` | any, with `-t plain` |
+| Placeholders in values | ✅ | ✅ | ✅ element text, CDATA and attributes | ✅ | ✅ strings, also within arrays and inline tables | ✅ unquoted and quoted | ✅ | ✅ every line |
+| Placeholders in keys | ✅ | ✅ | ❌ | ❌ | ✅ including table headers | ❌ | ❌ | ✅ |
+| [Filters](./FILTERS.md) and [plugins](./PLUGINS.md) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Comments preserved | ✅ | – | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Key order preserved | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Formatting preserved | ✅ including multiple documents | ❌ indented with 2 spaces | ✅ | ✅ except values with placeholders spanning several lines | ✅ | ✅ except values with placeholders spanning several lines | ✅ | ✅ |
+| Line endings and BOM preserved | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| [Fragments](./FILTERS.md#fragments) | ✅ values and keys | ✅ values and keys | ✅ element content | ❌ | ✅ values | ❌ | ❌ | ❌ |
+| [Typed values](./FILTERS.md#types) | ✅ with `to_int`, `to_float`, `to_bool` | ✅ with `to_int`, `to_float`, `to_bool` | ❌ text | ❌ text | ✅ with `to_int`, `to_float`, `to_bool` | ❌ text | ❌ text | ❌ text |
+| [Schema validation](#schema-validation) | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ object of strings | ✅ object of sections | ❌ |
 
 ## Installation
 
@@ -293,6 +293,59 @@ password = "it's secret"
 Only the strings and keys whose value changes are rewritten, everything else is written as it was read.
 Changed strings keep their quotes where possible: the literal string `'${DB_PASSWORD}'` becomes a basic string, since its value contains a `'`.
 
+### dotenv
+
+`.env` files, e.g. of Docker Compose, and files per environment like `.env.production`:
+
+`.env`:
+```sh
+# Database settings
+DB_HOST=${DB_HOST}
+DB_PASSWORD="${DB_PASSWORD}" # double-quoted values may contain line breaks
+API_KEY='${API_KEY}'
+LOG_LEVEL=${LOG_LEVEL | default(info)}
+```
+
+```console
+$ DB_HOST=db.internal DB_PASSWORD='s3cret"' API_KEY="it's" gonfig config process -f .env
+# Database settings
+DB_HOST=db.internal
+DB_PASSWORD="s3cret\"" # double-quoted values may contain line breaks
+API_KEY="it's"
+LOG_LEVEL=info
+```
+
+The common subset of the dotenv implementations is supported: `KEY=value` lines, optionally preceded by `export`, and comments starting with `#`. Unquoted values end at a `#` after whitespace, single-quoted values have no escapes, and double-quoted values have the escapes `\n`, `\r`, `\t`, `\\` and `\"` and may span several lines.
+Changed values keep their quotes where possible and are escaped as they require. Single-quoted values containing a `'` and unquoted values that would be read differently, e.g. because they contain a `#`, quotes, a backslash or a line break, become double-quoted values.
+Other lines fail, so nothing is lost silently.
+
+### INI
+
+`app.ini`:
+```ini
+; Database settings
+[database]
+host = ${DB_HOST}
+password = "${DB_PASSWORD}" ; quotes are kept
+
+[logging]
+level = ${LOG_LEVEL | default(info)}
+```
+
+```console
+$ DB_HOST=db.internal DB_PASSWORD='s3cret"' gonfig config process -f app.ini
+; Database settings
+[database]
+host = db.internal
+password = "s3cret\"" ; quotes are kept
+
+[logging]
+level = info
+```
+
+INI dialects differ, so the common subset is supported: `[section]` headers, `key = value` and `key: value` pairs, and comments starting with `;` or `#`. Entries are named `section.key`, e.g. `database.host` in `config check`.
+Unquoted values are read up to the end of the line, so an inline comment is part of the value and kept, and written as they are: a line break in an unquoted value fails. Double-quoted values may be followed by a comment and have the same escapes as in dotenv files. Lines without a separator, e.g. keys without a value, are kept as read.
+
 ## Use cases
 
 **Container entrypoints:** Render the config files of an application from environment variables when the container starts, then start the application:
@@ -333,7 +386,7 @@ Binaries installed with `go install` print the version only, and the commit is m
 
 ### config
 
-`gonfig config` works with JSON, YAML, XML, properties and TOML files, as well as plain text files (`-t plain`).
+`gonfig config` works with JSON, YAML, XML, properties, TOML, dotenv (`-t env`) and INI files, as well as plain text files (`-t plain`).
 
 It has two subcommands: `process` processes the given config files and is described below, while [`check`](#check) reports missing variables and errors without writing anything.
 
@@ -483,7 +536,7 @@ database:
 ```
 
 - **Processed output:** the result is validated, not the template, so placeholders need to produce the type the schema expects. Values are strings unless a [typed filter](./FILTERS.md#types) like `to_int` makes up the whole value: without it, the example fails with `database.port: got string, want integer`.
-- **File types:** JSON, YAML and TOML files. Every document of a YAML file is validated, and violations name the document, e.g. `document 2: database.port`. XML, properties and plain text files are rejected before any file is processed. TOML dates and times are validated as strings.
+- **File types:** JSON, YAML, TOML, dotenv and INI files. Every document of a YAML file is validated, and violations name the document, e.g. `document 2: database.port`. XML, properties and plain text files are rejected before any file is processed. TOML dates and times are validated as strings. Dotenv files are validated as an object of strings, and INI files as an object of sections, which are objects of strings, besides the keys before the first section.
 - **Several files:** every file is validated against the same schema, and all files are validated before any is written, so a single violation leaves all files unchanged. To validate files against different schemas, map them to their schemas as described [below](#different-schemas-per-file).
 - **Schemas:** any draft supported by the [validator](https://github.com/santhosh-tekuri/jsonschema), 2020-12 if `$schema` is not set. `$ref`s to other schema files are resolved relative to the schema file. Remote schemas are never fetched, so a `$ref` to an `http(s)` URL fails, except for the meta-schemas of json-schema.org, which are built in. `format` is asserted, e.g. `"format": "email"` rejects strings that are no email address.
 - **Values in messages:** values may be secrets, so messages name the failed requirement without the value, e.g. `value does not match pattern '^.{12,}$'`. Enable [`log-values`](#logging-notes) to include them.
