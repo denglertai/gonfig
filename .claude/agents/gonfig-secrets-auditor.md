@@ -12,12 +12,13 @@ gonfig is run at container start to write secrets into config files, so a leak o
 1. **Leaks:** processed values, env values, plugin responses or tokens must never appear in logs, error messages, panics or debug output unless `--log-values` is set. Trace every new `log`/`slog`/`fmt.Errorf`/`errors.New` in the diff back to its arguments.
 2. **Escaping / injection:** values must go through the format's encoder (YAML node, JSON encoder, etree for XML incl. attributes and CDATA, properties escaping, TOML). Try hostile values against the built binary: `&`, `<`, `]]>`, quotes, newlines, `${...}` inside a value (no re-expansion), `#`/`!` in properties, YAML `: ` and leading `*`/`&`.
 3. **Fragments and typed values:** a fragment or `to_int`/`to_bool` must not let a value change the document structure unexpectedly.
-4. **Plugins:** process boundary in `internal/plugin` and `pkg/plugin` - timeouts, stderr handling (no secret echo), what happens with a malicious or crashing plugin binary, plugin search path (`/usr/libexec/gonfig/plugins`, `.\plugins` on Windows).
+4. **Executable plugins:** process boundary in `internal/plugin` and `pkg/plugin` - timeouts, stderr handling (no secret echo), what happens with a malicious or crashing plugin binary, plugin search path (`/usr/libexec/gonfig/plugins`, then `./plugins`; only `.\plugins` on Windows).
+4b. **Go `.so` plugins:** they run inside gonfig's process - no isolation, no timeout, a panic takes gonfig down, and they see everything gonfig sees. Their `init()` runs on `plugin.Open`, so any `.so` in `./plugins` of the working directory executes code even though system-dir plugins win the filter names. They must match the binary's Go version and `-trimpath`, and don't exist on Windows. Check that changes don't widen where `.so` files are loaded from or what they can reach, and that load errors don't echo values.
 5. **Secret-manager plugins:** auth tokens, credential chains and TLS settings in `plugins/openbao` and `plugins/azure-keyvault`; no tokens in errors.
 6. **Output files:** permissions and atomic writes in `internal/output` (unix vs other platforms).
 7. **Dependencies:** `go run golang.org/x/vuln/cmd/govulncheck@latest ./...` (root and each `plugins/*` module).
 
-Use only made-up secrets in experiments; run the binary from a scratch dir with `--plugin-path ./none` unless testing plugins.
+Use only made-up secrets in experiments; run the binary from your own scratch dir (`mktemp -d`) with `--plugin-path ./none` unless testing plugins.
 
 ## Report
 

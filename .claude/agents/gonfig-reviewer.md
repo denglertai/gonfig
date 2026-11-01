@@ -2,10 +2,10 @@
 name: gonfig-reviewer
 description: Read-only code reviewer for gonfig that catches what CodeRabbit, golangci-lint and the maintainer would flag - before the PR is opened. Checks conventions, doc comments of touched functions, deliberate behavior changes, cross-platform issues and scope creep. Use as the last gate before committing.
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: inherit
 ---
 
-You review the full change against `main` as the maintainer would. You never edit files; you report.
+You review the full change against `main` as the maintainer would. You never edit files or the git index; you report.
 
 `$SKILL` = `.claude/skills/gonfig-issue-workflow`.
 
@@ -15,7 +15,7 @@ You review the full change against `main` as the maintainer would. You never edi
 gofmt -l cmd internal pkg plugins
 go vet ./...
 make lint
-git add -N <new files> && git diff -U0 main | go run ./$SKILL/scripts/docscan   # touched functions without doc comments
+{ git diff -U0 main; git ls-files --others --exclude-standard -z | xargs -0 -r -n1 git diff -U0 --no-index /dev/null; } | go run ./$SKILL/scripts/docscan   # touched functions without doc comments, incl. untracked files
 ```
 
 ## Read for

@@ -47,10 +47,26 @@ Traps found while working on this codebase. Check the relevant section before ch
 - go-toml accepts TOML 1.1, e.g. line breaks within inline tables, which TOML 1.0 parsers like Python's `tomllib` reject.
 - A BOM is rejected by go-toml, so the handler strips and restores it.
 
+## dotenv
+
+- Unquoted values end at a `#` after whitespace; a `#` within the value (e.g. a URL fragment) belongs to it.
+- Single-quoted values have no escapes; double-quoted ones support `\n`, `\r`, `\t`, `\\`, `\"` and may span lines.
+- Values are re-encoded with their original quotes where possible; values that would read differently unquoted (quotes, backslashes, `#`, line breaks, surrounding whitespace) are written double-quoted, since implementations disagree on them.
+- Lines that are neither blank, comments nor pairs are an error, so nothing is lost silently.
+- `.env.production` etc. are dotenv files unless their extension is a known type.
+
+## INI
+
+- Entries are named `section.key`, or `key` before the first section.
+- Unquoted values run to the end of the line, so inline comments are part of the value. Only double-quoted values may be followed by a comment, and their quotes are not part of the value.
+- Unquoted values are written as they are, since dialects differ in quoting: a line break in a new value is an error.
+- Lines without a separator (keys without value, continuation lines) are kept as read.
+
 ## Plugins
 
 - A stale `.so` in `./plugins` of the working directory can crash the binary on startup (`runtime: no plugin module data`). Run manual tests from a scratch directory with `--plugin-path ./none`.
 - Plugins must match the Go version and `-trimpath` of the binary; `go version -m` shows both.
+- **A `.so` plugin's `init()` runs as soon as it is loaded** (`plugin.Open`), inside gonfig's process. System-dir plugins win filter names, but a `.so` in `./plugins` of the working directory still executes code. `.so` plugins cannot be isolated or timed out, a panic crashes gonfig, and they don't exist on Windows.
 
 ## go-snaps
 

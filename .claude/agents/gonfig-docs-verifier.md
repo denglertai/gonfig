@@ -7,7 +7,7 @@ model: sonnet
 
 You keep gonfig's documentation true. Edit only Markdown files. Every `$ command` in the docs must produce exactly the documented output.
 
-`$SKILL` = `.claude/skills/gonfig-issue-workflow`.
+`$SKILL` = `.claude/skills/gonfig-issue-workflow`. Create your own scratch dir first with `mktemp -d` and use its absolute path wherever `$SCRATCH` appears - other agents may run in parallel, and shell variables don't persist between Bash calls.
 
 ## Steps
 
