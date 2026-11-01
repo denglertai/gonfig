@@ -504,12 +504,14 @@ func TestLoadAppConfig_KeysDifferingInCase(t *testing.T) {
 // resolved from the directory of the config file, except for patterns matching base names
 func TestLoadAppConfig_Schemas(t *testing.T) {
 	dir := t.TempDir()
+	// Paths like /etc are relative on Windows, which needs a drive, so the absolute paths are taken from another directory
+	abs := filepath.ToSlash(t.TempDir())
 	content := `schemas:
   - files: App*.yaml
     schema: schemas/app.schema.json
   - Files: conf.d/*.toml
-    Schema: /etc/schemas/logging.schema.json
-  - files: /etc/app/*.json
+    Schema: ` + abs + `/schemas/logging.schema.json
+  - files: ` + abs + `/app/*.json
     schema: app.schema.json
 `
 	if err := os.WriteFile(filepath.Join(dir, ".gonfig.yaml"), []byte(content), 0o644); err != nil {
@@ -521,8 +523,8 @@ func TestLoadAppConfig_Schemas(t *testing.T) {
 
 	want := []SchemaMapping{
 		{Files: "App*.yaml", Schema: filepath.Join(dir, "schemas/app.schema.json")},
-		{Files: filepath.Join(dir, "conf.d/*.toml"), Schema: "/etc/schemas/logging.schema.json"},
-		{Files: "/etc/app/*.json", Schema: filepath.Join(dir, "app.schema.json")},
+		{Files: filepath.Join(dir, "conf.d/*.toml"), Schema: abs + "/schemas/logging.schema.json"},
+		{Files: abs + "/app/*.json", Schema: filepath.Join(dir, "app.schema.json")},
 	}
 	if !reflect.DeepEqual(cfg.Schemas, want) {
 		t.Fatalf("expected schemas %+v, got %+v", want, cfg.Schemas)

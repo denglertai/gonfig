@@ -246,12 +246,14 @@ func TestProcessSchemaMappings(t *testing.T) {
 	t.Setenv("SCHEMA_TEST_LEVEL", "trace")
 	assert.NoError(t, os.WriteFile("conf.d/logging.yaml", []byte("level: ${SCHEMA_TEST_LEVEL}\n"), 0o644))
 	err := run("--schema", "app*.yaml="+configSchema, "--schema", "conf.d/*.yaml=logging.schema.json")
-	assert.EqualError(t, err, `conf.d/logging.yaml does not match the schema logging.schema.json:
+	// Errors name the file with the separator of the OS
+	loggingFile := filepath.FromSlash("conf.d/logging.yaml")
+	assert.EqualError(t, err, loggingFile+` does not match the schema logging.schema.json:
   - level: value must be one of 'debug', 'info'`)
 
 	// Every matching schema applies, so the config schema rejects the logging file as well
 	err = run("--schema", "*.yaml="+configSchema, "--schema", "conf.d/*.yaml=logging.schema.json")
-	assert.EqualError(t, err, "conf.d/logging.yaml does not match the schema "+configSchema+`:
+	assert.EqualError(t, err, loggingFile+" does not match the schema "+configSchema+`:
   - (root): missing property 'database'`)
 
 	// A pattern matching no file validates nothing, while a schema for every file includes the XML file
