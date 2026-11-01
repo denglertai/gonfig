@@ -7,7 +7,7 @@ description: End-to-end workflow for working on GitHub issues and pull requests 
 
 This is how issues are taken from "open" to "merged" in gonfig. Each step exists because skipping it caused a real problem before: untested doc examples that were wrong, a commit pushed after its PR had merged, quadratic algorithms only found by benchmarking, Codecov and CodeRabbit flagging lines that could have been checked locally.
 
-gonfig is a Go CLI that fills config files (YAML, JSON, XML, properties, plain text) with environment variables via placeholders like `${VAR | filter}`. Key packages:
+gonfig is a Go CLI that fills config files (YAML, JSON, XML, properties, TOML, dotenv, INI, plain text) with environment variables via placeholders like `${VAR | filter}`. Key packages:
 
 | Package | Responsibility |
 | --- | --- |
@@ -15,12 +15,17 @@ gonfig is a Go CLI that fills config files (YAML, JSON, XML, properties, plain t
 | `internal/filter` | Built-in filters, `filterMap`, unknown filter handling |
 | `internal/file` | One handler per file type, `FileProcessor` pipeline, typed values, fragments |
 | `internal/config` | Viper based config (`.gonfig.yaml`, `GONFIG_*`, flags) |
+| `internal/schema` | JSON Schema validation of processed files (`config check`) |
+| `internal/output` | Writing processed files atomically, file modes and owners |
+| `internal/diff` | Unified diffs of old and new content |
+| `internal/plugin`, `pkg/plugin` | Executable plugins over a protocol, Go `.so` plugins loaded in-process |
+| `plugins/*` | Secret-manager plugins (OpenBao, Azure Key Vault), separate Go modules |
 | `cmd` | Cobra commands, wiring config into the packages |
 | `cmd/benchmarks` | Benchmark suite (`make bench`, `make profile`) |
 
 User-facing docs live in `README.md`, `FILTERS.md`, `PLUGINS.md` and `cmd/benchmarks/README.md`.
 
-The helper scripts in `scripts/` are referenced as `$SKILL/scripts/...`, where `$SKILL` is `.claude/skills/gonfig-issue-workflow`.
+The helper scripts in `scripts/` are referenced as `$SKILL/scripts/...`, where `$SKILL` is `.claude/skills/gonfig-issue-workflow`. `$SCRATCH` stands for a scratch directory created with `mktemp -d`: use its absolute path, since shell variables don't persist between commands, and give each parallel agent its own.
 
 ## 1. Start from an issue
 
@@ -55,11 +60,12 @@ Run these before reporting the work as done. Report results faithfully, includin
 ### Tests
 
 ```bash
-gofmt -l cmd internal          # must print nothing
+gofmt -l cmd internal pkg plugins   # must print nothing
 go vet ./...
 make lint                      # golangci-lint as in CI, configured in .golangci.yml
 go test ./...
 go test -shuffle=on -count=3 ./cmd/ ./internal/...   # when package-level state is involved
+go test -race ./...            # as CI's race job, also in each plugins/* module, when state, plugins or pipes are involved
 ```
 
 Package-level state exists (allowed unknown filters, templates); tests that change it reset it with `t.Cleanup`.
@@ -126,7 +132,7 @@ Go measures coverage per package, so code in `internal/file` exercised only by `
 ### Doc comments of touched functions
 
 ```bash
-git add -N <new files> && git diff -U0 main | go run ./$SKILL/scripts/docscan
+{ git diff -U0 main; git ls-files --others --exclude-standard -z | xargs -0 -r -n1 git diff -U0 --no-index /dev/null; } | go run ./$SKILL/scripts/docscan   # incl. untracked files, without touching the index
 ```
 
 ### Benchmarks
@@ -134,7 +140,8 @@ git add -N <new files> && git diff -U0 main | go run ./$SKILL/scripts/docscan
 When touching hot paths (placeholder processing, file handlers, merging), compare against `main`:
 
 ```bash
-git worktree add "$SCRATCH/main-wt" main && cp -r cmd/benchmarks "$SCRATCH/main-wt/cmd/"   # if the suite is new
+git fetch origin main && git worktree add --detach "$SCRATCH/main-wt" origin/main   # detached, so it never blocks checking out main
+cp -r cmd/benchmarks "$SCRATCH/main-wt/cmd/"   # if the suite is new
 (cd "$SCRATCH/main-wt" && go test -run '^$' -bench . -benchmem -count=6 ./cmd/benchmarks > "$SCRATCH/old.txt")
 go test -run '^$' -bench . -benchmem -count=6 ./cmd/benchmarks > "$SCRATCH/new.txt"
 go run golang.org/x/perf/cmd/benchstat@latest "$SCRATCH/old.txt" "$SCRATCH/new.txt"
@@ -152,7 +159,7 @@ Ask before committing, pushing or opening a PR unless the user already asked for
 - Use conventional commits (`feat(file):`, `fix(value):`, `test:`, `docs:`, `perf:`, `chore(deps):`) with a body explaining why, `Closes #N`, a `BREAKING CHANGE:` footer when behavior changes incompatibly, and the attribution trailer the environment specifies. Split independent changes into separate commits.
 - PR description structure (see `references/pr-template.md`): Summary with a short example, Changes or Behavior, Behavior/Breaking change, Performance if relevant, Verification (what was run, with numbers), Related issues. Lead with breaking changes when there are any.
 
-Never use `git stash` casually in this repo: the user keeps old stashes. If you must stash, pop immediately and confirm with `git stash list` that only your entry was removed.
+`git stash` and `git add -A`/`--all`/`.` are denied in `.claude/settings.json`: the user keeps old stashes, and staging everything picks up unrelated files. To set work aside, commit it on a branch or use a worktree instead.
 
 ## 6. Handle PR feedback
 

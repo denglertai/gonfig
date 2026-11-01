@@ -26,7 +26,7 @@ go vet ./...
 go test ./...
 ```
 
-Run the feature end to end from a scratch dir: `go build -o "$SCRATCH/gonfig" . && cd "$SCRATCH" && VAR=x ./gonfig -l error --plugin-path ./none config process -f example.yaml`.
+Run the feature end to end from your own scratch dir (`mktemp -d`, absolute path in place of `$SCRATCH`): `go build -o "$SCRATCH/gonfig" . && cd "$SCRATCH" && VAR=x ./gonfig -l error --plugin-path ./none config process -f example.yaml`.
 
 ## Report
 

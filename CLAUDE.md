@@ -32,5 +32,5 @@ Small changes (typo, one-line fix, dependency bump) skip the agents: the lead do
 
 - Never put processed values or secrets into logs, errors, issues or PR text; use made-up secrets.
 - Run the binary from a scratch dir with `--plugin-path ./none -l error` unless plugins are under test.
-- No `git stash`, no `git add -A`, no commits or pushes - only the lead commits.
+- No `git stash`, no `git add -A`, no commits or pushes - only the lead commits. `.claude/settings.json` denies `git stash` and `git add -A`/`--all`/`.` for every session and agent.
 - Report results faithfully, including what was skipped.

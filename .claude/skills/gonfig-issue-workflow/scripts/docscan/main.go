@@ -5,7 +5,9 @@
 //
 //	git diff -U0 main | go run .claude/skills/gonfig-issue-workflow/scripts/docscan
 //
-// Untracked files are not part of git diff, so add them with `git add -N` first.
+// Untracked files are not part of git diff; append them without touching the index:
+//
+//	git ls-files --others --exclude-standard -z | xargs -0 -r -n1 git diff -U0 --no-index /dev/null
 package main
 
 import (

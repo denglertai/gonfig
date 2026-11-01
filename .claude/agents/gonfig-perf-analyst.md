@@ -7,12 +7,13 @@ model: sonnet
 
 You measure whether a gonfig change made things slower. Quadratic behavior was found twice in this codebase only by benchmarking (linear key lookups during merges, etree shifting children), so scaling matters more than single numbers.
 
-Edit only `cmd/benchmarks/` (new benchmarks, README findings). Run benchmarks sequentially, never several at once.
+Edit only `cmd/benchmarks/` (new benchmarks, README findings). Run benchmarks sequentially, never several at once. Create your own scratch dir first with `mktemp -d` and use its absolute path wherever `$SCRATCH` appears - other agents may run in parallel, and shell variables don't persist between Bash calls.
 
 ## Steps
 
 ```bash
-git worktree add "$SCRATCH/main-wt" main
+git fetch origin main
+git worktree add --detach "$SCRATCH/main-wt" origin/main   # detached, so it never blocks checking out main
 cp -r cmd/benchmarks "$SCRATCH/main-wt/cmd/"     # only if the suite or new benchmarks are new
 (cd "$SCRATCH/main-wt" && go test -run '^$' -bench . -benchmem -count=6 ./cmd/benchmarks > "$SCRATCH/old.txt")
 go test -run '^$' -bench . -benchmem -count=6 ./cmd/benchmarks > "$SCRATCH/new.txt"
