@@ -194,7 +194,9 @@ func writeCheckText(w io.Writer, reports checkReports) error {
 // writeCheckReportText writes the report of a file in a readable format
 func writeCheckReportText(sb *strings.Builder, report *file.CheckReport) {
 	if report.Error != "" {
-		fmt.Fprintf(sb, "%s: cannot be checked\n  error: %s\n%s\n", report.File, report.Error, checkSummary(report))
+		fmt.Fprintf(sb, "%s: cannot be checked\n  error: %s\n", report.File, report.Error)
+		writeSchemaNotValidated(sb, report)
+		fmt.Fprintf(sb, "%s\n", checkSummary(report))
 		return
 	}
 	fmt.Fprintf(sb, "%s: %s with placeholders\n", report.File, plural(len(report.Entries), "entry", "entries"))
@@ -219,13 +221,19 @@ func writeCheckReportText(sb *strings.Builder, report *file.CheckReport) {
 	for _, violation := range report.SchemaViolations {
 		fmt.Fprintf(sb, "  schema: %s\n", violation)
 	}
-	if report.SchemaValidated != nil && !*report.SchemaValidated {
-		sb.WriteString("  schema: not validated, since the file has other problems\n")
-	}
+	writeSchemaNotValidated(sb, report)
 
 	fmt.Fprintf(sb, "%s\n", checkSummary(report))
 	if report.Diff != nil {
 		sb.WriteString(*report.Diff)
+	}
+}
+
+// writeSchemaNotValidated writes that the file was not validated against the schema, if one applies to it, so a file
+// failing the check otherwise, including one that cannot be read, doesn't look like it matches the schema
+func writeSchemaNotValidated(sb *strings.Builder, report *file.CheckReport) {
+	if report.SchemaValidated != nil && !*report.SchemaValidated {
+		sb.WriteString("  schema: not validated, since the file has other problems\n")
 	}
 }
 

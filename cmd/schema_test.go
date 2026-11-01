@@ -102,6 +102,10 @@ func TestCheckSchema(t *testing.T) {
 `)
 	assert.NotContains(t, output, "schema: database")
 
+	output, err = runCheck(t, "database: [\n", "--schema", configSchemaPath(t))
+	assert.EqualError(t, err, "check failed: 0 missing variables, 1 error")
+	assert.Regexp(t, `cannot be checked\n  error: .+\n  schema: not validated, since the file has other problems\n0 missing variables, 1 error\n$`, output)
+
 	output, err = runCheck(t, "database:\n  host: ${SCHEMA_TEST_HOST}\n  port: 1\n", "--schema", configSchemaPath(t))
 	assert.NoError(t, err)
 	assert.NotContains(t, output, "schema:")
