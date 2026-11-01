@@ -194,9 +194,75 @@ c = """${FRAGMENT | fragment}""" # the comment is kept
 			fragment: "db-1, db-2",
 		},
 		{
-			name:     "error for a toml key",
+			name:     "toml key merged into its table",
+			fileType: general.TOML,
+			content: `[database]
+host = "localhost" # development
+port = 5432
+  pool = { size = 5 }
+  "${FRAGMENT | fragment}" = "" # environment overrides
+
+[logging]
+level = "info"
+`,
+			fragment: `host = "db.prod" # comments of the fragment are dropped
+pool = { size = 20, timeout = "${FRAGMENT_PORT}" }
+'user name' = "${FRAGMENT_SECRET}"
+replicas = ["db-1", "db-2"]
+`,
+		},
+		{
+			name:     "toml key overriding pairs only",
+			fileType: general.TOML,
+			content:  "\"${FRAGMENT | fragment}\" = \"\"\nhost = \"localhost\"\n[[servers]]\nhost = \"a\"\n",
+			fragment: "host = \"db.prod\"",
+		},
+		{
+			name:     "toml key in an array of tables",
+			fileType: general.TOML,
+			content:  "[[servers]]\nhost = \"a\"\n[[servers]]\nhost = \"b\"\n\"${FRAGMENT | fragment}\" = ''\n",
+			fragment: "host = \"c\"\nport = 80",
+		},
+		{
+			name:     "toml empty fragment as a key",
+			fileType: general.TOML,
+			content:  "[database]\nhost = \"localhost\"\n\"${FRAGMENT | fragment}\" = \"\"\n",
+			fragment: "",
+		},
+		{
+			name:     "error for a toml key with a dotted key of the table",
+			fileType: general.TOML,
+			content:  "[database]\npool.size = 5\n\"${FRAGMENT | fragment}\" = \"\"\n",
+			fragment: "pool = { size = 20 }",
+		},
+		{
+			name:     "error for a toml key defined by a table header",
+			fileType: general.TOML,
+			content:  "[database]\n\"${FRAGMENT | fragment}\" = \"\"\n[database.pool]\nsize = 5\n",
+			fragment: "pool = { size = 20 }",
+		},
+		{
+			name:     "error for a toml key fragment with a table header",
 			fileType: general.TOML,
 			content:  "[database]\n\"${FRAGMENT | fragment}\" = \"\"\n",
+			fragment: "host = \"db.prod\"\n[pool]\nsize = 20\n",
+		},
+		{
+			name:     "error for two toml keys overriding the same key",
+			fileType: general.TOML,
+			content:  "host = \"localhost\"\n\"${FRAGMENT | fragment}\" = \"\"\n\"${FRAGMENT | trim | fragment}\" = \"\"\n",
+			fragment: "host = \"db.prod\"",
+		},
+		{
+			name:     "error for a toml key with a value",
+			fileType: general.TOML,
+			content:  "[database]\n\"${FRAGMENT | fragment}\" = \"value\"\n",
+			fragment: "host = \"db.prod\"\n",
+		},
+		{
+			name:     "error for a toml key in a table header",
+			fileType: general.TOML,
+			content:  "[\"${FRAGMENT | fragment}\"]\nhost = \"localhost\"\n",
 			fragment: "host = \"db.prod\"\n",
 		},
 		{

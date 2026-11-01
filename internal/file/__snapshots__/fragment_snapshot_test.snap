@@ -258,7 +258,7 @@ FRAGMENT:
 a=1
 
 result:
-error: failed to process the value of key in config.properties: fragments are not supported here, only for YAML and JSON values and keys, TOML values and the content of XML elements
+error: failed to process the value of key in config.properties: fragments are not supported here, only for YAML, JSON and TOML values and keys and the content of XML elements
 ---
 
 [TestFragmentSnapshots/yaml_list_from_split - 1]
@@ -378,18 +378,6 @@ hosts = ["db-1","db-2"]
 nested = { hosts = ["db-1"," db-2"] }
 ---
 
-[TestFragmentSnapshots/error_for_a_toml_key - 1]
-file (config.toml):
-[database]
-"${FRAGMENT | fragment}" = ""
-
-FRAGMENT:
-host = "db.prod"
-
-result:
-error: failed to insert the fragment of database.${FRAGMENT | fragment} in config.toml: fragments are only supported as values in TOML files, not as keys
----
-
 [TestFragmentSnapshots/error_for_an_empty_toml_fragment_in_an_array - 1]
 file (config.toml):
 hosts = ["db-1", "${FRAGMENT | fragment}"]
@@ -422,4 +410,161 @@ FRAGMENT:
 
 result:
 error: failed to insert the fragment of settings in config.toml: invalid TOML fragment on line 1
+---
+
+[TestFragmentSnapshots/toml_key_merged_into_its_table - 1]
+file (config.toml):
+[database]
+host = "localhost" # development
+port = 5432
+  pool = { size = 5 }
+  "${FRAGMENT | fragment}" = "" # environment overrides
+
+[logging]
+level = "info"
+
+FRAGMENT:
+host = "db.prod" # comments of the fragment are dropped
+pool = { size = 20, timeout = "${FRAGMENT_PORT}" }
+'user name' = "${FRAGMENT_SECRET}"
+replicas = ["db-1", "db-2"]
+
+result:
+[database]
+host = "db.prod" # development
+port = 5432
+  pool = { size = 20, timeout = "8080" }
+  'user name' = "s3cret"
+  replicas = ["db-1", "db-2"] # environment overrides
+
+[logging]
+level = "info"
+---
+
+[TestFragmentSnapshots/toml_key_overriding_pairs_only - 1]
+file (config.toml):
+"${FRAGMENT | fragment}" = ""
+host = "localhost"
+[[servers]]
+host = "a"
+
+FRAGMENT:
+host = "db.prod"
+
+result:
+host = "db.prod"
+[[servers]]
+host = "a"
+---
+
+[TestFragmentSnapshots/toml_key_in_an_array_of_tables - 1]
+file (config.toml):
+[[servers]]
+host = "a"
+[[servers]]
+host = "b"
+"${FRAGMENT | fragment}" = ''
+
+FRAGMENT:
+host = "c"
+port = 80
+
+result:
+[[servers]]
+host = "a"
+[[servers]]
+host = "c"
+port = 80
+---
+
+[TestFragmentSnapshots/toml_empty_fragment_as_a_key - 1]
+file (config.toml):
+[database]
+host = "localhost"
+"${FRAGMENT | fragment}" = ""
+
+FRAGMENT:
+(empty)
+
+result:
+[database]
+host = "localhost"
+---
+
+[TestFragmentSnapshots/error_for_a_toml_key_with_a_dotted_key_of_the_table - 1]
+file (config.toml):
+[database]
+pool.size = 5
+"${FRAGMENT | fragment}" = ""
+
+FRAGMENT:
+pool = { size = 20 }
+
+result:
+error: failed to insert the fragment of database.${FRAGMENT | fragment} in config.toml: the fragment and the table both define pool, one of them with dotted keys within it; a fragment used as a key in a TOML file only replaces the values of keys written the same way
+---
+
+[TestFragmentSnapshots/error_for_a_toml_key_defined_by_a_table_header - 1]
+file (config.toml):
+[database]
+"${FRAGMENT | fragment}" = ""
+[database.pool]
+size = 5
+
+FRAGMENT:
+pool = { size = 20 }
+
+result:
+error: failed to write config.toml: the renamed keys or the fragments used as keys make the TOML document invalid on line 3, e.g. because a key of a fragment is also defined by a table header
+---
+
+[TestFragmentSnapshots/error_for_a_toml_key_fragment_with_a_table_header - 1]
+file (config.toml):
+[database]
+"${FRAGMENT | fragment}" = ""
+
+FRAGMENT:
+host = "db.prod"
+[pool]
+size = 20
+
+result:
+error: failed to insert the fragment of database.${FRAGMENT | fragment} in config.toml: invalid TOML fragment: a fragment used as a key must consist of key/value pairs, without table headers
+---
+
+[TestFragmentSnapshots/error_for_two_toml_keys_overriding_the_same_key - 1]
+file (config.toml):
+host = "localhost"
+"${FRAGMENT | fragment}" = ""
+"${FRAGMENT | trim | fragment}" = ""
+
+FRAGMENT:
+host = "db.prod"
+
+result:
+error: failed to write config.toml: two fragments used as keys replace the value on line 1
+---
+
+[TestFragmentSnapshots/error_for_a_toml_key_with_a_value - 1]
+file (config.toml):
+[database]
+"${FRAGMENT | fragment}" = "value"
+
+FRAGMENT:
+host = "db.prod"
+
+result:
+error: failed to insert the fragment of database.${FRAGMENT | fragment} in config.toml: a fragment used as a key in a TOML file must be the only key of a key/value pair outside inline tables, with an empty string as its value, e.g. "${X | fragment}" = ""
+---
+
+[TestFragmentSnapshots/error_for_a_toml_key_in_a_table_header - 1]
+file (config.toml):
+["${FRAGMENT | fragment}"]
+host = "localhost"
+
+FRAGMENT:
+host = "db.prod"
+
+result:
+error: failed to insert the fragment of ${FRAGMENT | fragment} in config.toml: a fragment used as a key in a TOML file must be the only key of a key/value pair outside inline tables, with an empty string as its value, e.g. "${X | fragment}" = ""
 ---

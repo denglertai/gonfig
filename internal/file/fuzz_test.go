@@ -315,6 +315,53 @@ func FuzzTomlFragment(f *testing.F) {
 	})
 }
 
+// FuzzTomlKeyFragment checks that a fragment used as a key is merged into its table as a shallow override: the pairs
+// of the fragment replace the pairs with the same key and are added otherwise, and the rest of the document is kept
+func FuzzTomlKeyFragment(f *testing.F) {
+	for _, seed := range []string{"a = 2", "b = { y = 2 }", "c = [1, # c\n  2]\nd.e = 'x'", "z = 1979-05-27 # c", "'a' = 3\n\"q\" = 4",
+		"b.y = 1", "[t2]\nx = 1", "a = 1\na = 2", ""} {
+		f.Add(seed)
+	}
+	const document = "[t]\na = 1 # c\nb = { x = 1 }\n  \"${X}\" = \"\" # c\nz = \"s\"\n[u]\nv = 1\n"
+	f.Fuzz(func(t *testing.T, text string) {
+		var fragment map[string]any
+		if toml.Unmarshal([]byte(text), &fragment) != nil {
+			t.Skip("not a valid document")
+		}
+
+		handler := NewTomlConfigFileHandler()
+		if err := handler.Read(strings.NewReader(document)); err != nil {
+			t.Fatal(err)
+		}
+		entries, _ := handler.Process()
+		for entry := range entries {
+			if entry.(*TomlConfigEntry).isKey {
+				if _, err := entry.(FragmentConfigEntry).SetFragment(filter.Fragment{Text: text}); err != nil {
+					t.Skip("rejected")
+				}
+			}
+		}
+
+		var output bytes.Buffer
+		if err := handler.Write(&output); err != nil {
+			t.Fatalf("fragment %q: %v", text, err)
+		}
+		var got map[string]any
+		if err := toml.Unmarshal(output.Bytes(), &got); err != nil {
+			t.Fatalf("the output of fragment %q cannot be read: %v\n%s", text, err, output.String())
+		}
+		var want map[string]any
+		if err := toml.Unmarshal([]byte(strings.Replace(document, "  \"${X}\" = \"\" # c\n", "", 1)), &want); err != nil {
+			t.Fatal(err)
+		}
+		table := want["t"].(map[string]any)
+		maps.Copy(table, fragment)
+		if !tomlValuesEqual(got, want) {
+			t.Fatalf("fragment %q is merged as %v, want %v\n%s", text, got, want, output.String())
+		}
+	})
+}
+
 // tomlValuesEqual returns whether two decoded TOML values are equal, including their types, e.g. 1 and "1" differ.
 // NaN equals NaN, and times are equal if they are the same instant with the same offset, since each parsed time
 // gets its own location.

@@ -551,7 +551,7 @@ Placeholder templates may be embedded into other text like any placeholder, and 
 
 The filter `fragment` inserts whole structures (fragments) into a config file instead of text, e.g. a list of YAML mappings or XML elements.
 A fragment is read like any value, from an environment variable or from a file referenced with `@path`.
-The file it is inserted into parses it in its own format, so YAML files take YAML fragments, JSON files take JSON fragments, TOML files take TOML values and XML files take XML fragments.
+The file it is inserted into parses it in its own format, so YAML files take YAML fragments, JSON files take JSON fragments, TOML files take TOML values, or key/value pairs for [keys](#fragments-as-keys), and XML files take XML fragments.
 JSON is valid YAML as well, so JSON fragments work in YAML files too.
 
 The position of the placeholder decides what happens.
@@ -667,7 +667,37 @@ The fragment is merged deeply:
 - **Other values**, like scalars and lists, are replaced by the ones of the fragment.
 - **Comments and key order** of the file are kept, and new keys are appended in the order of the fragment.
 
-In JSON files, the key has to have the value `null`, e.g. `"${DB_OVERRIDES | fragment}": null`. TOML files support fragments only as values, and XML files only as the content of elements.
+In JSON files, the key has to have the value `null`, e.g. `"${DB_OVERRIDES | fragment}": null`. XML files support fragments only as the content of elements.
+
+In TOML files, the key has to be the only key of a key/value pair with an empty string as its value, in a table, not in an inline table or a header. The fragment consists of key/value pairs, without table headers:
+
+`database.toml`:
+```toml
+[database]
+host = "localhost" # development
+port = 5432
+"${DB_OVERRIDES | fragment}" = ""
+```
+
+`db-prod.toml`:
+```toml
+host = "db.prod"
+pool = 20
+```
+
+```console
+$ DB_OVERRIDES=@db-prod.toml gonfig config process -f database.toml
+[database]
+host = "db.prod" # development
+port = 5432
+pool = 20
+```
+
+TOML files are edited in place, so the fragment is merged shallowly, within the table's section:
+
+- **Pairs with the same key** in the section, between the table's header and the next one, get the value of the fragment's pair. The key and comments stay as written, and a value that is an inline table is replaced as a whole.
+- **Other pairs** replace the pair of the placeholder, in the order of the fragment and with its indentation. A comment after the placeholder stays at the end of the last pair, while comments of the fragment are dropped. Without other pairs, the placeholder's pair is removed, like by an empty fragment.
+- **Subtables** can't be merged into: a key the section and the fragment both define, but one of them with dotted keys within it, like `pool.size = 5` and `pool = { size = 20 }`, fails. Keys the fragment adds that are defined elsewhere in the file, e.g. by a header like `[database.pool]`, make the document invalid, which fails as well. So do two fragments replacing the same value.
 
 ### Lists as fragments
 
@@ -802,7 +832,7 @@ b:
 - **Placeholders within fragments** are processed as well, e.g. a fragment may contain `${DB_PASSWORD | @secret}`. Fragments cannot contain further fragments.
 - **Empty fragments** replace a value by null, remove a key, remove a key/value pair of a TOML file or remove the content of an XML element.
 - **Formatting:** YAML fragments are written in block style. Quotes are only kept where they are needed to keep a string a string. TOML fragments are inserted as written.
-- **Errors:** Invalid fragments, fragments in properties, dotenv, INI or plain text files, fragments as TOML keys and fragments in XML attributes fail processing, so no output is written. The error of an invalid fragment names the format and, if known, the line, e.g. `invalid YAML fragment on line 3`. The parser's message may quote parts of the fragment, so it is only included with `log-values`, see [configuration](./README.md#configuration).
+- **Errors:** Invalid fragments, fragments in properties, dotenv, INI or plain text files, fragments as TOML keys outside the form described [above](#fragments-as-keys) and fragments in XML attributes fail processing, so no output is written. The error of an invalid fragment names the format and, if known, the line, e.g. `invalid YAML fragment on line 3`. The parser's message may quote parts of the fragment, so it is only included with `log-values`, see [configuration](./README.md#configuration).
 - **Templates:** Fragment files can be provided by [placeholder templates](#templates), e.g. with `default: "@/etc/app/logging.yaml"` and `${@logging | fragment}`.
 
 ## Recipes
