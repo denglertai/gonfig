@@ -3,7 +3,7 @@
 #
 # The binaries are linked against glibc for cgo (Go plugins), so the base provides glibc.
 # Once cgo is removed (#244), cgr.dev/chainguard/static suffices.
-FROM cgr.dev/chainguard/glibc-dynamic:latest@sha256:709673274b417a48f56374da8a7633ef7b2f5b27e34612ce98a335737318cc94
+FROM cgr.dev/chainguard/glibc-dynamic:latest@sha256:671a621016fb33812136dea6182b1db957996d3c8c618187aaf86abd9b14af53
 
 ARG TARGETPLATFORM
 
