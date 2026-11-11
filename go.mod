@@ -22,7 +22,7 @@ require (
 
 require (
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
-	github.com/gkampitakis/ciinfo v0.3.4 // indirect
+	github.com/gkampitakis/ciinfo v0.3.5 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/goccy/go-yaml v1.19.2 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
@@ -38,6 +38,6 @@ require (
 	github.com/tidwall/gjson v1.20.2 // indirect
 	github.com/tidwall/match v1.2.0 // indirect
 	github.com/tidwall/pretty v1.3.0 // indirect
-	github.com/tidwall/sjson v1.2.8 // indirect
+	github.com/tidwall/sjson v1.2.9 // indirect
 	golang.org/x/sys v0.50.0 // indirect
 )
