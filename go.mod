@@ -3,7 +3,7 @@ module github.com/denglertai/gonfig
 go 1.27
 
 // The Go version CI and releases are built with, read by actions/setup-go and updated by Renovate
-toolchain go1.27.3
+toolchain go1.27.4
 
 require (
 	github.com/beevik/etree v1.8.1
@@ -16,8 +16,8 @@ require (
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.12.1
 	go.yaml.in/yaml/v3 v3.0.6
-	golang.org/x/crypto v0.58.0
-	golang.org/x/text v0.43.0
+	golang.org/x/crypto v0.59.0
+	golang.org/x/text v0.44.0
 )
 
 require (
@@ -39,5 +39,5 @@ require (
 	github.com/tidwall/match v1.2.0 // indirect
 	github.com/tidwall/pretty v1.3.0 // indirect
 	github.com/tidwall/sjson v1.2.8 // indirect
-	golang.org/x/sys v0.49.0 // indirect
+	golang.org/x/sys v0.50.0 // indirect
 )

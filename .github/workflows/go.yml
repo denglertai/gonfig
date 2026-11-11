@@ -192,7 +192,7 @@ jobs:
     env:
       # Same version as release.yml and the Makefile, updated by Renovate
       # renovate: datasource=github-releases depName=goreleaser/goreleaser
-      GORELEASER_VERSION: v2.20.0
+      GORELEASER_VERSION: v2.20.1
 
     steps:
     - name: Checkout code
