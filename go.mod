@@ -3,7 +3,7 @@ module github.com/denglertai/gonfig
 go 1.27
 
 // The Go version CI and releases are built with, read by actions/setup-go and updated by Renovate
-toolchain go1.27.3
+toolchain go1.27.4
 
 require (
 	github.com/beevik/etree v1.8.1
