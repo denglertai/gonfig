@@ -21,11 +21,12 @@ Traps found while working on this codebase. Check the relevant section before ch
 - **The flag default only matters for `--help`** when `SetDefault` exists, so tests check flag defaults separately.
 - Nested maps (templates) can only come from `.gonfig.yaml`, not from flags or environment variables.
 
-## YAML (go.yaml.in/yaml/v3)
+## YAML (go.yaml.in/yaml/v4)
 
 - `@` cannot start a plain YAML value: template references like `filters: "@clean"` must be quoted.
 - Unquoted `${...}` within flow collections (`[...]`, `{...}`) is invalid YAML.
-- The encoder's event queue grows with the document; it allocates ~60% of the memory for large YAML files and cannot be fixed without changing the library.
+- The emitter's event queue (`emitter.events`) grows with the document; it allocates ~68% of the memory for large YAML files (memory profile, v4) and cannot be fixed without changing the library.
+- v4's `NewEncoder` wraps lines at 80 columns via `WithV3Defaults`, so gonfig uses `NewDumper` with `WithLineWidth(-1)`. Invalid UTF-8 would be written as `!!binary`, hence `checkUTF8` in `Write`.
 - A line comment on `key: value` belongs to the value node, but to the key node when the value is a block mapping or sequence.
 - Resetting quote and flow styles is safe: the encoder re-adds quotes where a string would read as another type (`"123"`, `"true"`).
 
