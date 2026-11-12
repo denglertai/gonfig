@@ -355,8 +355,8 @@ func TestFragmentErrorsWithoutValues(t *testing.T) {
 			fileType:       general.YAML,
 			content:        "a: ${FRAGMENT | fragment}\n",
 			fragment:       "pw: *s3cret",
-			want:           "invalid YAML fragment",
-			wantWithValues: "invalid YAML fragment: yaml: unknown anchor 's3cret' referenced",
+			want:           "invalid YAML fragment on line 1",
+			wantWithValues: "invalid YAML fragment: yaml: line 1: unknown anchor 's3cret' referenced",
 		},
 		{
 			desc:           "YAML syntax error",

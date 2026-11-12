@@ -175,7 +175,7 @@ config.yaml: 4 entries with placeholders
     error: fragments cannot contain further fragments
   database.${SNAP_CHECK_OVERRIDES | fragment}
     SNAP_CHECK_OVERRIDES     set
-    error: invalid YAML fragment on line 1
+    error: invalid YAML fragment on line 2
 2 missing variables, 2 errors
 Error: check failed: 2 missing variables, 2 errors
 

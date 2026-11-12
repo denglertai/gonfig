@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"iter"
-	"regexp"
 	"slices"
 	"strconv"
 
@@ -133,17 +132,15 @@ func (y *YamlConfigEntry) mergeFragment(fragment *yaml.Node) ([]ConfigEntry, err
 	return y.handler.collectEntries(func() { y.handler.mergeMappings(y.parent, fragment, y.parentPath) }), nil
 }
 
-// yamlErrorLineRe matches the line number at the start of a YAML syntax error, which is the only part of the
-// message that never quotes the parsed text
-var yamlErrorLineRe = regexp.MustCompile(`^yaml: line (\d+):`)
-
-// parseYamlFragment parses the first document of a fragment, or returns nil for an empty fragment
+// parseYamlFragment parses the first document of a fragment, or returns nil for an empty fragment. Only the
+// line of a load error is reported without values in errors, because the message may quote the parsed text
 func parseYamlFragment(text string) (*yaml.Node, error) {
 	var document yaml.Node
 	if err := yaml.Unmarshal([]byte(text), &document); err != nil {
 		location := ""
-		if match := yamlErrorLineRe.FindStringSubmatch(err.Error()); match != nil {
-			location = "on line " + match[1]
+		var loadErr *yaml.LoadError
+		if errors.As(err, &loadErr) && loadErr.Mark.Line > 0 {
+			location = "on line " + strconv.Itoa(loadErr.Mark.Line)
 		}
 		return nil, fragmentError("YAML", location, err)
 	}
