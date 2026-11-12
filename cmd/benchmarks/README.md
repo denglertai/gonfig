@@ -172,9 +172,10 @@ The plugin is started once per run of gonfig, so its startup time is added once,
 
 ### Remaining
 
-- **YAML encoding:** About 60% of the memory allocated for YAML files is allocated by the encoder of `go.yaml.in/yaml/v3`, whose event queue grows with the size of the document instead of being reused.
+- **YAML encoding:** About 68% of the memory allocated for YAML files (`ProcessFile/yaml/static`, memory profile, Go 1.27.3) is allocated by the emitter of `go.yaml.in/yaml/v4`,
+  which appends every event to `emitter.events` (`libyaml/emitter.go:194`) and keeps the queue for the whole document instead of reusing it. Decoding allocates another 14%.
   This is also the main reason for the high peak memory of YAML files, see [scaling](#scaling).
-  The archived `gopkg.in/yaml.v3`, which gonfig used before, has the same implementation and performance. Fixing it requires changes to the library.
+  `go.yaml.in/yaml/v3` and the archived `gopkg.in/yaml.v3`, which gonfig used before, have the same implementation and performance (v4 compared with v3: within noise for 1 MiB files, less than 0.1% more bytes and 1% more allocations per operation). Fixing it requires changes to the library.
 - **Properties:** Most of the time was spent reading and writing by `github.com/magiconair/properties`, which rewrote the whole file.
   Since [#315](https://github.com/denglertai/gonfig/issues/315), properties files are parsed line by line and unchanged lines are written as read, which takes 72 to 86% less time,
   50 to 67% less allocated memory and 82 to 93% fewer allocations than with the library (1 MiB, Go 1.27.3). The scaling table above was measured afterwards.
