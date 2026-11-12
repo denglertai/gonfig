@@ -12,6 +12,7 @@
           "matchStrings": ["# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+[A-Z_]+(?:: | \\?= )(?<currentValue>\\S+)"]
        }
     ],
+    "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths"],
     "packageRules": [
        {
           "description": "Plugins in this repository build against the local gonfig sources via a replace directive, so the required version is only a placeholder",
