@@ -115,7 +115,8 @@ func TestCheckUnterminatedParams(t *testing.T) {
 	assert.True(t, report.Failed())
 }
 
-// TestCheckFragments checks that the entries of fragments are reported and errors of fragments are collected
+// TestCheckFragments checks that the entries of fragments are reported and errors of fragments are collected. The
+// unterminated flow sequence is reported on line 2, the end of the input where the parser notices it
 func TestCheckFragments(t *testing.T) {
 	t.Setenv("CHECK_FRAGMENT", "inner: ${CHECK_INNER}\nnested: ${CHECK_NESTED | fragment}")
 	t.Setenv("CHECK_NESTED", "a: 1")
@@ -127,7 +128,7 @@ func TestCheckFragments(t *testing.T) {
 		{Path: "outer", Variables: []VariableReport{{Name: "CHECK_FRAGMENT", Status: VariableSet}}},
 		{Path: "outer.inner", Variables: []VariableReport{{Name: "CHECK_INNER", Status: VariableMissing}}},
 		{Path: "outer.nested", Variables: []VariableReport{{Name: "CHECK_NESTED", Status: VariableSet}}, Error: "fragments cannot contain further fragments"},
-		{Path: "invalid", Variables: []VariableReport{{Name: "CHECK_INVALID", Status: VariableSet}}, Error: "invalid YAML fragment on line 1"},
+		{Path: "invalid", Variables: []VariableReport{{Name: "CHECK_INVALID", Status: VariableSet}}, Error: "invalid YAML fragment on line 2"},
 	}, report.Entries)
 }
 

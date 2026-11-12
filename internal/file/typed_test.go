@@ -10,7 +10,7 @@ import (
 
 	"github.com/denglertai/gonfig/internal/general"
 	"github.com/stretchr/testify/assert"
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // processTyped processes the content as a file of the given type and returns the output

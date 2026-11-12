@@ -334,3 +334,41 @@ func BenchmarkProcessFragment(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkProcessYAMLScaling processes YAML files with n service entries (1k, 4k and 16k) with and without
+// placeholders. 4x the entries should take about 4x the time (linear), about 16x is quadratic.
+func BenchmarkProcessYAMLScaling(b *testing.B) {
+	for _, placeholders := range []bool{false, true} {
+		kind := "static"
+		if placeholders {
+			kind = "placeholders"
+		}
+
+		for _, n := range []int{1000, 4000, 16000} {
+			b.Run(fmt.Sprintf("%s/%d", kind, n), func(b *testing.B) {
+				setEnv(b)
+
+				var buf bytes.Buffer
+				buf.WriteString("services:\n")
+				for i := range n {
+					yamlEntry(&buf, i, placeholders)
+				}
+
+				path := filepath.Join(b.TempDir(), "config.yaml")
+				if err := os.WriteFile(path, buf.Bytes(), 0o600); err != nil {
+					b.Fatal(err)
+				}
+
+				b.SetBytes(int64(buf.Len()))
+				b.ReportAllocs()
+				sampler := startHeapSampler()
+				for b.Loop() {
+					if err := file.NewFileProcessor(path, general.YAML, io.Discard).Process(); err != nil {
+						b.Fatal(err)
+					}
+				}
+				sampler.Stop(b)
+			})
+		}
+	}
+}

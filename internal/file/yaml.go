@@ -3,15 +3,16 @@ package file
 import (
 	"cmp"
 	"errors"
+	"fmt"
 	"io"
 	"iter"
-	"regexp"
 	"slices"
 	"strconv"
+	"unicode/utf8"
 
 	"github.com/denglertai/gonfig/internal/filter"
 	"github.com/denglertai/gonfig/internal/value"
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // YamlConfigEntry represents a single scalar of a YAML document, which is either a value or the key of a mapping
@@ -133,17 +134,15 @@ func (y *YamlConfigEntry) mergeFragment(fragment *yaml.Node) ([]ConfigEntry, err
 	return y.handler.collectEntries(func() { y.handler.mergeMappings(y.parent, fragment, y.parentPath) }), nil
 }
 
-// yamlErrorLineRe matches the line number at the start of a YAML syntax error, which is the only part of the
-// message that never quotes the parsed text
-var yamlErrorLineRe = regexp.MustCompile(`^yaml: line (\d+):`)
-
-// parseYamlFragment parses the first document of a fragment, or returns nil for an empty fragment
+// parseYamlFragment parses the first document of a fragment, or returns nil for an empty fragment. Only the
+// line of a load error is reported without values in errors, because the message may quote the parsed text
 func parseYamlFragment(text string) (*yaml.Node, error) {
 	var document yaml.Node
 	if err := yaml.Unmarshal([]byte(text), &document); err != nil {
 		location := ""
-		if match := yamlErrorLineRe.FindStringSubmatch(err.Error()); match != nil {
-			location = "on line " + match[1]
+		var loadErr *yaml.LoadError
+		if errors.As(err, &loadErr) && loadErr.Mark.Line > 0 {
+			location = "on line " + strconv.Itoa(loadErr.Mark.Line)
 		}
 		return nil, fragmentError("YAML", location, err)
 	}
@@ -315,16 +314,37 @@ func (y *YamlConfigFileHandler) Process() (iter.Seq[ConfigEntry], error) {
 	return slices.Values(y.entries), nil
 }
 
-// Write writes the configuration entries to the target
+// Write writes the configuration entries to the target. It keeps the yaml v3 output, including its unlimited line
+// width, so that long lines are never wrapped
 func (y *YamlConfigFileHandler) Write(target io.Writer) error {
-	enc := yaml.NewEncoder(target)
-	enc.SetIndent(2)
+	if err := y.checkUTF8(); err != nil {
+		return err
+	}
+
+	// NewDumper only fails for invalid options, and these are constant
+	dumper, _ := yaml.NewDumper(target, yaml.WithV3Defaults(), yaml.WithIndent(2), yaml.WithLineWidth(-1))
 
 	for _, document := range y.documents {
-		if err := enc.Encode(document); err != nil {
+		if err := dumper.Dump(document); err != nil {
 			return err
 		}
 	}
 
-	return enc.Close()
+	return dumper.Close()
+}
+
+// checkUTF8 rejects entries whose text is not valid UTF-8, naming the entry but not the text, which may be a
+// secret. yaml v4 would silently write such text base64-encoded as !!binary, while v3 failed
+func (y *YamlConfigFileHandler) checkUTF8() error {
+	for _, entry := range y.entries {
+		yamlEntry := entry.(*YamlConfigEntry)
+		if utf8.ValidString(yamlEntry.node.Value) {
+			continue
+		}
+		if yamlEntry.isKey {
+			return fmt.Errorf("the key %s is not valid UTF-8", yamlEntry.path)
+		}
+		return fmt.Errorf("the value of %s is not valid UTF-8", yamlEntry.path)
+	}
+	return nil
 }
