@@ -7,6 +7,7 @@ Benchmarks for processing config files and single values.
 | `BenchmarkProcessFile/<type>/static` | Reading, parsing and writing a config file of at least 1 MiB without placeholders |
 | `BenchmarkProcessFile/<type>/placeholders` | The same file with three placeholders per entry, e.g. `${BENCH_PASSWORD \| trim}` |
 | `BenchmarkProcessValue/<case>` | Finding placeholders and executing filter chains for a single value |
+| `BenchmarkProcessYAMLScaling/<static\|placeholders>/<n>` | Processing a YAML file with `n` entries (1,000, 4,000 and 16,000) to check for linear scaling: 4 times the entries take about 4 times the time, memory and allocations (measured 3.8 to 4.3 times per step) |
 | `BenchmarkProcessFragment/<type>/<mode>/<n>` | Inserting a [fragment](../../FILTERS.md#fragments) with `n` keys or XML elements as a value (`value`), or merging it into a mapping with `n` keys (`merge`) |
 
 The difference between `static` and `placeholders` shows the cost of the placeholders compared to reading and writing the file.
@@ -105,6 +106,7 @@ Peak heap size after the optimizations:
 
 Time and memory grow linearly with the size of a file, so the benchmarks use files of 1 MiB.
 Larger files would make the benchmarks slower without revealing different behavior.
+The exception is `BenchmarkProcessYAMLScaling`: YAML depends most on its library, so it checks the scaling in `go test` at three sizes, e.g. after an update of `go.yaml.in/yaml`.
 
 Measured with the gonfig binary, `/usr/bin/time` and files with two placeholders per entry, after the optimizations:
 
