@@ -3,10 +3,12 @@ package file
 import (
 	"cmp"
 	"errors"
+	"fmt"
 	"io"
 	"iter"
 	"slices"
 	"strconv"
+	"unicode/utf8"
 
 	"github.com/denglertai/gonfig/internal/filter"
 	"github.com/denglertai/gonfig/internal/value"
@@ -312,16 +314,37 @@ func (y *YamlConfigFileHandler) Process() (iter.Seq[ConfigEntry], error) {
 	return slices.Values(y.entries), nil
 }
 
-// Write writes the configuration entries to the target
+// Write writes the configuration entries to the target. It keeps the yaml v3 output, including its unlimited line
+// width, so that long lines are never wrapped
 func (y *YamlConfigFileHandler) Write(target io.Writer) error {
-	enc := yaml.NewEncoder(target)
-	enc.SetIndent(2)
+	if err := y.checkUTF8(); err != nil {
+		return err
+	}
+
+	// NewDumper only fails for invalid options, and these are constant
+	dumper, _ := yaml.NewDumper(target, yaml.WithV3Defaults(), yaml.WithIndent(2), yaml.WithLineWidth(-1))
 
 	for _, document := range y.documents {
-		if err := enc.Encode(document); err != nil {
+		if err := dumper.Dump(document); err != nil {
 			return err
 		}
 	}
 
-	return enc.Close()
+	return dumper.Close()
+}
+
+// checkUTF8 rejects entries whose text is not valid UTF-8, naming the entry but not the text, which may be a
+// secret. yaml v4 would silently write such text base64-encoded as !!binary, while v3 failed
+func (y *YamlConfigFileHandler) checkUTF8() error {
+	for _, entry := range y.entries {
+		yamlEntry := entry.(*YamlConfigEntry)
+		if utf8.ValidString(yamlEntry.node.Value) {
+			continue
+		}
+		if yamlEntry.isKey {
+			return fmt.Errorf("the key %s is not valid UTF-8", yamlEntry.path)
+		}
+		return fmt.Errorf("the value of %s is not valid UTF-8", yamlEntry.path)
+	}
+	return nil
 }

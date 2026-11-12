@@ -208,6 +208,7 @@ func processYaml(t *testing.T, input string, fn func(ConfigEntry) string) string
 	return output.String()
 }
 
+// TestYamlRoundTrip checks that unchanged documents are written back exactly as they were read
 func TestYamlRoundTrip(t *testing.T) {
 	testCases := []struct {
 		desc  string
@@ -219,6 +220,10 @@ func TestYamlRoundTrip(t *testing.T) {
 		{desc: "multiple documents", input: "a: 1\n---\nb: 2\n"},
 		{desc: "anchors and aliases", input: "base: &base\n  a: 1\nderived:\n  <<: *base\n  b: 2\n"},
 		{desc: "block scalar", input: "script: |\n  echo a\n  echo b\n"},
+		{desc: "literal scalar with long line", input: "script: |\n  " + strings.Repeat("echo a; ", 15) + "\n  echo b\n"},
+		// Folded lines are joined when written, so only the joined form is written back unchanged
+		{desc: "folded scalar", input: "text: >\n  first line second line\nnext: 1\n"},
+		{desc: "folded scalar with long line", input: "text: >-\n  " + strings.Repeat("word ", 25) + "end\n"},
 	}
 	for _, tC := range testCases {
 		t.Run(tC.desc, func(t *testing.T) {
@@ -228,6 +233,23 @@ func TestYamlRoundTrip(t *testing.T) {
 	}
 }
 
+// TestYamlLongLinesAreNotWrapped checks that lines longer than 80 columns are kept on one line, like yaml v3 did,
+// because v4 wraps at 80 columns by default and wrapped values break line-based tools reading the output
+func TestYamlLongLinesAreNotWrapped(t *testing.T) {
+	long := strings.Repeat("abcdefghij ", 10) + "end"
+	input := "static: " + long + "\nplain: placeholder\nquoted: \"placeholder\"\n"
+
+	output := processYaml(t, input, func(entry ConfigEntry) string {
+		if entry.(*YamlConfigEntry).IsKey() || entry.Path() == "static" {
+			return entry.GetValue()
+		}
+		return long
+	})
+
+	assert.Equal(t, "static: "+long+"\nplain: "+long+"\nquoted: \""+long+"\"\n", output)
+}
+
+// TestYamlSetValues checks that set values are written with the style of the replaced value
 func TestYamlSetValues(t *testing.T) {
 	testCases := []struct {
 		desc     string
@@ -272,6 +294,37 @@ func TestYamlSetValues(t *testing.T) {
 				return entry.GetValue()
 			})
 			assert.Equal(t, tC.expected, output)
+		})
+	}
+}
+
+// TestYamlInvalidUTF8IsRejected checks that values and keys which are not valid UTF-8 fail writing and name the entry
+// without the value, since yaml v4 would otherwise write them base64-encoded as !!binary
+func TestYamlInvalidUTF8IsRejected(t *testing.T) {
+	testCases := []struct {
+		desc    string
+		content string
+		wantErr string
+	}{
+		{desc: "plain value", content: "a: ${INVALID_UTF8}\n", wantErr: "the value of a is not valid UTF-8"},
+		{desc: "quoted value", content: "a: \"${INVALID_UTF8}\"\n", wantErr: "the value of a is not valid UTF-8"},
+		{desc: "literal value", content: "a: |\n  ${INVALID_UTF8}\n", wantErr: "the value of a is not valid UTF-8"},
+		{desc: "list item", content: "a:\n  - ${INVALID_UTF8}\n", wantErr: "the value of a.0 is not valid UTF-8"},
+		{desc: "key", content: "${INVALID_UTF8}: keyed\n", wantErr: "the key ${INVALID_UTF8} is not valid UTF-8"},
+		{desc: "fragment", content: "a: ${INVALID_UTF8 | fragment}\n", wantErr: "invalid YAML fragment"},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			t.Setenv("INVALID_UTF8", "s3cret\xffutf8")
+			file := path.Join(t.TempDir(), "config.yaml")
+			assert.NoError(t, os.WriteFile(file, []byte(tC.content), 0o644))
+
+			var output bytes.Buffer
+			err := NewFileProcessor(file, "yaml", &output).Process()
+
+			assert.ErrorContains(t, err, tC.wantErr)
+			assert.NotContains(t, err.Error(), "s3cret")
+			assert.Empty(t, output.String())
 		})
 	}
 }

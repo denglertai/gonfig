@@ -528,3 +528,37 @@ result:
 escaped = ${NAME}
 mixed = "${NAME} is gonfig"
 ---
+
+[TestYamlScalarStyleSnapshots/yaml_long_lines_and_block_scalars - 1]
+environment:
+HOST="db.internal.example.com"
+
+file (config.yaml):
+url: "jdbc:postgresql://${HOST}:5432/application?sslmode=verify-full&connectTimeout=10&applicationName=gonfig-demo"
+words: "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen ${HOST}"
+folded: >
+  first line of ${HOST}
+  second line
+
+  next paragraph
+literal: |
+  keeps
+  its lines
+trailing: |
+  spaces at the end   
+  of the lines  
+
+result:
+url: "jdbc:postgresql://db.internal.example.com:5432/application?sslmode=verify-full&connectTimeout=10&applicationName=gonfig-demo"
+words: "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen db.internal.example.com"
+folded: >
+  first line of db.internal.example.com second line
+
+  next paragraph
+literal: |
+  keeps
+  its lines
+trailing: |
+  spaces at the end   
+  of the lines  
+---

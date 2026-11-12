@@ -350,3 +350,31 @@ location / { proxy_set_header Host $host; set $x "$${host}"; }
 		},
 	})
 }
+
+// TestYamlScalarStyleSnapshots documents how the YAML writer lays out long lines and block scalars: lines are never
+// wrapped at 80 columns, folded scalars end without an extra blank line, and block scalars with trailing spaces
+// keep their block style
+func TestYamlScalarStyleSnapshots(t *testing.T) {
+	// The spaces at the end of the "trailing" block lines are intentional: they must keep their block style
+	runBehaviorSnapshots(t, []behaviorCase{
+		{
+			name:     "yaml long lines and block scalars",
+			fileType: general.YAML,
+			env:      map[string]string{"HOST": "db.internal.example.com"},
+			content: `url: "jdbc:postgresql://${HOST}:5432/application?sslmode=verify-full&connectTimeout=10&applicationName=gonfig-demo"
+words: "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen ${HOST}"
+folded: >
+  first line of ${HOST}
+  second line
+
+  next paragraph
+literal: |
+  keeps
+  its lines
+trailing: |
+  spaces at the end   
+  of the lines  
+`,
+		},
+	})
+}
