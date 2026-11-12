@@ -13,7 +13,7 @@ import (
 	"github.com/denglertai/gonfig/internal/general"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // Settings represents the configuration settings

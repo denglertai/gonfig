@@ -11,7 +11,7 @@ import (
 
 	"github.com/denglertai/gonfig/internal/filter"
 	"github.com/denglertai/gonfig/internal/value"
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // YamlConfigEntry represents a single scalar of a YAML document, which is either a value or the key of a mapping
