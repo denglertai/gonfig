@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -315,14 +316,21 @@ func TestYamlInvalidUTF8IsRejected(t *testing.T) {
 	}
 	for _, tC := range testCases {
 		t.Run(tC.desc, func(t *testing.T) {
-			t.Setenv("INVALID_UTF8", "s3cret\xffutf8")
-			file := path.Join(t.TempDir(), "config.yaml")
+			// The value is read from a file referenced with @, because Windows stores environment variables as
+			// UTF-16 and would replace the invalid byte with U+FFFD
+			dir := t.TempDir()
+			secret := filepath.Join(dir, "secret")
+			assert.NoError(t, os.WriteFile(secret, []byte("s3cret\xffutf8"), 0o600))
+			t.Setenv("INVALID_UTF8", "@"+secret)
+			file := path.Join(dir, "config.yaml")
 			assert.NoError(t, os.WriteFile(file, []byte(tC.content), 0o644))
 
 			var output bytes.Buffer
 			err := NewFileProcessor(file, "yaml", &output).Process()
 
-			assert.ErrorContains(t, err, tC.wantErr)
+			if !assert.ErrorContains(t, err, tC.wantErr) {
+				return
+			}
 			assert.NotContains(t, err.Error(), "s3cret")
 			assert.Empty(t, output.String())
 		})
