@@ -2,8 +2,10 @@
 package output
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -18,15 +20,37 @@ type Options struct {
 	Mode fs.FileMode
 	// ForceMode sets Mode for existing files as well, which keep their mode otherwise, e.g. for an explicit --mode
 	ForceMode bool
+	// SkipUnchanged leaves an existing file alone if it is unchanged, i.e. Unchanged is set or the file already contains
+	// the data, so files that need no rendering can stay read-only and keep their mtime, e.g. for -i.
+	// With ForceMode, only the mode of an unchanged file is changed, if it differs.
+	SkipUnchanged bool
+	// Unchanged is set by the caller if processing changed no value of the file, see SkipUnchanged
+	Unchanged bool
+	// CheckWritable opens existing files for writing before WriteAll writes any file, so a read-only file fails
+	// before other files have been replaced, e.g. for -i
+	CheckWritable bool
+	// IgnoreReadOnly skips files that cannot be written because they are read-only, logging a warning instead of
+	// failing, see isReadOnlyErr
+	IgnoreReadOnly bool
 }
 
-// rename, setOwner and writeTemp are variables, so tests can simulate failures, e.g. of a rename onto a bind-mounted file,
-// of keeping the owner of a file, which requires root, or of writing to a full disk
+// rename, setOwner, writeTemp, writeFile, openWritable and chmod are variables, so tests can simulate failures,
+// e.g. of a rename onto a bind-mounted file, of keeping the owner of a file, which requires root, of writing to a full
+// disk or of writing to a read-only file system
 var (
-	rename    = os.Rename
-	setOwner  = keepOwner
-	writeTemp = writeTempFile
+	rename       = os.Rename
+	setOwner     = keepOwner
+	writeTemp    = writeTempFile
+	writeFile    = os.WriteFile
+	openWritable = openWritableFile
+	chmod        = os.Chmod
 )
+
+// openWritableFile opens the existing file for writing without truncating it, so checking it changes nothing.
+// It doesn't block, e.g. if the file has been replaced by a named pipe without a reader since it was checked.
+func openWritableFile(name string) (*os.File, error) {
+	return os.OpenFile(name, os.O_WRONLY|nonBlock, 0) //nolint:gosec // an output file given by the user
+}
 
 // errInPlace marks failures of an atomic write after which the file is written in place instead,
 // e.g. if the directory is not writable or the file is a bind mount, which cannot be replaced by a rename
@@ -61,7 +85,11 @@ type File struct {
 // Files that are not regular and paths of special files like /dev/stdout are always written in place.
 //
 // New files get opts.Mode. Existing files keep their mode, unless opts.ForceMode is set.
+//
+// Write writes a single file, so it ignores opts.SkipUnchanged, opts.CheckWritable and opts.IgnoreReadOnly,
+// which only WriteAll handles.
 func Write(path string, data []byte, opts Options) error {
+	opts.SkipUnchanged, opts.CheckWritable, opts.IgnoreReadOnly = false, false, false
 	p, err := prepare(path, data, opts)
 	if err != nil {
 		return err
@@ -72,9 +100,13 @@ func Write(path string, data []byte, opts Options) error {
 // WriteAll writes several files like Write, in two phases, so a failure leaves as few files changed as possible.
 //
 // First, the temporary files of all files are written. If one of them fails, e.g. because the disk is full,
-// all temporary files are removed and no file is changed.
+// all temporary files are removed and no file is changed. With CheckWritable, existing files are opened for writing
+// in this phase as well, so a read-only file fails before any file is changed.
 // Then the temporary files are renamed to their files, and finally the files that cannot be replaced atomically
 // are written in place. Errors of these phases name the files that have been written already.
+//
+// With SkipUnchanged, unchanged files are not written, see Options. With IgnoreReadOnly, read-only files are
+// skipped with a warning and the other files are still written.
 func WriteAll(files []File) error {
 	prepared := make([]*pending, 0, len(files))
 	for _, f := range files {
@@ -83,7 +115,12 @@ func WriteAll(files []File) error {
 			for _, p := range prepared {
 				p.discard()
 			}
-			return fmt.Errorf("failed to write %s, no file has been changed: %w", f.Path, err)
+			// The check of an unchanged file fails only for the change of its mode, which isn't written
+			action := "write"
+			if p != nil && p.unchanged {
+				action = "change the mode of"
+			}
+			return fmt.Errorf("failed to %s %s, no file has been changed: %w", action, f.Path, err)
 		}
 		prepared = append(prepared, p)
 	}
@@ -91,33 +128,89 @@ func WriteAll(files []File) error {
 	// All renames happen before any file is written in place, since writing in place may leave partial output if it fails.
 	// Files whose rename fails, e.g. bind-mounted files, are written in place as well.
 	written := make([]string, 0, len(prepared))
+	var skipped []string
 	var inPlace []*pending
-	for _, p := range prepared {
-		if p.writesInPlace() || !p.rename() {
+	for i, p := range prepared {
+		switch {
+		case p.skip != nil:
+			p.warnSkipped(p.skip)
+			skipped = append(skipped, p.path)
+		case p.unchanged:
+			// Changing only the mode doesn't write the file, so it isn't listed as written in errors.
+			// Read-only files were found by prepare already, unless they became read-only meanwhile.
+			err := p.updateMode()
+			if err != nil && !p.ignoresReadOnly(err) {
+				for _, rest := range prepared[i+1:] {
+					rest.discard()
+				}
+				return fmt.Errorf("failed to change the mode of %s%s: %w", p.path, writeStatus(written, skipped, notWrittenPaths(prepared[i+1:], inPlace)), err)
+			}
+			if err != nil {
+				p.warnSkipped(err)
+				skipped = append(skipped, p.path)
+			}
+		case p.writesInPlace() || !p.rename():
 			inPlace = append(inPlace, p)
-			continue
+		default:
+			written = append(written, p.path)
 		}
-		written = append(written, p.path)
 	}
 
 	for i, p := range inPlace {
-		if err := p.writeInPlace(); err != nil {
-			notWritten := make([]string, 0, len(inPlace)-i-1)
-			for _, rest := range inPlace[i+1:] {
-				notWritten = append(notWritten, rest.path)
-			}
-			return fmt.Errorf("failed to write %s%s: %w", p.path, writeStatus(written, notWritten), err)
+		err := p.writeInPlace()
+		if err != nil && p.ignoresReadOnly(err) {
+			// The file was writable when it was checked, but became read-only meanwhile
+			p.warnSkipped(err)
+			skipped = append(skipped, p.path)
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("failed to write %s%s: %w", p.path, writeStatus(written, skipped, notWrittenPaths(nil, inPlace[i+1:])), err)
 		}
 		written = append(written, p.path)
 	}
 	return nil
 }
 
-// writeStatus lists the files that have and have not been written, e.g. " (written: a.yaml; not written: c.yaml)"
-func writeStatus(written []string, notWritten []string) string {
+// notWrittenPaths returns the paths of the files of WriteAll that have not been written yet: the remaining prepared
+// files, which are written unless unchanged or skipped, and the files deferred to be written in place
+func notWrittenPaths(remaining []*pending, inPlace []*pending) []string {
+	var paths []string
+	for _, p := range inPlace {
+		paths = append(paths, p.path)
+	}
+	for _, p := range remaining {
+		if p.skip == nil && !p.unchanged {
+			paths = append(paths, p.path)
+		}
+	}
+	return paths
+}
+
+// warnSkipped logs that a read-only file is skipped, or only the change of its mode for an unchanged file, so it is
+// clear the requested mode hasn't been applied. Only the OS error is logged, e.g. "read-only file system", without
+// the path it contains, which is logged on its own, and never the data of the file.
+func (p *pending) warnSkipped(err error) {
+	var pathErr *fs.PathError
+	if errors.As(err, &pathErr) {
+		err = pathErr.Err
+	}
+	if p.unchanged {
+		logging.Warn("Skipping mode change of read-only file", "path", p.path, "mode", fmt.Sprintf("%#o", p.opts.Mode), "error", err.Error())
+		return
+	}
+	logging.Warn("Skipping read-only file", "path", p.path, "error", err.Error())
+}
+
+// writeStatus lists the files that have been written, skipped and not written,
+// e.g. " (written: a.yaml; skipped: b.yaml; not written: c.yaml)"
+func writeStatus(written []string, skipped []string, notWritten []string) string {
 	var parts []string
 	if len(written) > 0 {
 		parts = append(parts, "written: "+strings.Join(written, ", "))
+	}
+	if len(skipped) > 0 {
+		parts = append(parts, "skipped: "+strings.Join(skipped, ", "))
 	}
 	if len(notWritten) > 0 {
 		parts = append(parts, "not written: "+strings.Join(notWritten, ", "))
@@ -142,9 +235,15 @@ type pending struct {
 	special bool
 	// tmp is the temporary file, which is empty for files written in place
 	tmp string
+	// unchanged is set if the file is not written, since it is unchanged, see Options.SkipUnchanged
+	unchanged bool
+	// skip is the error of a read-only file that is not written, see Options.IgnoreReadOnly
+	skip error
 }
 
-// prepare writes the temporary file of the file at path, or prepares writing it in place, see Write
+// prepare writes the temporary file of the file at path, or prepares writing it in place, see Write.
+// If checking whether the file can be written fails, the file is returned with the error, so the error can name
+// what was going to be changed.
 func prepare(path string, data []byte, opts Options) (*pending, error) {
 	p := &pending{path: path, target: path, data: data, opts: opts}
 
@@ -169,8 +268,23 @@ func prepare(path string, data []byte, opts Options) (*pending, error) {
 	}
 	if existing != nil {
 		p.existing = existing
+		if opts.SkipUnchanged && (opts.Unchanged || sameContent(p.target, existing, data)) {
+			logging.Debug("File unchanged, not writing it", "file", path)
+			p.unchanged = true
+			// The mode of an unchanged file is still changed, so a read-only file fails before any file is changed as well
+			if opts.CheckWritable && p.changesMode() {
+				return p.checked(checkModeChangeable(p.target, existing), existing)
+			}
+			return p, nil
+		}
 		if !existing.Mode().IsRegular() {
 			return p, nil
+		}
+		if opts.CheckWritable {
+			checked, err := p.checked(checkWritable(p.target), existing)
+			if err != nil || checked.skip != nil {
+				return checked, err
+			}
 		}
 	}
 
@@ -189,6 +303,77 @@ func prepare(path string, data []byte, opts Options) (*pending, error) {
 		return nil, err
 	}
 	return p, nil
+}
+
+// checked returns the result of checking whether the file can be written: the error of a read-only file, or the file
+// marked as skipped with IgnoreReadOnly. Other errors are ignored, since writing the file may still succeed,
+// e.g. replacing a file without write permission by a rename.
+func (p *pending) checked(err error, existing fs.FileInfo) (*pending, error) {
+	if err == nil || !isReadOnlyErr(err, existing) {
+		return p, nil
+	}
+	if !p.opts.IgnoreReadOnly {
+		// The file is returned with the error, so the error can tell whether it was going to be written
+		return p, err
+	}
+	p.skip = err
+	return p, nil
+}
+
+// checkModeChangeable sets the mode the existing file has already, which changes nothing, but fails like changing it
+// would, e.g. on a read-only file system. Unlike opening the file for writing, it succeeds for a file with the
+// read-only attribute on Windows, whose mode can still be changed.
+func checkModeChangeable(target string, existing fs.FileInfo) error {
+	return chmod(target, existing.Mode()&(fs.ModePerm|fs.ModeSetuid|fs.ModeSetgid|fs.ModeSticky))
+}
+
+// sameContent returns whether the existing regular file contains exactly the data.
+// Files of another size differ, so they are not read. A file that cannot be read is written as if it differed.
+// The file is opened without blocking and checked again, so a named pipe swapped in since it was checked isn't read.
+func sameContent(target string, existing fs.FileInfo, data []byte) bool {
+	if !existing.Mode().IsRegular() || existing.Size() != int64(len(data)) {
+		return false
+	}
+	f, err := os.OpenFile(target, os.O_RDONLY|nonBlock, 0) //nolint:gosec // an output file given by the user
+	if err != nil {
+		return false
+	}
+	// The file is only read, so an error closing it does not affect the result
+	defer func() { _ = f.Close() }()
+	if info, err := f.Stat(); err != nil || !info.Mode().IsRegular() {
+		return false
+	}
+	content, err := io.ReadAll(f)
+	return err == nil && bytes.Equal(content, data)
+}
+
+// checkWritable opens the existing file for writing and closes it again, without changing it
+func checkWritable(target string) error {
+	f, err := openWritable(target)
+	if err != nil {
+		return err
+	}
+	return f.Close()
+}
+
+// ignoresReadOnly returns whether the error is a read-only error that is ignored, see Options.IgnoreReadOnly
+func (p *pending) ignoresReadOnly(err error) bool {
+	return p.opts.IgnoreReadOnly && !p.special && isReadOnlyErr(err, p.existing)
+}
+
+// changesMode returns whether the mode of an unchanged file is changed, i.e. ForceMode sets another mode of a regular file.
+// Only the bits the system applies are compared, see modeBits, so e.g. a read-only file on Windows stays untouched
+// with --mode 0444.
+func (p *pending) changesMode() bool {
+	return p.opts.ForceMode && p.existing.Mode().IsRegular() && (p.existing.Mode().Perm()^p.opts.Mode)&modeBits != 0
+}
+
+// updateMode sets the mode of an unchanged regular file to the mode of ForceMode if it differs, without writing it
+func (p *pending) updateMode() error {
+	if !p.changesMode() {
+		return nil
+	}
+	return chmod(p.target, p.opts.Mode)
 }
 
 // writesInPlace returns whether commit writes the file in place instead of renaming a temporary file
@@ -222,7 +407,7 @@ func (p *pending) rename() bool {
 // writeInPlace writes the target in place, keeping the mode of special files like /dev/stdout
 func (p *pending) writeInPlace() error {
 	if p.special {
-		return os.WriteFile(p.target, p.data, p.opts.Mode)
+		return writeFile(p.target, p.data, p.opts.Mode)
 	}
 	return writeInPlace(p.target, p.data, p.existing, p.opts)
 }
@@ -278,13 +463,13 @@ func writeTempFile(tmp *os.File, data []byte, mode fs.FileMode) error {
 // New files and, with opts.ForceMode, existing regular files get exactly opts.Mode, regardless of the umask.
 func writeInPlace(target string, data []byte, existing fs.FileInfo, opts Options) error {
 	// os.WriteFile also reports errors on closing the file, unlike a deferred Close
-	if err := os.WriteFile(target, data, opts.Mode); err != nil {
+	if err := writeFile(target, data, opts.Mode); err != nil {
 		return err
 	}
 
 	// A new file has been created as a regular file by WriteFile. Files that are not regular, e.g. named pipes, keep their mode.
 	if existing == nil || (opts.ForceMode && existing.Mode().IsRegular()) {
-		return os.Chmod(target, opts.Mode)
+		return chmod(target, opts.Mode)
 	}
 	return nil
 }

@@ -3,12 +3,19 @@
 package output
 
 import (
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"syscall"
 )
+
+// modeBits are the permission bits os.Chmod applies, which are all of them on Unix
+const modeBits = fs.ModePerm
+
+// nonBlock opens files without blocking, e.g. a named pipe without a reader or writer, which has no effect on regular files
+const nonBlock = syscall.O_NONBLOCK
 
 // isSpecialPath returns whether the path refers to a special file like /dev/stdout or /proc/self/fd/1,
 // which are written in place without resolving their links
@@ -39,4 +46,11 @@ func syncDir(dir string) {
 		_ = d.Sync()
 		_ = d.Close()
 	}
+}
+
+// isReadOnlyErr returns whether the error is caused by a read-only file system, e.g. a read-only bind mount or a
+// Kubernetes ConfigMap. Files without write permission are no read-only error, since they can still be replaced by a
+// rename if their directory is writable.
+func isReadOnlyErr(err error, _ fs.FileInfo) bool {
+	return errors.Is(err, syscall.EROFS)
 }

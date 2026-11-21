@@ -382,12 +382,13 @@ func TestWriteAllWritesInPlaceLast(t *testing.T) {
 	assertNoLeftovers(t, dir)
 }
 
-// TestWriteStatus checks the list of written and not written files in errors of WriteAll
+// TestWriteStatus checks the list of written, skipped and not written files in errors of WriteAll
 func TestWriteStatus(t *testing.T) {
-	assert.Equal(t, "", writeStatus(nil, nil))
-	assert.Equal(t, " (written: a, b)", writeStatus([]string{"a", "b"}, nil))
-	assert.Equal(t, " (not written: c)", writeStatus(nil, []string{"c"}))
-	assert.Equal(t, " (written: a; not written: c)", writeStatus([]string{"a"}, []string{"c"}))
+	assert.Equal(t, "", writeStatus(nil, nil, nil))
+	assert.Equal(t, " (written: a, b)", writeStatus([]string{"a", "b"}, nil, nil))
+	assert.Equal(t, " (not written: c)", writeStatus(nil, nil, []string{"c"}))
+	assert.Equal(t, " (written: a; not written: c)", writeStatus([]string{"a"}, nil, []string{"c"}))
+	assert.Equal(t, " (written: a; skipped: b; not written: c)", writeStatus([]string{"a"}, []string{"b"}, []string{"c"}))
 }
 
 // TestWriteAllDefersFailedRenames checks that a file whose rename fails, e.g. a bind-mounted file, is written in place

@@ -4,6 +4,9 @@ package output
 
 import "io/fs"
 
+// nonBlock is no flag on other systems, e.g. Windows, which have no named pipes in the file system that could block
+const nonBlock = 0
+
 // keepOwner does nothing, since files on other systems, e.g. Windows, have no Unix owner to keep
 func keepOwner(_ string, _ fs.FileInfo) error {
 	return nil

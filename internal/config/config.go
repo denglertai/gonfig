@@ -85,6 +85,9 @@ type AppConfig struct {
 	LogValues bool
 	// FailOnMissing makes environment variables that are not set fail processing, unless a default is provided
 	FailOnMissing bool
+	// IgnoreWriteErrors are the kinds of errors writing files back with -i that skip the file with a warning instead of
+	// failing, e.g. WriteErrorReadOnly. Values are lower case, without duplicates.
+	IgnoreWriteErrors []string
 	// Templates are reusable filter chains and placeholders, which can only be defined in the config file
 	Templates Templates
 	// Schemas assign JSON Schemas to processed files, which can only be defined in the config file. A file is validated
@@ -100,6 +103,54 @@ type AppConfig struct {
 // optionKeys are the keys of the options, which the config file may set besides the templates
 var optionKeys = []string{
 	"log-level", "log-format", "log-source", "config-path", "plugin-path", "allow-unknown-filters", "log-values", "fail-on-missing",
+	"ignore-write-errors",
+}
+
+// WriteErrorReadOnly is the value of ignore-write-errors that skips files on read-only file systems or, on Windows,
+// with the read-only attribute
+const WriteErrorReadOnly = "read-only"
+
+// writeErrorKinds are the valid values of ignore-write-errors
+var writeErrorKinds = []string{WriteErrorReadOnly}
+
+// IgnoresWriteError returns whether errors of the kind, e.g. WriteErrorReadOnly, are ignored when writing files back
+func (c *AppConfig) IgnoresWriteError(kind string) bool {
+	return slices.Contains(c.IgnoreWriteErrors, kind)
+}
+
+// parseWriteErrors returns the kinds of ignore-write-errors, which is a list from the flag or a config file list,
+// or a comma separated string from the environment or a config file scalar. Viper splits strings at whitespace
+// only, so they are split here. Values are trimmed and lower cased, empty values dropped, and unknown values fail.
+func parseWriteErrors(value any) ([]string, error) {
+	var items []string
+	// The value is never nil, since an empty list is the default, which viper also uses for empty config values
+	switch v := value.(type) {
+	case string:
+		items = strings.Split(v, ",")
+	case []string:
+		for _, item := range v {
+			items = append(items, strings.Split(item, ",")...)
+		}
+	case []any:
+		for _, item := range v {
+			items = append(items, strings.Split(fmt.Sprint(item), ",")...)
+		}
+	default:
+		return nil, fmt.Errorf("invalid ignore-write-errors, expected a list of %s", strings.Join(writeErrorKinds, ", "))
+	}
+
+	var kinds []string
+	for _, item := range items {
+		kind := strings.ToLower(strings.TrimSpace(item))
+		if kind == "" || slices.Contains(kinds, kind) {
+			continue
+		}
+		if !slices.Contains(writeErrorKinds, kind) {
+			return nil, fmt.Errorf("invalid value %q for ignore-write-errors, expected %s", kind, strings.Join(writeErrorKinds, ", "))
+		}
+		kinds = append(kinds, kind)
+	}
+	return kinds, nil
 }
 
 // LoadAppConfig loads configuration from multiple sources
@@ -117,6 +168,12 @@ func LoadAppConfig(v *viper.Viper) (*AppConfig, error) {
 		FailOnMissing:       v.GetBool("fail-on-missing"),
 		ConfigFile:          v.ConfigFileUsed(),
 	}
+
+	ignoreWriteErrors, err := parseWriteErrors(v.Get("ignore-write-errors"))
+	if err != nil {
+		return nil, err
+	}
+	cfg.IgnoreWriteErrors = ignoreWriteErrors
 
 	if cfg.ConfigFile != "" {
 		unknown, err := unknownKeys(cfg.ConfigFile)
@@ -287,6 +344,7 @@ func SetupViper(flags *pflag.FlagSet) (*viper.Viper, error) {
 	v.SetDefault("allow-unknown-filters", false)
 	v.SetDefault("log-values", false)
 	v.SetDefault("fail-on-missing", false)
+	v.SetDefault("ignore-write-errors", []string{})
 
 	// Environment variables
 	v.SetEnvPrefix("GONFIG")

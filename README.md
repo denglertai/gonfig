@@ -35,7 +35,7 @@ czNjciZ0
 | [Filters](./FILTERS.md) and [plugins](./PLUGINS.md) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Comments preserved | ✅ | – | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Key order preserved | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Formatting preserved | ✅ including multiple documents | ❌ indented with 2 spaces | ✅ | ✅ except values with placeholders spanning several lines | ✅ | ✅ except values with placeholders spanning several lines | ✅ | ✅ |
+| Formatting preserved | ✅ including multiple documents | ❌ indented with 2 spaces, except for files `-i` does not write because nothing changed | ✅ | ✅ except values with placeholders spanning several lines | ✅ | ✅ except values with placeholders spanning several lines | ✅ | ✅ |
 | Line endings and BOM preserved | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | [Fragments](./FILTERS.md#fragments) | ✅ values and keys | ✅ values and keys | ✅ element content | ❌ | ✅ values and keys | ❌ | ❌ | ❌ |
 | [Typed values](./FILTERS.md#types) | ✅ with `to_int`, `to_float`, `to_bool` | ✅ with `to_int`, `to_float`, `to_bool` | ❌ text | ❌ text | ✅ with `to_int`, `to_float`, `to_bool` | ❌ text | ❌ text | ❌ text |
@@ -413,6 +413,7 @@ Usage:
     ```
    This reads the file, processes its placeholders and writes the result back to `/path/to/file.xml`.
    `-i` cannot be combined with `-o`, which fails before anything is processed.
+   Files that processing did not change, i.e. no placeholder was replaced, or whose output equals the file byte for byte, are not written, see [unchanged and read-only files](#unchanged-and-read-only-files).
 
 1. Process a file with a custom extension that does not allow inferring the file's type (`-t` / `--file-type` flag)
     ```console
@@ -434,7 +435,7 @@ Usage:
     ```
    Rendered files often contain secrets, so their mode is not left to the umask:
    a new output file gets the mode of the input file, so restricting the template restricts the output, and an existing output file keeps its mode.
-   `--mode` sets the mode in both cases, also for `-i`.
+   `--mode` sets the mode in both cases, also for `-i`. For an unchanged file that `-i` does not write, it only changes the mode if it differs.
 
 1. Read the input from stdin (`-f -`), e.g. in a pipeline
     ```console
@@ -456,6 +457,38 @@ If writing the temporary file fails, e.g. because the disk is full, the output f
 Symbolic links are kept and the file they point to is replaced, e.g. for files mounted from a Kubernetes ConfigMap.
 On Linux and macOS, the owner and group of the file are kept as well.
 If the file cannot be replaced, e.g. because its directory is not writable or it is bind-mounted into a container, it is written in place instead; an error during this fallback may leave partial output.
+
+#### Unchanged and read-only files
+
+With `-i`, a file is not written if processing changed none of its values or if its output equals the file byte for byte. Files that are already complete are never touched: they can be read-only, e.g. mounted from a Kubernetes ConfigMap, and keep their modification time.
+Because they are not rewritten, they are not reformatted either, e.g. compact JSON stays compact with `-i`, while `-o` always writes the formatted output.
+With `--mode`, the mode of such a file is still changed if it differs, without rewriting its content.
+
+Before `-i` writes any file, gonfig checks that every file it is going to change can be opened for writing. A read-only file then fails the run before any file has been changed:
+
+```text
+$ DB_HOST=db.internal gonfig config process -i -f 'ro/*' -f other.yaml
+Error: failed to write ro/app.yaml, no file has been changed: open ro/app.yaml: read-only file system
+```
+
+Files that would change but cannot be written can be skipped with `ignore-write-errors`. Its only value is `read-only`, which matches files on a read-only file system and, on Windows, files with the read-only attribute. It can be set with `--ignore-write-errors=read-only` (`config process` only), `ignore-write-errors: [read-only]` in [`.gonfig.yaml`](#config-file) or `GONFIG_IGNORE_WRITE_ERRORS=read-only`; several values are separated by commas, values are case-insensitive, and unknown values fail.
+Each skipped file is logged as a warning with its path and the error of the operating system, never with values, the exit code stays `0` and the other files are written:
+
+```text
+$ DB_HOST=db.internal gonfig config process -i --ignore-write-errors=read-only -f 'ro/*' -f other.yaml
+{"time":"...","level":"WARN","msg":"Skipping read-only file","path":"ro/app.yaml","error":"read-only file system"}
+```
+
+The same applies to the mode change of an unchanged file with `--mode`: it is checked before anything is written as well, and fails on a read-only file with `failed to change the mode of ro/done.yaml, no file has been changed: chmod ro/done.yaml: read-only file system`. With `ignore-write-errors=read-only`, it is skipped with a separate warning and the exit code stays `0`:
+
+```text
+$ DB_HOST=db.internal gonfig config process -i --mode 0600 --ignore-write-errors=read-only -f 'ro/done.yaml'
+{"time":"...","level":"WARN","msg":"Skipping mode change of read-only file","path":"ro/done.yaml","mode":"0600","error":"read-only file system"}
+```
+
+A skipped file keeps its content as it is, so placeholders in a skipped file stay unrendered, e.g. `x: ${DB_HOST}` is still `x: ${DB_HOST}` afterwards. The warning is shown at the default log level and hidden with `-l error`, so with `-l error` a skipped file produces no output at all.
+
+The option only applies to `-i`: errors writing to stdout or with `-o` still fail, and if it is set without `-i`, e.g. in a shared `.gonfig.yaml`, it has no effect.
 
 #### Several files
 
@@ -490,7 +523,7 @@ Each output file gets its mode as for a single file: from its own input file if 
 `--mode` applies to every output file, so avoid it for files with different modes, e.g. configs with `0644` and secrets with `0600`, which would all get the same mode.
 
 All files are processed before any is written, so an error, e.g. a missing variable with `fail-on-missing`, leaves all files unchanged.
-Without `-w`, all output files are checked before any is written as well.
+Without `-w`, all output files are checked before any is written as well, and with `-i`, all files to change are checked for write access, see [unchanged and read-only files](#unchanged-and-read-only-files).
 Writing happens in two phases: first, the temporary files of all output files are written, and if one fails, e.g. because the disk is full, no file is changed. Then they replace the output files.
 Files that cannot be replaced and are written in place are written last. Errors of this phase name the files written already.
 
@@ -842,6 +875,7 @@ Order of precedence (highest to lowest):
 | Plugin directory | `--plugin-path` | `GONFIG_PLUGIN_PATH` | `/usr/libexec/gonfig/plugins` (except on Windows) and `./plugins` | Directory scanned recursively for executable plugins (`gonfig-plugin-*`) and deprecated Go plugins (`.so` files). If set, only this directory is scanned |
 | Log values | `--log-values` | `GONFIG_LOG_VALUES` | `false` | Includes processed values in debug logs, error messages of filters, the parser messages of invalid fragments and the diff of `config check --diff`. Values may contain secrets, so only use it for debugging; gonfig warns on startup while it is enabled |
 | Fail on missing variables | `--fail-on-missing` | `GONFIG_FAIL_ON_MISSING` | `false` | Fails for [environment variables that are not set](./FILTERS.md#missing-variables) instead of using empty strings, unless the placeholder provides a default |
+| Ignore write errors | `--ignore-write-errors` (`config process` only) | `GONFIG_IGNORE_WRITE_ERRORS` | empty | Comma-separated kinds of errors writing files back with `-i` that skip the file with a warning instead of failing. Only `read-only` is supported, see [unchanged and read-only files](#unchanged-and-read-only-files). Has no effect without `-i` |
 | Allow unknown filters | `--allow-unknown-filters` | `GONFIG_ALLOW_UNKNOWN_FILTERS` | `false` | Passes values on unchanged with a warning instead of failing for [unknown filters](./FILTERS.md#order-of-operations). This may write secrets that were meant to be hashed or encrypted |
 
 ### Config File
@@ -869,6 +903,8 @@ log-values: false
 fail-on-missing: false
 # Fail on unknown filters instead of passing values on unchanged (default)
 allow-unknown-filters: false
+# Skip read-only files with a warning when writing back with -i, e.g. mounted ConfigMaps (default: none)
+ignore-write-errors: [read-only]
 # JSON Schemas the processed files matching a pattern are validated against, see "Different schemas per file"
 schemas:
   - files: service.yaml

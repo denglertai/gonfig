@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -141,6 +142,44 @@ func TestProcessSeveralFilesInline(t *testing.T) {
 		assert.Equal(t, os.FileMode(0o644), fileMode(t, paths[0]))
 		assert.Equal(t, os.FileMode(0o600), fileMode(t, paths[2]), "each file keeps its mode")
 	}
+}
+
+// TestProcessInlineSkipsUnchangedFiles checks that -i leaves files without changed values alone, even if gonfig would
+// format them differently, while -o still writes them
+func TestProcessInlineSkipsUnchangedFiles(t *testing.T) {
+	t.Setenv("MULTI_VALUE", "value")
+	dir := t.TempDir()
+	paths := writeFiles(t, dir, map[string]string{
+		"compact.json": `{"a":1}`, "changed.yaml": "a: ${MULTI_VALUE}\n",
+	}, "compact.json", "changed.yaml")
+	past := time.Now().Add(-time.Hour).Truncate(time.Second)
+	require.NoError(t, os.Chtimes(paths[0], past, past))
+
+	_, err := runGonfig(t, "config", "process", "-i", "-f", paths[0], "-f", paths[1])
+	require.NoError(t, err)
+	assert.Equal(t, `{"a":1}`, readFile(t, paths[0]))
+	info, err := os.Stat(paths[0])
+	require.NoError(t, err)
+	assert.True(t, info.ModTime().Equal(past), "the unchanged file keeps its mtime")
+	assert.Equal(t, "a: value\n", readFile(t, paths[1]))
+
+	out := filepath.Join(dir, "out.json")
+	_, err = runGonfig(t, "config", "process", "-f", paths[0], "-o", out)
+	require.NoError(t, err)
+	assert.Equal(t, "{\n  \"a\": 1\n}\n", readFile(t, out), "-o writes unchanged files as before")
+}
+
+// TestProcessIgnoreWriteErrors checks that --ignore-write-errors accepts read-only, also without -i, and rejects
+// unknown values
+func TestProcessIgnoreWriteErrors(t *testing.T) {
+	path := writeFiles(t, t.TempDir(), map[string]string{"a.yaml": "a: 1\n"}, "a.yaml")[0]
+
+	_, err := runGonfig(t, "config", "process", "-i", "-f", path, "--ignore-write-errors=read-only")
+	assert.NoError(t, err)
+	_, err = runGonfig(t, "config", "process", "-f", path, "--ignore-write-errors", "READ-ONLY")
+	assert.NoError(t, err)
+	_, err = runGonfig(t, "config", "process", "-i", "-f", path, "--ignore-write-errors=read-only,disk-full")
+	assert.EqualError(t, err, `invalid value "disk-full" for ignore-write-errors, expected read-only`)
 }
 
 // TestProcessSeveralFilesIntoDirectory checks that -o with a directory writes each file into it under its base name,
@@ -309,4 +348,37 @@ func TestSeveralFilesThroughLinks(t *testing.T) {
 	_, err = runGonfig(t, "config", "process", "-f", paths[0], "-f", paths[1], "-o", out, "-w")
 	assert.EqualError(t, err, fmt.Sprintf("%s and %s would both be written to %s", paths[0], paths[1], target))
 	assert.Equal(t, "existing\n", readFile(t, paths[2]))
+}
+
+// TestIgnoreWriteErrorsFlagOnlyOnProcess checks that only config process offers --ignore-write-errors
+func TestIgnoreWriteErrorsFlagOnlyOnProcess(t *testing.T) {
+	out, err := runGonfig(t, "config", "process", "--help")
+	require.NoError(t, err)
+	assert.Contains(t, out, "--ignore-write-errors")
+
+	for _, args := range [][]string{{"--help"}, {"config", "--help"}, {"config", "check", "--help"}, {"version", "--help"}} {
+		out, err := runGonfig(t, args...)
+		require.NoError(t, err, args)
+		assert.NotContains(t, out, "ignore-write-errors", args)
+	}
+
+	_, err = runGonfig(t, "config", "check", "--ignore-write-errors=read-only")
+	assert.ErrorContains(t, err, "unknown flag")
+}
+
+// TestInvalidIgnoreWriteErrorsEnvironment checks that an invalid GONFIG_IGNORE_WRITE_ERRORS is reported by the
+// commands that read the option and does not break commands that don't process files, and that a valid one applies
+// to config process without the flag
+func TestInvalidIgnoreWriteErrorsEnvironment(t *testing.T) {
+	path := writeFiles(t, t.TempDir(), map[string]string{"a.yaml": "a: 1\n"}, "a.yaml")[0]
+
+	t.Setenv("GONFIG_IGNORE_WRITE_ERRORS", "junk")
+	_, err := runGonfig(t, "config", "process", "-i", "-f", path)
+	assert.EqualError(t, err, `invalid value "junk" for ignore-write-errors, expected read-only`)
+	_, err = runGonfig(t, "version")
+	assert.NoError(t, err)
+
+	t.Setenv("GONFIG_IGNORE_WRITE_ERRORS", "read-only")
+	_, err = runGonfig(t, "config", "process", "-i", "-f", path)
+	assert.NoError(t, err)
 }

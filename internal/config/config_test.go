@@ -562,3 +562,111 @@ unknown key "schemas[0].schemas", expected files or schema`},
 		})
 	}
 }
+
+// TestLoadAppConfig_IgnoreWriteErrors checks that ignore-write-errors is read from a config file list or scalar, from a
+// comma separated environment variable and from a flag, trimmed, lower cased and without empty values or duplicates
+func TestLoadAppConfig_IgnoreWriteErrors(t *testing.T) {
+	testCases := []struct {
+		desc   string
+		config string
+		env    string
+		flag   string
+		want   []string
+	}{
+		{desc: "default", want: nil},
+		{desc: "config list", config: "ignore-write-errors: [read-only]\n", want: []string{WriteErrorReadOnly}},
+		{desc: "config scalar", config: "ignore-write-errors: Read-Only\n", want: []string{WriteErrorReadOnly}},
+		{desc: "env comma separated", env: " read-only, ,READ-ONLY", want: []string{WriteErrorReadOnly}},
+		{desc: "flag", flag: "read-only", want: []string{WriteErrorReadOnly}},
+		{desc: "flag overrides env", env: "unknown", flag: "read-only", want: []string{WriteErrorReadOnly}},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Setenv("GONFIG_CONFIG_PATH", dir)
+			if tC.config != "" {
+				if err := os.WriteFile(filepath.Join(dir, ".gonfig.yaml"), []byte(tC.config), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tC.env != "" {
+				t.Setenv("GONFIG_IGNORE_WRITE_ERRORS", tC.env)
+			}
+			v := mustSetupViper(t, nil)
+			if tC.flag != "" {
+				// The flag is defined by config process only, which binds it like this
+				flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
+				flags.StringSlice("ignore-write-errors", nil, "")
+				if err := flags.Parse([]string{"--ignore-write-errors=" + tC.flag}); err != nil {
+					t.Fatal(err)
+				}
+				if err := v.BindPFlag("ignore-write-errors", flags.Lookup("ignore-write-errors")); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			cfg := mustLoadAppConfig(t, v)
+			if !reflect.DeepEqual(cfg.IgnoreWriteErrors, tC.want) {
+				t.Fatalf("expected %v, got %v", tC.want, cfg.IgnoreWriteErrors)
+			}
+			if got := cfg.IgnoresWriteError(WriteErrorReadOnly); got != (tC.want != nil) {
+				t.Fatalf("expected IgnoresWriteError %v, got %v", tC.want != nil, got)
+			}
+		})
+	}
+}
+
+// TestLoadAppConfig_InvalidIgnoreWriteErrors checks that unknown kinds of ignore-write-errors fail
+func TestLoadAppConfig_InvalidIgnoreWriteErrors(t *testing.T) {
+	t.Setenv("GONFIG_CONFIG_PATH", t.TempDir())
+	t.Setenv("GONFIG_IGNORE_WRITE_ERRORS", "read-only,permission")
+
+	_, err := LoadAppConfig(mustSetupViper(t, nil))
+	want := `invalid value "permission" for ignore-write-errors, expected read-only`
+	if err == nil || err.Error() != want {
+		t.Fatalf("expected error %q, got %v", want, err)
+	}
+}
+
+// TestLoadAppConfig_IgnoreWriteErrorsTypes checks that an empty or a non-list value of ignore-write-errors in a config
+// file is handled: null and an empty list ignore nothing, a number fails
+func TestLoadAppConfig_IgnoreWriteErrorsTypes(t *testing.T) {
+	testCases := []struct {
+		desc    string
+		config  string
+		wantErr string
+	}{
+		{desc: "null", config: "ignore-write-errors:\n"},
+		{desc: "empty list", config: "ignore-write-errors: []\n"},
+		{desc: "empty string", config: "ignore-write-errors: \"\"\n"},
+		{desc: "number", config: "ignore-write-errors: 5\n", wantErr: "invalid ignore-write-errors, expected a list of read-only"},
+		{desc: "map", config: "ignore-write-errors: {a: b}\n", wantErr: "invalid ignore-write-errors, expected a list of read-only"},
+		{desc: "list with comma separated item", config: "ignore-write-errors: [\"read-only, read-only\"]\n"},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Setenv("GONFIG_CONFIG_PATH", dir)
+			if err := os.WriteFile(filepath.Join(dir, ".gonfig.yaml"), []byte(tC.config), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			cfg, err := LoadAppConfig(mustSetupViper(t, nil))
+			if tC.wantErr != "" {
+				if err == nil || err.Error() != tC.wantErr {
+					t.Fatalf("expected error %q, got %v", tC.wantErr, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tC.desc == "list with comma separated item" {
+				if !reflect.DeepEqual(cfg.IgnoreWriteErrors, []string{WriteErrorReadOnly}) {
+					t.Fatalf("got %v", cfg.IgnoreWriteErrors)
+				}
+			} else if len(cfg.IgnoreWriteErrors) != 0 {
+				t.Fatalf("expected nothing ignored, got %v", cfg.IgnoreWriteErrors)
+			}
+		})
+	}
+}

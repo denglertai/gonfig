@@ -120,6 +120,100 @@ func TestFileProcessorProcessesEntries(t *testing.T) {
 	assert.NotContains(t, logs.String(), "entry=static")
 }
 
+// TestFileProcessorChanged checks that Changed reports whether processing changed any value, independent of whether
+// the output is formatted differently than the file
+func TestFileProcessorChanged(t *testing.T) {
+	t.Setenv("PROCESSOR_TEST_CHANGED", "x")
+	t.Setenv("PROCESSOR_TEST_SAME", "${PROCESSOR_TEST_SAME}")
+	t.Setenv("PROCESSOR_TEST_PORT", "5")
+	tests := []struct {
+		name    string
+		file    string
+		content string
+		want    bool
+	}{
+		{"no placeholders, reformatted", "compact.json", `{"a":1}`, false},
+		{"placeholder replaced", "a.yaml", "a: ${PROCESSOR_TEST_CHANGED}\n", true},
+		{"value equal after processing", "same.yaml", "a: ${PROCESSOR_TEST_SAME}\n", false},
+		{"escaped placeholder", "escaped.yaml", "a: $${PROCESSOR_TEST_CHANGED}\n", true},
+		{"typed value", "typed.yaml", "a: ${PROCESSOR_TEST_PORT | to_int}\n", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file := path.Join(t.TempDir(), tt.file)
+			assert.NoError(t, os.WriteFile(file, []byte(tt.content), 0o644))
+
+			processor := NewFileProcessor(file, general.Undefined, io.Discard)
+			assert.NoError(t, processor.Process())
+			assert.Equal(t, tt.want, processor.Changed())
+		})
+	}
+}
+
+// TestFileProcessorChangedFileTypes checks Changed for fragments, typed values and escaped placeholders of the file
+// types, and for a file where only some of the values change
+func TestFileProcessorChangedFileTypes(t *testing.T) {
+	t.Setenv("PROCESSOR_TEST_PORT", "5")
+	t.Setenv("PROCESSOR_TEST_FRAGMENT", "x: 1")
+	t.Setenv("PROCESSOR_TEST_JSON_FRAGMENT", `{"x": 1}`)
+	t.Setenv("PROCESSOR_TEST_SAME", "${PROCESSOR_TEST_SAME}")
+	t.Setenv("PROCESSOR_TEST_TEXT", "text")
+	tests := []struct {
+		name     string
+		file     string
+		fileType general.FileType
+		content  string
+		want     bool
+	}{
+		{"yaml fragment", "f.yaml", general.YAML, "a: ${PROCESSOR_TEST_FRAGMENT | fragment}\n", true},
+		{"json fragment", "f.json", general.JSON, `{"a": "${PROCESSOR_TEST_JSON_FRAGMENT | fragment}"}`, true},
+		{"json typed", "t.json", general.JSON, `{"a": "${PROCESSOR_TEST_PORT | to_int}"}`, true},
+		{"json unchanged, reformatted", "u.json", general.JSON, `{"a":"b","c":[1,2]}`, false},
+		{"json escaped only", "e.json", general.JSON, `{"a": "$${PROCESSOR_TEST_TEXT}"}`, true},
+		{"toml typed", "t.toml", general.TOML, "a = \"${PROCESSOR_TEST_PORT | to_int}\"\n", true},
+		{"toml unchanged", "u.toml", general.TOML, "a = \"b\"\n[c]\nd = 1\n", false},
+		{"yaml escaped only", "e.yaml", general.YAML, "a: $${PROCESSOR_TEST_TEXT}\nb: 1\n", true},
+		{"yaml only some values change", "m.yaml", general.YAML, "a: 1\nb: ${PROCESSOR_TEST_SAME}\nc: ${PROCESSOR_TEST_TEXT}\n", true},
+		{"yaml only unchanged placeholders", "n.yaml", general.YAML, "a: 1\nb: ${PROCESSOR_TEST_SAME}\n", false},
+		{"yaml default of a set variable", "d.yaml", general.YAML, "a: ${PROCESSOR_TEST_TEXT | default(x)}\n", true},
+		{"properties unchanged", "u.properties", general.PROPERTIES, "a=b\n", false},
+		{"properties changed", "c.properties", general.PROPERTIES, "a=${PROCESSOR_TEST_TEXT}\n", true},
+		{"plain unchanged", "u.txt", general.PLAIN, "a b\n", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file := path.Join(t.TempDir(), tt.file)
+			assert.NoError(t, os.WriteFile(file, []byte(tt.content), 0o644))
+
+			processor := NewFileProcessor(file, tt.fileType, io.Discard)
+			assert.NoError(t, processor.Process())
+			assert.Equal(t, tt.want, processor.Changed())
+		})
+	}
+}
+
+// TestFileProcessorChangedIsResetByProcess checks that Changed refers to the last Process only, also if it fails
+func TestFileProcessorChangedIsResetByProcess(t *testing.T) {
+	t.Setenv("PROCESSOR_TEST_TEXT", "text")
+	file := path.Join(t.TempDir(), "a.yaml")
+	assert.NoError(t, os.WriteFile(file, []byte("a: ${PROCESSOR_TEST_TEXT}\n"), 0o644))
+
+	processor := NewFileProcessor(file, general.Undefined, io.Discard)
+	assert.False(t, processor.Changed(), "nothing is processed yet")
+	assert.NoError(t, processor.Process())
+	assert.True(t, processor.Changed())
+
+	assert.NoError(t, os.WriteFile(file, []byte("a: plain\n"), 0o644))
+	assert.NoError(t, processor.Process())
+	assert.False(t, processor.Changed())
+
+	assert.NoError(t, os.WriteFile(file, []byte("a: ${PROCESSOR_TEST_TEXT}\n"), 0o644))
+	assert.NoError(t, processor.Process())
+	assert.NoError(t, os.WriteFile(file, []byte("a: ${PROCESSOR_TEST_TEXT | nofilter}\n"), 0o644))
+	assert.Error(t, processor.Process())
+	assert.False(t, processor.Changed(), "a failed Process is not reported as changed")
+}
+
 // failingWriter fails on every write
 type failingWriter struct{}
 

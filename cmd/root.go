@@ -45,6 +45,14 @@ It provides a flexible plugin system for extending functionality and a filtering
 		if err != nil {
 			return err
 		}
+		// Options with flags of single commands are bound if the command has them, so the config file and environment
+		// variables set them for the other commands as well, e.g. ignore-write-errors of config process
+		for _, name := range commandOptionFlags {
+			// BindPFlag only fails for a nil flag, which is excluded by the lookup
+			if flag := cmd.Flags().Lookup(name); flag != nil {
+				_ = v.BindPFlag(name, flag)
+			}
+		}
 
 		// Load into AppConfig
 		cfg, err := config.LoadAppConfig(v)
@@ -89,6 +97,9 @@ It provides a flexible plugin system for extending functionality and a filtering
 	},
 	TraverseChildren: true,
 }
+
+// commandOptionFlags are the options whose flags are defined by single commands instead of the root command
+var commandOptionFlags = []string{"ignore-write-errors"}
 
 // appConfigKey is the context key under which the AppConfig is stored
 type appConfigKey struct{}

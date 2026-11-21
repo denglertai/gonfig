@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/denglertai/gonfig/internal/config"
 	"github.com/denglertai/gonfig/internal/output"
 	"github.com/denglertai/gonfig/pkg/logging"
 	"github.com/spf13/cobra"
@@ -35,7 +36,14 @@ Its output goes to stdout, or to a file with -o <file>. New files get mode 0600 
 --schema validates every processed JSON, YAML, TOML, dotenv or INI file against a JSON Schema before anything is
 written, so a file that does not match it leaves all files unchanged. --schema '<pattern>=<schema>' validates only the
 files matching the pattern, e.g. --schema 'app*.yaml=app.schema.json' --schema 'logging.yaml=logging.schema.json', and
-can be repeated. Without --schema, the schemas of the config file apply.`,
+can be repeated. Without --schema, the schemas of the config file apply.
+
+With -i, files whose values processing didn't change, or whose output equals their content, are not written, so files
+that are already complete, e.g. mounted ConfigMaps, can stay read-only and keep their modification time. --mode still
+changes the mode of such a file if it differs. Before any file is written, every file that changes is checked for
+whether it can be written, so a file on a read-only file system fails before any file has been changed.
+--ignore-write-errors=read-only (config file: ignore-write-errors: [read-only], env var: GONFIG_IGNORE_WRITE_ERRORS)
+skips such files with a warning instead and writes the others. It has no effect without -i.`,
 	Args:             noArgs,
 	TraverseChildren: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -64,6 +72,11 @@ can be repeated. Without --schema, the schemas of the config file apply.`,
 		mode, err := parseMode(modeFlag)
 		if err != nil {
 			return err
+		}
+
+		ignoreReadOnly := GetAppConfig(cmd).IgnoresWriteError(config.WriteErrorReadOnly)
+		if ignoreReadOnly && !inline {
+			logging.Debug("Ignoring ignore-write-errors, which only applies to -i")
 		}
 
 		// Successful runs are silent by default, so their details are only logged at debug level
@@ -124,6 +137,13 @@ can be repeated. Without --schema, the schemas of the config file apply.`,
 
 			// New files get the mode of their input file unless --mode is given, so restricting a template restricts its output
 			opts := output.Options{Mode: mode, ForceMode: modeFlag != ""}
+			if inline {
+				// Only files written back are left alone, since -o and stdout expect the output to be written
+				opts.SkipUnchanged = true
+				opts.Unchanged = !processor.Changed()
+				opts.CheckWritable = true
+				opts.IgnoreReadOnly = ignoreReadOnly
+			}
 			if !opts.ForceMode {
 				// The input file has just been read, so this only fails if it was removed meanwhile, using a safe mode then.
 				// stdin has no mode to take, so its output gets the safe mode as well.
@@ -202,6 +222,9 @@ func init() {
 	processCmd.Flags().StringArray("schema", nil, "JSON Schema file the processed files have to match, or <pattern>=<schema> for the files matching the pattern; can be repeated. JSON, YAML, TOML, dotenv and INI files only. Nothing is written if a file does not match")
 
 	processCmd.Flags().String("mode", "", "File mode of the output files in octal, e.g. 0600 (defaults to the mode of an existing output file, or of the input file for new ones)")
+
+	// The option is bound to the flag in the root command, so the config file and environment variable set it as well
+	processCmd.Flags().StringSlice("ignore-write-errors", nil, "Kinds of errors writing files back with -i that skip the file with a warning instead of failing; only read-only, for read-only file systems or files with the read-only attribute on Windows (env var: GONFIG_IGNORE_WRITE_ERRORS)")
 
 	// -i writes to the input files, so an output given as well would be ignored
 	processCmd.MarkFlagsMutuallyExclusive("inline", "output")

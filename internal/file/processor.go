@@ -62,6 +62,8 @@ type FileProcessor struct {
 	source []byte
 	// format is the BOM and line ending of the file, which are restored when writing, see restoreFormat
 	format textFormat
+	// changed is set once processing changed a value, see Changed
+	changed bool
 }
 
 // NewFileProcessor creates a new file processor
@@ -98,6 +100,7 @@ func NewFileProcessor(fileName string, fileType general.FileType, output io.Writ
 // as far as the file type's library allows, e.g. comments and key order.
 // If any value fails to process, nothing is written.
 func (fp *FileProcessor) Process() error {
+	fp.changed = false
 	handler, entries, err := fp.read()
 	if err != nil {
 		return err
@@ -114,6 +117,13 @@ func (fp *FileProcessor) Process() error {
 	}
 
 	return nil
+}
+
+// Changed returns whether the last Process changed any value of the file, e.g. by replacing a placeholder or an
+// escaped placeholder. A file whose values are all unchanged needs no writing back, even if its output is formatted
+// differently, e.g. compact JSON.
+func (fp *FileProcessor) Changed() bool {
+	return fp.changed
 }
 
 // read reads and parses the file with the handler of its file type and returns the handler and its entries
@@ -321,16 +331,23 @@ func (fp *FileProcessor) applyEntry(entry ConfigEntry, current string, allowFrag
 	}
 
 	if fragment, isFragment := newVal.(filter.Fragment); isFragment {
+		// A fragment replaces the entry by a structure, which always differs from the text of the entry
+		fp.changed = true
 		return fp.insertFragment(entry, fragment, allowFragments, fileGroup)
 	}
 
 	newText, ok := newVal.(string)
 	if !ok {
-		// Write non-string results (e.g. of to_int) with their type if the file type supports it, otherwise as text
+		// Write non-string results (e.g. of to_int) with their type if the file type supports it, otherwise as text.
+		// A typed value replaces a string containing a placeholder, so it always changes the entry.
 		if typed, ok := entry.(TypedConfigEntry); ok && typed.SetTypedValue(newVal) {
+			fp.changed = true
 			return nil
 		}
 		newText = fmt.Sprint(newVal)
+	}
+	if newText != current {
+		fp.changed = true
 	}
 	entry.SetValue(newText)
 
