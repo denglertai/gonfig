@@ -360,3 +360,72 @@ func TestCheckDiffMissingFile(t *testing.T) {
 	_, err := processor.Check()
 	assert.ErrorIs(t, err, os.ErrNotExist)
 }
+
+// TestCheckMaskedTomlKeys checks that keys of a TOML table that are all masked as *** don't fail check, with and
+// without a diff, since only masking makes them equal
+func TestCheckMaskedTomlKeys(t *testing.T) {
+	t.Setenv("CHECK_KEY_1", "made-up-a")
+	t.Setenv("CHECK_KEY_2", "made-up-b")
+	const content = "\"${CHECK_KEY_1}\" = 1\n\"${CHECK_KEY_2}\" = 2\n"
+
+	report := checkFile(t, general.TOML, content)
+	assert.Empty(t, report.Error)
+	assert.False(t, report.Failed())
+
+	assert.Equal(t, "@@ -1,2 +1,2 @@\n-\"${CHECK_KEY_1}\" = 1\n-\"${CHECK_KEY_2}\" = 2\n+\"***\" = 1\n+\"***\" = 2\n",
+		checkDiff(t, general.TOML, content))
+}
+
+// TestCheckSkipsWriteAfterEntryErrors checks that a file is not written without a diff if an entry failed, since the
+// placeholder kept by the entry may make writing fail, e.g. as the anchor of a merge key, so the entry's error is
+// reported instead of a write error
+func TestCheckSkipsWriteAfterEntryErrors(t *testing.T) {
+	t.Setenv("CHECK_FRAGMENT", "{k: made-up-v}")
+	report := checkFile(t, general.YAML, "base: &b ${CHECK_FRAGMENT | nosuchfilter | fragment}\nx: {<<: *b}\n")
+	assert.Empty(t, report.Error)
+	assert.Contains(t, report.Entries[0].Error, `unknown filter "nosuchfilter"`)
+	assert.Equal(t, 1, report.Errors())
+}
+
+// TestCheckMaskedTomlKeyFragmentConflicts checks that check fails like process for keys of fragments that are also
+// defined by a table header, although the keys produced by placeholders are masked, with and without a diff, and that
+// the names the keys are validated with are never shown
+func TestCheckMaskedTomlKeyFragmentConflicts(t *testing.T) {
+	const content = "[t]\na = \"str\"\n\"${CHECK_FRAGMENT | fragment}\" = \"\"\n[t.sub]\nz = 1\n"
+	for _, fragment := range []string{"sub = 1", "sub.z = 2", "a = 1\nsub.y = 3"} {
+		t.Run(fragment, func(t *testing.T) {
+			t.Setenv("CHECK_FRAGMENT", fragment)
+			_, err := processFragment(t, general.TOML, content, fragment)
+			assert.ErrorContains(t, err, "a key of a fragment is also defined by a table header")
+
+			report := checkFile(t, general.TOML, content)
+			assert.Contains(t, report.Error, "a key of a fragment is also defined by a table header")
+			assert.NotContains(t, report.Error, "gonfig-masked-key")
+
+			file := path.Join(t.TempDir(), "config.toml")
+			assert.NoError(t, os.WriteFile(file, []byte(content), 0o644))
+			processor := NewFileProcessor(file, general.TOML, io.Discard)
+			processor.Diff = true
+			report, err = processor.Check()
+			assert.NoError(t, err)
+			assert.Contains(t, report.Error, "a key of a fragment is also defined by a table header")
+		})
+	}
+}
+
+// TestCheckMaskedTomlKeysWithPlaceholderKeysOfFragments checks that keys with placeholders within a fragment used as a
+// key, which are masked alike, don't fail check, and that the diff shows them masked, not by the names they are
+// validated with
+func TestCheckMaskedTomlKeysWithPlaceholderKeysOfFragments(t *testing.T) {
+	t.Setenv("CHECK_KEY_1", "made-up-a")
+	t.Setenv("CHECK_KEY_2", "made-up-b")
+	t.Setenv("CHECK_FRAGMENT", "\"${CHECK_KEY_1}\" = 1\n\"${CHECK_KEY_2}\" = 2")
+	content := "[t]\n\"${CHECK_FRAGMENT | fragment}\" = \"\"\n"
+
+	report := checkFile(t, general.TOML, content)
+	assert.Empty(t, report.Error)
+	diff := checkDiff(t, general.TOML, content)
+	assert.Contains(t, diff, "\"***\" = ")
+	assert.NotContains(t, diff, "gonfig-masked-key")
+	assert.NotContains(t, diff, "made-up")
+}

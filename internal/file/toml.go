@@ -30,6 +30,14 @@ type TomlFileHandler struct {
 	bom bool
 	// writtenKeys records the positions of the keys produced by placeholders when writing, see keyLocator
 	writtenKeys *tomlWrittenKeys
+	// masked is set while values are masked, see setMasked
+	masked bool
+}
+
+// setMasked makes Write validate the renamed keys with distinct names, since keys masked as *** collide whatever their
+// values are, see distinctKeysDocument
+func (t *TomlFileHandler) setMasked() {
+	t.masked = true
 }
 
 // TomlConfigEntry is a configuration entry for TOML files: a string value, or a key containing a placeholder.
@@ -486,7 +494,11 @@ func (t *TomlFileHandler) Write(destination io.Writer) error {
 	}
 	keys.base = result.Len()
 	if keyChanged := spliceToml(&result, t.data, t.entries, keys); keyChanged {
-		if err := checkRenamedKeys(bytes.TrimPrefix(result.Bytes(), utf8BOM), keyFragments); err != nil {
+		written := bytes.TrimPrefix(result.Bytes(), utf8BOM)
+		if t.masked {
+			written = t.distinctKeysDocument()
+		}
+		if err := checkRenamedKeys(written, keyFragments); err != nil {
 			return err
 		}
 	}
@@ -499,6 +511,42 @@ func (t *TomlFileHandler) Write(destination io.Writer) error {
 
 	_, err = destination.Write(result.Bytes())
 	return err
+}
+
+// distinctKeysDocument returns the document with every key produced by placeholders replaced by a distinct name, which
+// is only validated, never written or shown. Keys masked as *** collide whatever their values are, while collisions with
+// static keys, keys of fragments and table headers are still found, so check fails like process for them. Only
+// collisions between the values of placeholders go undetected while values are masked.
+func (t *TomlFileHandler) distinctKeysDocument() []byte {
+	var renamed []*TomlConfigEntry
+	var collect func(entries []*TomlConfigEntry)
+	collect = func(entries []*TomlConfigEntry) {
+		for _, entry := range entries {
+			switch {
+			case entry.fragment != nil:
+				collect(entry.fragment.entries)
+				for _, override := range entry.fragment.overrides {
+					collect(override.value.entries)
+				}
+			case entry.isKey && entry.changed():
+				renamed = append(renamed, entry)
+			}
+		}
+	}
+	collect(t.entries)
+
+	values := make([]string, len(renamed))
+	for i, entry := range renamed {
+		values[i] = entry.val
+		entry.val = "gonfig-masked-key-" + strconv.Itoa(i)
+	}
+	var document bytes.Buffer
+	document.Grow(len(t.data))
+	spliceToml(&document, t.data, t.entries, &tomlWrittenKeys{})
+	for i, entry := range renamed {
+		entry.val = values[i]
+	}
+	return document.Bytes()
 }
 
 // checkOverrides returns whether fragments are merged into tables, and an error if two of them replace the same value,

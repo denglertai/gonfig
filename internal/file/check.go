@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/denglertai/gonfig/internal/diff"
 	"github.com/denglertai/gonfig/internal/filter"
@@ -127,24 +128,45 @@ func (fp *FileProcessor) checkWith(handler ConfigFileHandler) (*CheckReport, err
 
 	fp.report = &CheckReport{File: fp.FileName, Entries: []EntryReport{}}
 	defer func() { fp.report = nil }()
+	if masking, ok := handler.(maskingHandler); ok && fp.masked() {
+		masking.setMasked()
+	}
 
 	for entry := range entries {
 		// Errors are recorded in the report
 		_ = fp.processEntry(entry, true, fp.fileGroup())
 	}
 
+	// Without a diff, the file is written into nothing, since writing fails for documents process cannot write either,
+	// e.g. YAML aliases whose anchor a fragment dropped. Entries with errors keep their placeholders, which may cause
+	// such a failure, e.g. an alias of a fragment that failed, so the file is only written if no entry failed, and the
+	// errors of the entries are reported instead.
+	if !fp.Diff && fp.report.Errors() > 0 {
+		return fp.report, nil
+	}
+	// Entries with errors keep their placeholders, so the diff shows the changes of all other entries
+	var processed bytes.Buffer
+	target := io.Writer(&processed)
+	if !fp.Diff {
+		target = io.Discard
+	}
+	if err := fp.write(handler, target); err != nil {
+		fp.report.Error = fmt.Sprintf("failed to write %s: %v", fp.FileName, err)
+		return fp.report, nil
+	}
 	if fp.Diff {
-		// Entries with errors keep their placeholders, so the diff shows the changes of all other entries
-		var processed bytes.Buffer
-		if err := fp.write(handler, &processed); err != nil {
-			fp.report.Error = fmt.Sprintf("failed to write %s: %v", fp.FileName, err)
-			return fp.report, nil
-		}
 		changes := diff.Unified(fp.FileName, fp.FileName, string(fp.source), processed.String())
 		fp.report.Diff = &changes
 	}
 
 	return fp.report, nil
+}
+
+// maskingHandler is implemented by handlers that write differently while values are masked, see FileProcessor.masked:
+// a handler avoids failures that only masking causes by making different texts equal, e.g. TOML keys masked as ***
+type maskingHandler interface {
+	// setMasked is called before the entries are processed if values are masked
+	setMasked()
 }
 
 // checkEntry processes the entry like applyEntry and records the variables, templates and error in the report

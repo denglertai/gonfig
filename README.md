@@ -720,6 +720,7 @@ The check fails with exit code `1` if processing a file would fail, or if a vari
 Variables set to an empty value are reported, but don't fail the check.
 Several files are checked like [several files](#several-files) are processed, e.g. `-f 'conf.d/*.yaml'`: each file is reported, followed by the total.
 A file that cannot be read, e.g. because it is invalid, is reported with the error and counts as one; the other files are still checked.
+The check runs the write step without writing, so errors of the written file are reported as well, e.g. a YAML merge key referring to a fragment that is no mapping: `failed to write m.yaml: the alias *d on line 3 is used as the value of a merge key, but does not refer to a mapping`.
 
 Use `-o json` for a report in JSON. It lists each file with its entries and the number of its missing variables and errors, followed by the totals, for a single file as well:
 
@@ -772,6 +773,7 @@ Use `--diff` to review how processing would change a file before deploying it, e
 It adds a unified diff of the changes to the report of each file, and the field `diff` to each file of the JSON report, which is empty if nothing would change.
 The results of placeholders and the values inserted by fragments may be secrets, so they are shown as `***`, while the keys and elements of fragments are shown.
 Enable [`log-values`](#logging-notes) to see the values.
+While values are masked, the placeholders in TOML keys are checked with distinct names, so two placeholders that resolve to the same key are only reported by `config process`, or by `config check` with `--log-values`.
 
 `deploy.yaml`:
 ```yaml

@@ -532,3 +532,168 @@ $ gonfig config check -f config.yaml --diff -o json
 (exit code 0)
 
 ---
+
+[TestCheckSnapshots/fragment_replacing_an_anchored_value - 1]
+environment:
+SNAP_CHECK_BASE="pool: &pool 10\nmax: *pool"
+
+config.yaml:
+base: &base ${SNAP_CHECK_BASE | fragment}
+service:
+  <<: *base
+  name: app
+
+$ gonfig config check -f config.yaml --diff
+config.yaml: 1 entry with placeholders
+  base
+    SNAP_CHECK_BASE          set
+0 missing variables, 0 errors
+--- config.yaml
++++ config.yaml
+@@ -1,4 +1,6 @@
+-base: &base ${SNAP_CHECK_BASE | fragment}
++base: &base
++  pool: &pool '***'
++  max: *pool
+ service:
+   <<: *base
+   name: app
+(exit code 0)
+
+---
+
+[TestCheckSnapshots/scalar_fragment_used_as_a_merge_key - 1]
+environment:
+SNAP_CHECK_BASE="made-up"
+
+config.yaml:
+base: &base ${SNAP_CHECK_BASE | fragment}
+service:
+  <<: *base
+
+$ gonfig config check -f config.yaml --diff
+config.yaml: cannot be checked
+  error: failed to write config.yaml: the alias *base on line 3 is used as the value of a merge key, but does not refer to a mapping
+  base
+    SNAP_CHECK_BASE          set
+0 missing variables, 1 error
+Error: check failed: 0 missing variables, 1 error
+
+---
+
+[TestCheckSnapshots/scalar_fragment_used_as_a_merge_key_without_diff - 1]
+environment:
+SNAP_CHECK_BASE="made-up"
+
+config.yaml:
+base: &base ${SNAP_CHECK_BASE | fragment}
+service:
+  <<: *base
+
+$ gonfig config check -f config.yaml
+config.yaml: cannot be checked
+  error: failed to write config.yaml: the alias *base on line 3 is used as the value of a merge key, but does not refer to a mapping
+  base
+    SNAP_CHECK_BASE          set
+0 missing variables, 1 error
+Error: check failed: 0 missing variables, 1 error
+
+---
+
+[TestCheckSnapshots/toml_keys_masked_alike - 1]
+environment:
+SNAP_CHECK_K1="made-up-a"
+SNAP_CHECK_K2="made-up-b"
+
+config.toml:
+"${SNAP_CHECK_K1}" = 1
+"${SNAP_CHECK_K2}" = 2
+
+$ gonfig config check -f config.toml
+config.toml: 2 entries with placeholders
+  ${SNAP_CHECK_K1}
+    SNAP_CHECK_K1            set
+  ${SNAP_CHECK_K2}
+    SNAP_CHECK_K2            set
+0 missing variables, 0 errors
+(exit code 0)
+
+---
+
+[TestCheckSnapshots/toml_keys_masked_alike_with_diff - 1]
+environment:
+SNAP_CHECK_K1="made-up-a"
+SNAP_CHECK_K2="made-up-b"
+
+config.toml:
+"${SNAP_CHECK_K1}" = 1
+"${SNAP_CHECK_K2}" = 2
+
+$ gonfig config check -f config.toml --diff
+config.toml: 2 entries with placeholders
+  ${SNAP_CHECK_K1}
+    SNAP_CHECK_K1            set
+  ${SNAP_CHECK_K2}
+    SNAP_CHECK_K2            set
+0 missing variables, 0 errors
+--- config.toml
++++ config.toml
+@@ -1,2 +1,2 @@
+-"${SNAP_CHECK_K1}" = 1
+-"${SNAP_CHECK_K2}" = 2
++"***" = 1
++"***" = 2
+(exit code 0)
+
+---
+
+[TestCheckSnapshots/missing_fragment_used_by_a_merge_key - 1]
+environment:
+SNAP_CHECK_OK="{k: v}"
+
+config.yaml:
+base: &b ${SNAP_CHECK_MISSING | fragment}
+other: ${SNAP_CHECK_OK | fragment}
+x: {<<: *b}
+
+$ gonfig config check -f config.yaml --fail-on-missing
+config.yaml: 2 entries with placeholders
+  base
+    SNAP_CHECK_MISSING       missing
+    error: environment variable "SNAP_CHECK_MISSING" is not set
+  other
+    SNAP_CHECK_OK            set
+1 missing variable, 1 error
+Error: check failed: 1 missing variable, 1 error
+
+---
+
+[TestCheckSnapshots/missing_fragment_used_by_a_merge_key_with_diff - 1]
+environment:
+SNAP_CHECK_OK="{k: v}"
+
+config.yaml:
+base: &b ${SNAP_CHECK_MISSING | fragment}
+other: ${SNAP_CHECK_OK | fragment}
+x: {<<: *b}
+
+$ gonfig config check -f config.yaml --fail-on-missing --diff
+config.yaml: 2 entries with placeholders
+  base
+    SNAP_CHECK_MISSING       missing
+    error: environment variable "SNAP_CHECK_MISSING" is not set
+  other
+    SNAP_CHECK_OK            set
+1 missing variable, 1 error
+--- config.yaml
++++ config.yaml
+@@ -1,3 +1,4 @@
+ base: &b ${SNAP_CHECK_MISSING | fragment}
+-other: ${SNAP_CHECK_OK | fragment}
++other:
++  k: '***'
+ x: {<<: *b}
+Error: check failed: 1 missing variable, 1 error
+
+---
+

@@ -97,6 +97,53 @@ database:
 			},
 		},
 		{
+			name:     "fragment replacing an anchored value",
+			fileName: "config.yaml",
+			content:  "base: &base ${SNAP_CHECK_BASE | fragment}\nservice:\n  <<: *base\n  name: app\n",
+			env:      map[string]string{"SNAP_CHECK_BASE": "pool: &pool 10\nmax: *pool"},
+			args:     []string{"--diff"},
+		},
+		{
+			name:     "scalar fragment used as a merge key",
+			fileName: "config.yaml",
+			content:  "base: &base ${SNAP_CHECK_BASE | fragment}\nservice:\n  <<: *base\n",
+			env:      map[string]string{"SNAP_CHECK_BASE": "made-up"},
+			args:     []string{"--diff"},
+		},
+		{
+			name:     "scalar fragment used as a merge key without diff",
+			fileName: "config.yaml",
+			content:  "base: &base ${SNAP_CHECK_BASE | fragment}\nservice:\n  <<: *base\n",
+			env:      map[string]string{"SNAP_CHECK_BASE": "made-up"},
+		},
+		{
+			name:     "toml keys masked alike",
+			fileName: "config.toml",
+			content:  "\"${SNAP_CHECK_K1}\" = 1\n\"${SNAP_CHECK_K2}\" = 2\n",
+			env:      map[string]string{"SNAP_CHECK_K1": "made-up-a", "SNAP_CHECK_K2": "made-up-b"},
+		},
+		{
+			name:     "toml keys masked alike with diff",
+			fileName: "config.toml",
+			content:  "\"${SNAP_CHECK_K1}\" = 1\n\"${SNAP_CHECK_K2}\" = 2\n",
+			env:      map[string]string{"SNAP_CHECK_K1": "made-up-a", "SNAP_CHECK_K2": "made-up-b"},
+			args:     []string{"--diff"},
+		},
+		{
+			name:     "missing fragment used by a merge key",
+			fileName: "config.yaml",
+			content:  "base: &b ${SNAP_CHECK_MISSING | fragment}\nother: ${SNAP_CHECK_OK | fragment}\nx: {<<: *b}\n",
+			env:      map[string]string{"SNAP_CHECK_OK": "{k: v}"},
+			args:     []string{"--fail-on-missing"},
+		},
+		{
+			name:     "missing fragment used by a merge key with diff",
+			fileName: "config.yaml",
+			content:  "base: &b ${SNAP_CHECK_MISSING | fragment}\nother: ${SNAP_CHECK_OK | fragment}\nx: {<<: *b}\n",
+			env:      map[string]string{"SNAP_CHECK_OK": "{k: v}"},
+			args:     []string{"--fail-on-missing", "--diff"},
+		},
+		{
 			name:     "fail on missing",
 			fileName: "config.yaml",
 			content: `password: ${SNAP_CHECK_PASWORD}
@@ -283,4 +330,32 @@ func renderCheckSnapshot(tC checkSnapshotCase, args []string, output string, err
 		sb.WriteString("(exit code 0)\n")
 	}
 	return sb.String()
+}
+
+// TestCheckAgreesWithProcessOnTomlKeyFragmentConflicts checks that a key of a fragment that is also defined by a table
+// header fails process and check alike, with and without --diff and --schema, although check masks the keys produced
+// by placeholders, and that keys masked alike don't fail either of them
+func TestCheckAgreesWithProcessOnTomlKeyFragmentConflicts(t *testing.T) {
+	const content = "[t]\na = \"str\"\n\"${FRAG | fragment}\" = \"\"\n[t.sub]\nz = 1\n\"${KEY_1}\" = 1\n\"${KEY_2}\" = 2\n"
+	t.Setenv("KEY_1", "made-up-a")
+	t.Setenv("KEY_2", "made-up-b")
+	for fragment, wantErr := range map[string]bool{"sub = 1": true, "sub.z = 2": true, "a = 1\nsub.y = 3": true, "ok = 1": false} {
+		for _, args := range [][]string{{"process"}, {"check"}, {"check", "--diff"}, {"check", "--schema", "schema.json"}} {
+			t.Run(fragment+" "+strings.Join(args, " "), func(t *testing.T) {
+				t.Setenv("FRAG", fragment)
+				t.Chdir(t.TempDir())
+				assert.NoError(t, os.WriteFile("config.toml", []byte(content), 0o644))
+				assert.NoError(t, os.WriteFile("schema.json", []byte("{}"), 0o644))
+
+				var out bytes.Buffer
+				rootCmd.SetOut(&out)
+				t.Cleanup(func() { rootCmd.SetOut(nil) })
+				resetFlags(t)
+				rootCmd.SetArgs(append([]string{"config", args[0], "-f", "config.toml"}, args[1:]...))
+				err := rootCmd.Execute()
+				assert.Equal(t, wantErr, err != nil, "%v: %s", err, out.String())
+				assert.NotContains(t, out.String(), "gonfig-masked-key")
+			})
+		}
+	}
 }

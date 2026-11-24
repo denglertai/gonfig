@@ -200,13 +200,29 @@ func writeCheckText(w io.Writer, reports checkReports) error {
 func writeCheckReportText(sb *strings.Builder, report *file.CheckReport) {
 	if report.Error != "" {
 		fmt.Fprintf(sb, "%s: cannot be checked\n  error: %s\n", report.File, report.Error)
+		// A file that cannot be written has entries, whose errors may be the cause, e.g. a missing fragment
+		writeCheckEntriesText(sb, report.Entries)
 		writeSchemaNotValidated(sb, report)
 		fmt.Fprintf(sb, "%s\n", checkSummary(report))
 		return
 	}
 	fmt.Fprintf(sb, "%s: %s with placeholders\n", report.File, plural(len(report.Entries), "entry", "entries"))
 
-	for _, entry := range report.Entries {
+	writeCheckEntriesText(sb, report.Entries)
+	for _, violation := range report.SchemaViolations {
+		fmt.Fprintf(sb, "  schema: %s\n", violation)
+	}
+	writeSchemaNotValidated(sb, report)
+
+	fmt.Fprintf(sb, "%s\n", checkSummary(report))
+	if report.Diff != nil {
+		sb.WriteString(*report.Diff)
+	}
+}
+
+// writeCheckEntriesText writes the entries of a report with their variables, templates and errors
+func writeCheckEntriesText(sb *strings.Builder, entries []file.EntryReport) {
+	for _, entry := range entries {
 		fmt.Fprintf(sb, "  %s\n", entry.Path)
 		for _, variable := range entry.Variables {
 			// The default only applies to variables that are not set or empty
@@ -222,15 +238,6 @@ func writeCheckReportText(sb *strings.Builder, report *file.CheckReport) {
 		if entry.Error != "" {
 			fmt.Fprintf(sb, "    error: %s\n", entry.Error)
 		}
-	}
-	for _, violation := range report.SchemaViolations {
-		fmt.Fprintf(sb, "  schema: %s\n", violation)
-	}
-	writeSchemaNotValidated(sb, report)
-
-	fmt.Fprintf(sb, "%s\n", checkSummary(report))
-	if report.Diff != nil {
-		sb.WriteString(*report.Diff)
 	}
 }
 
