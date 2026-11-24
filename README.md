@@ -773,6 +773,8 @@ Use `--diff` to review how processing would change a file before deploying it, e
 It adds a unified diff of the changes to the report of each file, and the field `diff` to each file of the JSON report, which is empty if nothing would change.
 The results of placeholders and the values inserted by fragments may be secrets, so they are shown as `***`, while the keys and elements of fragments are shown.
 Enable [`log-values`](#logging-notes) to see the values.
+The diff shows only the structure of fragments: their comments (YAML, TOML and XML) and XML processing instructions and directives are left out, while `config process` writes the file unchanged by this.
+YAML anchor names are shown, as they are structure.
 While values are masked, the placeholders in TOML keys are checked with distinct names, so two placeholders that resolve to the same key are only reported by `config process`, or by `config check` with `--log-values`.
 
 `deploy.yaml`:

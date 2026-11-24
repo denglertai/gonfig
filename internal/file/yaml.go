@@ -113,6 +113,11 @@ func (y *YamlConfigEntry) SetFragment(f filter.Fragment) ([]ConfigEntry, error) 
 	if fragment == nil {
 		fragment = &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!null"}
 	}
+	// Check doesn't show the comments of fragments, since the text of fragments is masked; the comments of the file
+	// stay, see keepYamlComments
+	if y.handler.masked {
+		clearYamlComments(fragment)
+	}
 
 	// A line comment of a value belongs to its key if the value is written as a block below the key. Empty mappings and
 	// sequences are written as {} and [] on the line of the key, so their comment stays on them, e.g. "a: [] #c".
@@ -152,6 +157,9 @@ func (y *YamlConfigEntry) mergeFragment(fragment *yaml.Node, names map[string]in
 		return nil, nil
 	}
 
+	if y.handler.masked {
+		clearYamlComments(fragment)
+	}
 	kept := map[*yaml.Node]string{}
 	entries := y.handler.collectEntries(func() { y.handler.mergeMappings(y.parent, fragment, y.parentPath, kept) })
 	y.handler.keepYamlAnchors(fragment, kept, names)
@@ -177,6 +185,14 @@ func parseYamlFragment(text string) (*yaml.Node, error) {
 	fragment := document.Content[0]
 	resetYamlStyles(fragment)
 	return fragment, nil
+}
+
+// clearYamlComments removes the comments of the node and all nodes within it
+func clearYamlComments(node *yaml.Node) {
+	node.HeadComment, node.LineComment, node.FootComment = "", "", ""
+	for _, child := range node.Content {
+		clearYamlComments(child)
+	}
 }
 
 // keepYamlComments keeps the comments of a replaced node, unless the replacing node has comments of its own
@@ -215,6 +231,13 @@ type YamlConfigFileHandler struct {
 	fragmentNodes map[*yaml.Node]struct{}
 	// insertedFragment is set once a fragment was inserted, which is the only way an alias may lose its anchor
 	insertedFragment bool
+	// masked is set while values are masked, so the comments of fragments are not written, see maskingHandler
+	masked bool
+}
+
+// setMasked removes the comments of the fragments inserted from now on, since their text is masked
+func (y *YamlConfigFileHandler) setMasked() {
+	y.masked = true
 }
 
 // NewYamlConfigFileHandler creates a new YAML configuration file handler

@@ -163,6 +163,7 @@ func (fp *FileProcessor) checkWith(handler ConfigFileHandler) (*CheckReport, err
 }
 
 // maskingHandler is implemented by handlers that write differently while values are masked, see FileProcessor.masked:
+// check doesn't show fragment text other than its structure, e.g. comments, since the text of fragments is masked, and
 // a handler avoids failures that only masking causes by making different texts equal, e.g. TOML keys masked as ***
 type maskingHandler interface {
 	// setMasked is called before the entries are processed if values are masked

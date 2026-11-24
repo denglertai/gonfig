@@ -365,6 +365,37 @@ func FuzzTomlKeyFragment(f *testing.F) {
 	})
 }
 
+// FuzzTomlComments checks that removing the comments found by tomlComments from valid TOML, as a document and as the
+// value of a pair, leaves valid TOML that is read as the original, so no # within a string is taken for a comment and
+// no comment is left behind
+func FuzzTomlComments(f *testing.F) {
+	for _, seed := range []string{"a = 1 # c", "a = 1#c", "a = \"x#y\" # c", "a = 'x#y'#c", "a = \"\"\"x\\\"\"\"#\"\"\" # c",
+		"a = \"\"\"\"\"\"\"#\"\"\"", "a = '''x#''''' # c", "a = [\n  1, # c\n  \"#\", #d\n]\r\n# e\r\nb = { c = '#' } # f", "# only",
+		"a = \"\\\\\" # c", "a = \"\"\"\\\n  #\"\"\"", "# \"\n'#'=1", "a = \"\"\"\"\"\"\" # c"} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, text string) {
+		for _, document := range []string{text, "v = " + text + "\n"} {
+			var want map[string]any
+			if toml.Unmarshal([]byte(document), &want) != nil {
+				continue
+			}
+			result := []byte(document)
+			comments := tomlComments(result)
+			for i := len(comments) - 1; i >= 0; i-- {
+				result = slices.Delete(result, comments[i].start, comments[i].end)
+			}
+			var got map[string]any
+			if err := toml.Unmarshal(result, &got); err != nil {
+				t.Fatalf("%q without its comments is %q, which cannot be read: %v", document, result, err)
+			}
+			if !tomlValuesEqual(got, want) {
+				t.Fatalf("%q without its comments is %q, which is read as %v, want %v", document, result, got, want)
+			}
+		}
+	})
+}
+
 // tomlValuesEqual returns whether two decoded TOML values are equal, including their types, e.g. 1 and "1" differ.
 // NaN equals NaN, and times are equal if they are the same instant with the same offset, since each parsed time
 // gets its own location.

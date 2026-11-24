@@ -697,3 +697,27 @@ Error: check failed: 1 missing variable, 1 error
 
 ---
 
+[TestCheckSnapshots/diff_without_the_comments_of_fragments - 1]
+environment:
+SNAP_CHECK_FR="[1, 2] # made-up-fragment-comment"
+
+config.yaml:
+a: &k ${SNAP_CHECK_FR | fragment} # file-comment
+b: *k
+
+$ gonfig config check -f config.yaml --diff
+config.yaml: 1 entry with placeholders
+  a
+    SNAP_CHECK_FR            set
+0 missing variables, 0 errors
+--- config.yaml
++++ config.yaml
+@@ -1,2 +1,4 @@
+-a: &k ${SNAP_CHECK_FR | fragment} # file-comment
++a: &k
++  - '***' # file-comment
++  - '***'
+ b: *k
+(exit code 0)
+
+---

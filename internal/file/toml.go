@@ -35,7 +35,7 @@ type TomlFileHandler struct {
 }
 
 // setMasked makes Write validate the renamed keys with distinct names, since keys masked as *** collide whatever their
-// values are, see distinctKeysDocument
+// values are, see distinctKeysDocument, and remove the comments of fragments, since their text is masked
 func (t *TomlFileHandler) setMasked() {
 	t.masked = true
 }
@@ -81,6 +81,8 @@ type tomlFragment struct {
 	entries []*TomlConfigEntry
 	// overrides are the values of the table's key/value pairs a fragment used as a key replaces
 	overrides []tomlOverride
+	// commentsRemoved is set once entries removing the comments of text were added, see removeComments
+	commentsRemoved bool
 }
 
 // tomlOverride replaces the value of a key/value pair of the table by the value of the pair with the same key in
@@ -487,6 +489,9 @@ func (t *TomlFileHandler) Write(destination io.Writer) error {
 	if err != nil {
 		return err
 	}
+	if t.masked {
+		t.removeFragmentComments()
+	}
 	// The handler is not referenced after splicing, so the document as read can be freed while the result is written
 	keys := t.writtenKeys
 	if keys == nil {
@@ -547,6 +552,78 @@ func (t *TomlFileHandler) distinctKeysDocument() []byte {
 		entry.val = values[i]
 	}
 	return document.Bytes()
+}
+
+// removeFragmentComments removes the comments of the fragments, so check doesn't show them, since the text of fragments
+// is masked. A comment is removed with the spaces before it by an entry replacing it by nothing, so the positions of
+// the entries of the fragment stay valid.
+func (t *TomlFileHandler) removeFragmentComments() {
+	for _, entry := range t.entries {
+		if entry.fragment == nil {
+			continue
+		}
+		entry.fragment.removeComments()
+		for _, override := range entry.fragment.overrides {
+			override.value.removeComments()
+		}
+	}
+}
+
+// removeComments adds an entry replacing each comment of the fragment's text by nothing, see removeFragmentComments
+func (f *tomlFragment) removeComments() {
+	if f.commentsRemoved {
+		return
+	}
+	f.commentsRemoved = true
+	for _, comment := range tomlComments(f.text) {
+		f.entries = append(f.entries, &TomlConfigEntry{offset: comment.start, raw: string(f.text[comment.start:comment.end]),
+			fragment: &tomlFragment{text: []byte{}}})
+	}
+}
+
+// tomlComments returns the ranges of the comments of valid TOML text, each with the spaces and tabs before it. A # only
+// starts a comment outside strings, so basic, literal and multi-line strings are skipped.
+func tomlComments(text []byte) []tomlRange {
+	var comments []tomlRange
+	for i := 0; i < len(text); i++ {
+		switch {
+		case bytes.HasPrefix(text[i:], []byte(`"""`)), bytes.HasPrefix(text[i:], []byte(`'''`)):
+			i = skipTomlString(text, i, string(text[i:i+3]))
+		case text[i] == '"' || text[i] == '\'':
+			i = skipTomlString(text, i, string(text[i]))
+		case text[i] == '#':
+			start, end := i, i
+			for start > 0 && (text[start-1] == ' ' || text[start-1] == '\t') {
+				start--
+			}
+			for end < len(text) && text[end] != '\n' && text[end] != '\r' {
+				end++
+			}
+			comments = append(comments, tomlRange{start: start, end: end})
+			i = end
+		}
+	}
+	return comments
+}
+
+// skipTomlString returns the position of the last byte of the string starting at i with the quote, e.g. """. Escapes
+// are only skipped in basic strings, since literal strings have none. A multi-line string may end with up to two more
+// quotes, e.g. """a"""" ends with the last one.
+func skipTomlString(text []byte, i int, quote string) int {
+	for j := i + len(quote); j < len(text); j++ {
+		if quote[0] == '"' && text[j] == '\\' {
+			j++
+			continue
+		}
+		if bytes.HasPrefix(text[j:], []byte(quote)) {
+			end := j + len(quote) - 1
+			for len(quote) == 3 && end+1 < len(text) && text[end+1] == quote[0] && end+1 < j+5 {
+				end++
+			}
+			return end
+		}
+	}
+	return len(text) - 1
 }
 
 // checkOverrides returns whether fragments are merged into tables, and an error if two of them replace the same value,

@@ -387,6 +387,61 @@ func TestCheckSkipsWriteAfterEntryErrors(t *testing.T) {
 	assert.Equal(t, 1, report.Errors())
 }
 
+// TestCheckDiffHidesFragmentComments checks that check doesn't show the comments of fragments, since the text of
+// fragments is masked, while the comments of the file stay
+func TestCheckDiffHidesFragmentComments(t *testing.T) {
+	tests := []struct {
+		name     string
+		fileType general.FileType
+		content  string
+		fragment string
+		want     string
+	}{
+		{
+			name:     "yaml value",
+			fileType: general.YAML,
+			content:  "a: &k ${CHECK_FRAGMENT | fragment} # file-comment\nb: *k\n",
+			fragment: "# made-up-head\n[1, 2] # made-up-comment\n# made-up-foot",
+			want:     "@@ -1,2 +1,4 @@\n-a: &k ${CHECK_FRAGMENT | fragment} # file-comment\n+a: &k\n+  - '***' # file-comment\n+  - '***'\n b: *k\n",
+		},
+		{
+			name:     "yaml key",
+			fileType: general.YAML,
+			content:  "db:\n  ${CHECK_FRAGMENT | fragment}:\n",
+			fragment: "# made-up-head\nport: 1 # made-up-comment",
+			want:     "@@ -1,2 +1,2 @@\n db:\n-  ${CHECK_FRAGMENT | fragment}:\n+  port: '***'\n",
+		},
+		{
+			name:     "toml value",
+			fileType: general.TOML,
+			content:  "# file-comment\nhosts = \"${CHECK_FRAGMENT | fragment}\" # file-line\n",
+			fragment: "[\n  \"a#b\", # made-up-comment\n  '''c#'''\n] # made-up-line",
+			want:     "@@ -1,2 +1,5 @@\n # file-comment\n-hosts = \"${CHECK_FRAGMENT | fragment}\" # file-line\n+hosts = [\n+  \"***\",\n+  '''***'''\n+] # file-line\n",
+		},
+		{
+			name:     "xml content",
+			fileType: general.XML,
+			content:  "<r><!-- file-comment --><a>${CHECK_FRAGMENT | fragment}</a></r>\n",
+			fragment: "<!-- made-up-comment --><b>x<!-- made-up-inner --></b>",
+			want:     "@@ -1 +1 @@\n-<r><!-- file-comment --><a>${CHECK_FRAGMENT | fragment}</a></r>\n+<r><!-- file-comment --><a><b>***</b></a></r>\n",
+		}, {
+			name:     "xml processing instruction and directive",
+			fileType: general.XML,
+			content:  "<r><?file-pi keep?><a>${CHECK_FRAGMENT | fragment}</a></r>\n",
+			fragment: "<b><?pi made-up-pi?>x</b><!DOCTYPE made-up-directive>",
+			want:     "@@ -1 +1 @@\n-<r><?file-pi keep?><a>${CHECK_FRAGMENT | fragment}</a></r>\n+<r><?file-pi keep?><a><b>***</b></a></r>\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("CHECK_FRAGMENT", tt.fragment)
+			got := checkDiff(t, tt.fileType, tt.content)
+			assert.Equal(t, tt.want, got)
+			assert.NotContains(t, got, "made-up")
+		})
+	}
+}
+
 // TestCheckMaskedTomlKeyFragmentConflicts checks that check fails like process for keys of fragments that are also
 // defined by a table header, although the keys produced by placeholders are masked, with and without a diff, and that
 // the names the keys are validated with are never shown
