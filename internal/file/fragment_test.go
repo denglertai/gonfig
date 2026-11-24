@@ -141,6 +141,27 @@ func TestFragments(t *testing.T) {
 			want:     "database:\n  host: localhost\n",
 		},
 		{
+			desc:     "yaml key replacing the value of a later placeholder key",
+			fileType: general.YAML,
+			content:  "${FRAGMENT | fragment}:\n${FRAGMENT_SECRET}: 1\n",
+			fragment: `{"${FRAGMENT_SECRET}": {"y": 2}}`,
+			want:     "s3cret:\n  y: 2\n",
+		},
+		{
+			desc:     "yaml key replacing the value of a nested placeholder key",
+			fileType: general.YAML,
+			content:  "${FRAGMENT | fragment}:\no:\n  ${FRAGMENT_SECRET}: 1\n",
+			fragment: `{"o": {"${FRAGMENT_SECRET}": 2}}`,
+			want:     "o:\n  s3cret: 2\n",
+		},
+		{
+			desc:     "yaml key replacing a later key fragment by a value",
+			fileType: general.YAML,
+			content:  "${FRAGMENT | fragment}:\n${FRAGMENT_PORT | fragment}:\n",
+			fragment: `{"${FRAGMENT_PORT | fragment}": 1}`,
+			wantErr:  "a key with a fragment must not have a value",
+		},
+		{
 			desc:     "yaml key with a value",
 			fileType: general.YAML,
 			content:  "${FRAGMENT | fragment}: value\n",
@@ -232,6 +253,49 @@ func TestFragments(t *testing.T) {
 			content:  `{"a": 1, "${FRAGMENT | fragment}": null}`,
 			fragment: "",
 			want:     "{\n  \"a\": 1\n}\n",
+		},
+		{
+			desc:     "json key replacing the value of a later placeholder key",
+			fileType: general.JSON,
+			content:  `{"${FRAGMENT | fragment}": null, "${FRAGMENT_SECRET}": 1}`,
+			fragment: `{"${FRAGMENT_SECRET}": {"y": 2}}`,
+			want:     "{\n  \"s3cret\": {\n    \"y\": 2\n  }\n}\n",
+		},
+		{
+			desc:     "json key replacing the scalar of a later placeholder key",
+			fileType: general.JSON,
+			content:  `{"${FRAGMENT | fragment}": null, "${FRAGMENT_SECRET}": 1}`,
+			fragment: `{"${FRAGMENT_SECRET}": 2}`,
+			want:     "{\n  \"s3cret\": 2\n}\n",
+		},
+		{
+			desc:     "json key in a nested object replacing the value of a later placeholder key",
+			fileType: general.JSON,
+			content:  `{"o": {"${FRAGMENT | fragment}": null, "${FRAGMENT_SECRET}": 1}}`,
+			fragment: `{"${FRAGMENT_SECRET}": 3}`,
+			want:     "{\n  \"o\": {\n    \"s3cret\": 3\n  }\n}\n",
+		},
+		{
+			desc:     "json key replacing the value of a nested placeholder key",
+			fileType: general.JSON,
+			content:  `{"${FRAGMENT | fragment}": null, "o": {"${FRAGMENT_SECRET}": 1}}`,
+			fragment: `{"o": {"${FRAGMENT_SECRET}": 2}}`,
+			want:     "{\n  \"o\": {\n    \"s3cret\": 2\n  }\n}\n",
+		},
+		{
+			// Pins the current first-occurrence matching only; how duplicate keys should be handled is tracked separately
+			desc:     "json key replacing the first of duplicate placeholder keys",
+			fileType: general.JSON,
+			content:  `{"${FRAGMENT | fragment}": null, "${FRAGMENT_SECRET}": 1, "${FRAGMENT_SECRET}": 5}`,
+			fragment: `{"${FRAGMENT_SECRET}": 2}`,
+			want:     "{\n  \"s3cret\": 2,\n  \"s3cret\": 5\n}\n",
+		},
+		{
+			desc:     "json key replacing a later key fragment by a value",
+			fileType: general.JSON,
+			content:  `{"${FRAGMENT | fragment}": null, "${FRAGMENT_PORT | fragment}": null}`,
+			fragment: `{"${FRAGMENT_PORT | fragment}": 1}`,
+			wantErr:  "a key with a fragment must have the value null",
 		},
 		{
 			desc:     "json key with a value",
@@ -378,6 +442,14 @@ func TestFragmentErrorsWithoutValues(t *testing.T) {
 			wantWithValues: "invalid JSON fragment: invalid character 's' looking for beginning of value",
 		},
 		{
+			desc:           "JSON key replacing a later key fragment by a value",
+			fileType:       general.JSON,
+			content:        `{"${FRAGMENT | fragment}": null, "${FRAGMENT_PORT | fragment}": null}`,
+			fragment:       `{"${FRAGMENT_PORT | fragment}": "s3cret"}`,
+			want:           "config.json: a key with a fragment must have the value null",
+			wantWithValues: "a key with a fragment must have the value null",
+		},
+		{
 			desc:           "unknown XML entity",
 			fileType:       general.XML,
 			content:        "<r><a>${FRAGMENT | fragment}</a></r>",
@@ -400,6 +472,76 @@ func TestFragmentErrorsWithoutValues(t *testing.T) {
 			assert.ErrorContains(t, err, tC.wantWithValues)
 		})
 	}
+}
+
+// TestKeyFragmentReplacingKeyFragment checks that a key fragment whose fragment replaces a later key fragment by null
+// keeps the later one a key fragment, which is merged afterwards, for YAML and JSON
+func TestKeyFragmentReplacingKeyFragment(t *testing.T) {
+	t.Setenv("FRAGMENT_SECOND", `{"q": 1}`)
+	for fileType, testCase := range map[general.FileType]struct{ content, want string }{
+		general.YAML: {"${FRAGMENT | fragment}:\n${FRAGMENT_SECOND | fragment}:\n", "q: 1\n"},
+		general.JSON: {`{"${FRAGMENT | fragment}": null, "${FRAGMENT_SECOND | fragment}": null}`, "{\n  \"q\": 1\n}\n"},
+	} {
+		output, err := processFragment(t, fileType, testCase.content, `{"${FRAGMENT_SECOND | fragment}": null}`)
+		assert.NoError(t, err, fileType)
+		assert.Equal(t, testCase.want, output, fileType)
+	}
+}
+
+// TestJsonKeyFragmentChain checks that the rename of a placeholder key survives several key fragments replacing its
+// value one after the other, so the key is renamed once, to its processed name, and the last value stays
+func TestJsonKeyFragmentChain(t *testing.T) {
+	t.Setenv("FRAGMENT_FIRST", `{"${FRAGMENT_SECRET}": {"a": "${FRAGMENT_PORT}"}, "${FRAGMENT_PORT}": 1}`)
+	t.Setenv("FRAGMENT_SECOND", `{"${FRAGMENT_SECRET}": "${FRAGMENT_PORT}"}`)
+	t.Setenv("FRAGMENT_THIRD", `{"${FRAGMENT_SECRET}": 3}`)
+	content := `{"${FRAGMENT_FIRST | fragment}": null, "${FRAGMENT_SECOND | fragment}": null, "${FRAGMENT_THIRD | fragment}": null, "${FRAGMENT_SECRET}": 0}`
+
+	output, err := processFragment(t, general.JSON, content, "")
+	assert.NoError(t, err)
+	assert.Equal(t, "{\n  \"s3cret\": 3,\n  \"8080\": 1\n}\n", output)
+}
+
+// TestJsonKeyFragmentDetachedEntries checks that entries beneath a member replaced by a fragment, whose parent is no
+// longer part of the document, neither fail nor write into the output
+func TestJsonKeyFragmentDetachedEntries(t *testing.T) {
+	for desc, testCase := range map[string]struct{ content, fragment, want string }{
+		"key beneath a replaced object": {
+			`{"${FRAGMENT | fragment}": null, "o": {"${FRAGMENT_SECRET}": 1}}`, `{"o": 5}`, "{\n  \"o\": 5\n}\n"},
+		"value beneath a replaced object": {
+			`{"${FRAGMENT | fragment}": null, "o": {"k": "${FRAGMENT_SECRET}"}}`, `{"o": "x"}`, "{\n  \"o\": \"x\"\n}\n"},
+		"value beneath a replaced list": {
+			`{"${FRAGMENT | fragment}": null, "o": ["${FRAGMENT_SECRET}", {"${FRAGMENT_PORT}": 1}]}`, `{"o": null}`, "{\n  \"o\": null\n}\n"},
+		"key and value beneath a replaced placeholder key": {
+			`{"${FRAGMENT | fragment}": null, "${FRAGMENT_PORT}": {"${FRAGMENT_SECRET}": "${FRAGMENT_SECRET}"}}`, `{"${FRAGMENT_PORT}": true}`, "{\n  \"8080\": true\n}\n"},
+	} {
+		output, err := processFragment(t, general.JSON, testCase.content, testCase.fragment)
+		assert.NoError(t, err, desc)
+		assert.Equal(t, testCase.want, output, desc)
+		assert.NotContains(t, output, "s3cret", desc)
+	}
+}
+
+// TestJsonKeyEntryGuards checks the internal errors for a key whose value is no longer part of its object, which
+// mergeObjects prevents by moving the key entries
+func TestJsonKeyEntryGuards(t *testing.T) {
+	newEntry := func(value *jsonNode) *JsonConfigEntry {
+		parent := &jsonNode{kind: jsonObject, keys: []string{"${X}"}, children: []*jsonNode{{kind: jsonScalar}}}
+		return &JsonConfigEntry{node: value, key: "${X}", isKey: true, parent: parent, handler: NewJsonConfigFileHandler()}
+	}
+
+	assert.PanicsWithValue(t, "internal error: a JSON key containing a placeholder is no longer part of its object",
+		func() { newEntry(&jsonNode{kind: jsonScalar}).SetValue("made-up") })
+
+	entry := newEntry(&jsonNode{kind: jsonScalar})
+	_, err := entry.SetFragment(filter.Fragment{Text: `{"a": 1}`})
+	assert.EqualError(t, err, "internal error: the key with the fragment is no longer part of its object")
+	assert.Len(t, entry.parent.keys, 1, "the object must stay unchanged")
+
+	// Entries of the object are found by the identity of the value
+	entry = newEntry(nil)
+	entry.node = entry.parent.children[0]
+	entry.SetValue("made-up")
+	assert.Equal(t, []string{"made-up"}, entry.parent.keys)
 }
 
 // TestListFragmentWithDel checks that a list element containing DEL, which YAML and TOML only allow escaped, is inserted

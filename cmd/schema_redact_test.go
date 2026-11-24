@@ -23,6 +23,8 @@ func TestSchemaViolationPathsHideKeyEdgeCases(t *testing.T) {
 	t.Setenv("SCHEMA_EDGE_A", secretA)
 	t.Setenv("SCHEMA_EDGE_B", secretB)
 	t.Setenv("SCHEMA_EDGE_NUM", "42")
+	// The fragment replaces the value of the placeholder key, which keeps its rename
+	t.Setenv("SCHEMA_EDGE_FRAGMENT", `{"${SCHEMA_EDGE_A}": ["x"]}`)
 	t.Cleanup(func() {
 		file.SetLogValues(false)
 		filter.SetValuesInErrors(false)
@@ -60,6 +62,9 @@ func TestSchemaViolationPathsHideKeyEdgeCases(t *testing.T) {
 		{name: "json keys", file: "c.json", content: `{"${SCHEMA_EDGE_A}": {"pre_${SCHEMA_EDGE_B}": ["x"]}, "$${X}": "x"}`,
 			want:   []string{"***.pre_***.0: got string", "${X}: got string"},
 			hidden: []string{secretA, secretB}},
+		{name: "json key fragment replacing the value of a placeholder key", file: "c.json",
+			content: `{"${SCHEMA_EDGE_FRAGMENT | fragment}": null, "${SCHEMA_EDGE_A}": 1}`,
+			want:    []string{"***.0: got string"}, hidden: []string{secretA}},
 		{name: "toml dotted and quoted keys", file: "c.toml",
 			content: "[\"${SCHEMA_EDGE_A}\"]\nstatic.\"pre_${SCHEMA_EDGE_B}\".k = \"x\"\n",
 			want:    []string{"***.static.pre_***.k: got string"}, hidden: []string{secretA, secretB}},

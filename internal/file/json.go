@@ -71,7 +71,13 @@ func (j *JsonConfigEntry) GetValue() string {
 // SetValue sets the value of the configuration entry, or renames the key
 func (j *JsonConfigEntry) SetValue(value string) {
 	if j.isKey {
-		j.parent.keys[slices.Index(j.parent.children, j.node)] = value
+		i := slices.Index(j.parent.children, j.node)
+		if i < 0 {
+			// mergeObjects moves key entries along with the values they name, so this is a bug. Renaming nothing
+			// would silently leave the placeholder in the output, and the message names no key, as it may be a secret.
+			panic("internal error: a JSON key containing a placeholder is no longer part of its object")
+		}
+		j.parent.keys[i] = value
 		j.value = value
 		return
 	}
@@ -146,6 +152,11 @@ func (j *JsonConfigEntry) mergeFragment(fragment *jsonNode) ([]ConfigEntry, erro
 	}
 
 	i := slices.Index(j.parent.children, j.node)
+	if i < 0 {
+		// mergeObjects moves key entries along with the values they name, so this is a bug. The caller names the
+		// entry and file.
+		return nil, errors.New("internal error: the key with the fragment is no longer part of its object")
+	}
 	j.parent.keys = slices.Delete(j.parent.keys, i, i+1)
 	j.parent.children = slices.Delete(j.parent.children, i, i+1)
 	if fragment == nil {
@@ -206,12 +217,16 @@ func (j *JsonConfigEntry) getConvertedValue() (any, error) {
 type JsonConfigFileHandler struct {
 	root    *jsonNode
 	entries []ConfigEntry
+	// keyEntries maps the value of each key containing a placeholder to the entry of the key, so mergeObjects can move
+	// the entry to the value of a fragment replacing it. The entry finds its key by the identity of the value.
+	keyEntries map[*jsonNode]*JsonConfigEntry
 }
 
 // NewJsonConfigFileHandler creates a new JSON configuration file handler
 func NewJsonConfigFileHandler() *JsonConfigFileHandler {
 	return &JsonConfigFileHandler{
-		entries: make([]ConfigEntry, 0),
+		entries:    make([]ConfigEntry, 0),
+		keyEntries: make(map[*jsonNode]*JsonConfigEntry),
 	}
 }
 
@@ -303,14 +318,15 @@ func (j *JsonConfigFileHandler) handleNode(node *jsonNode, path string, key stri
 	}
 }
 
-// handleObjectChild collects the entries of the key and value at index i of the object
+// handleObjectChild collects the entries of the key and value at index i of the object.
+// Keys containing placeholders are recorded in keyEntries as well.
 func (j *JsonConfigFileHandler) handleObjectChild(object *jsonNode, i int, path string) {
 	key, child := object.keys[i], object.children[i]
 	currentPath := appendToPath(path, key)
 
 	// Keys may contain placeholders as well
 	if strings.Contains(key, "${") {
-		j.entries = append(j.entries, &JsonConfigEntry{
+		entry := &JsonConfigEntry{
 			node:       child,
 			key:        key,
 			path:       currentPath,
@@ -319,7 +335,9 @@ func (j *JsonConfigFileHandler) handleObjectChild(object *jsonNode, i int, path 
 			isKey:      true,
 			parent:     object,
 			parentPath: path,
-		})
+		}
+		j.entries = append(j.entries, entry)
+		j.keyEntries[child] = entry
 	}
 
 	j.handleNode(child, currentPath, key)
@@ -333,7 +351,8 @@ func (j *JsonConfigFileHandler) collectEntries(insert func()) []ConfigEntry {
 }
 
 // mergeObjects deep merges the source object into the target object: objects are merged recursively,
-// other values of the source replace the ones of the target, and new keys are appended in the order of the source
+// other values of the source replace the ones of the target, and new keys are appended in the order of the source.
+// Keys are matched as they are now, so a key containing a placeholder that is not processed yet is matched as written.
 func (j *JsonConfigFileHandler) mergeObjects(target *jsonNode, source *jsonNode, path string) {
 	// Index the keys of the target once, so merging takes linear instead of quadratic time for large objects.
 	// The first occurrence of a duplicate key is used.
@@ -358,6 +377,12 @@ func (j *JsonConfigFileHandler) mergeObjects(target *jsonNode, source *jsonNode,
 		case target.children[k].kind == jsonObject && child.kind == jsonObject:
 			j.mergeObjects(target.children[k], child, currentPath)
 		default:
+			// The entry of a key containing a placeholder finds its key by the value, so it moves to the new value
+			if entry, isKey := j.keyEntries[target.children[k]]; isKey {
+				delete(j.keyEntries, target.children[k])
+				entry.node = child
+				j.keyEntries[child] = entry
+			}
 			target.children[k] = child
 			j.handleNode(child, currentPath, key)
 		}

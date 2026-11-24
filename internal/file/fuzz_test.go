@@ -2,6 +2,7 @@ package file
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"maps"
@@ -394,6 +395,103 @@ func FuzzTomlComments(f *testing.F) {
 			}
 		}
 	})
+}
+
+// FuzzJsonKeyFragment checks that a fragment used as a key is deep merged into its object, also when it replaces the
+// values of later keys containing placeholders, which are matched as written and keep their rename. The keys of the
+// fragment are not processed, and fragments with duplicate keys or keys equal to the renamed ones are skipped, since
+// decoding into maps cannot express them.
+func FuzzJsonKeyFragment(f *testing.F) {
+	for _, seed := range []string{`{"a": 2}`, `{"${P}": {"y": 2}}`, `{"${P}": 2}`, `{"b": {"${P}": 3, "z": [1]}}`, `{"b": 1}`,
+		`{"${X}": 1, "n": null}`, `{"a": {"deep": {"er": true}}}`, `{}`, ""} {
+		f.Add(seed)
+	}
+	const document = `{"t": {"a": 1, "${X}": null, "${P}": 1, "b": {"x": 1, "${P}": 2}, "z": "s"}, "u": {"v": 1}}`
+	const renamed = "made-up-p"
+	f.Fuzz(func(t *testing.T, text string) {
+		var fragment map[string]any
+		if strings.TrimSpace(text) != "" {
+			node, err := parseJsonFragment(text)
+			if err != nil || node.kind != jsonObject || jsonHasDuplicateKeys(node) || decodeJsonNumbers(text, &fragment) != nil {
+				t.Skip("not an object with unique keys")
+			}
+		}
+
+		handler := NewJsonConfigFileHandler()
+		if err := handler.Read(strings.NewReader(document)); err != nil {
+			t.Fatal(err)
+		}
+		entries, _ := handler.Process()
+		for entry := range entries {
+			switch jce := entry.(*JsonConfigEntry); {
+			case jce.isKey && jce.key == "${X}":
+				if _, err := jce.SetFragment(filter.Fragment{Text: text}); err != nil {
+					t.Fatalf("fragment %q: %v", text, err)
+				}
+			case jce.isKey:
+				jce.SetValue(renamed)
+			}
+		}
+
+		var output bytes.Buffer
+		if err := handler.Write(&output); err != nil {
+			t.Fatalf("fragment %q: %v", text, err)
+		}
+		var got map[string]any
+		if err := decodeJsonNumbers(output.String(), &got); err != nil {
+			t.Fatalf("the output of fragment %q cannot be read: %v\n%s", text, err, output.String())
+		}
+
+		var want map[string]any
+		if err := decodeJsonNumbers(strings.Replace(document, `"${X}": null, `, "", 1), &want); err != nil {
+			t.Fatal(err)
+		}
+		table := want["t"].(map[string]any)
+		deepMergeJson(table, fragment)
+		for _, object := range []any{table, table["b"]} {
+			if object, ok := object.(map[string]any); ok {
+				if _, found := object[renamed]; found {
+					t.Skip("the fragment contains a renamed key")
+				}
+				if value, found := object["${P}"]; found {
+					delete(object, "${P}")
+					object[renamed] = value
+				}
+			}
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("fragment %q is merged as %v, want %v\n%s", text, got, want, output.String())
+		}
+	})
+}
+
+// jsonHasDuplicateKeys returns whether an object of the node contains a key twice, which a map cannot represent
+func jsonHasDuplicateKeys(node *jsonNode) bool {
+	if node.kind == jsonObject && len(slices.Compact(slices.Sorted(slices.Values(node.keys)))) != len(node.keys) {
+		return true
+	}
+	return slices.ContainsFunc(node.children, jsonHasDuplicateKeys)
+}
+
+// decodeJsonNumbers decodes the JSON text into target keeping numbers as written, like the JSON handler
+func decodeJsonNumbers(text string, target any) error {
+	decoder := json.NewDecoder(strings.NewReader(text))
+	decoder.UseNumber()
+	return decoder.Decode(target)
+}
+
+// deepMergeJson merges the source into the target like mergeObjects: objects are merged recursively, and other values
+// of the source replace the ones of the target
+func deepMergeJson(target, source map[string]any) {
+	for key, value := range source {
+		targetObject, targetIsObject := target[key].(map[string]any)
+		sourceObject, sourceIsObject := value.(map[string]any)
+		if targetIsObject && sourceIsObject {
+			deepMergeJson(targetObject, sourceObject)
+			continue
+		}
+		target[key] = value
+	}
 }
 
 // tomlValuesEqual returns whether two decoded TOML values are equal, including their types, e.g. 1 and "1" differ.

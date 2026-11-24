@@ -638,3 +638,24 @@ a: 1
 result:
 error: failed to insert the fragment of ${FRAGMENT | fragment} in config.yaml: a key with a fragment must not have an anchor
 ---
+
+[TestFragmentSnapshots/json_key_fragment_replacing_the_value_of_a_placeholder_key - 1]
+file (config.json):
+{
+  "${FRAGMENT | fragment}": null,
+  "${FRAGMENT_SECRET}": {"old": true},
+  "keep": "${FRAGMENT_PORT}"
+}
+
+FRAGMENT:
+{"${FRAGMENT_SECRET}": {"new": "${FRAGMENT_PORT}"}}
+
+result:
+{
+  "s3cret": {
+    "old": true,
+    "new": "8080"
+  },
+  "keep": "8080"
+}
+---

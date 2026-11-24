@@ -234,6 +234,21 @@ database:
 			args: []string{"--diff"},
 		},
 		{
+			name:     "diff of a json key fragment replacing the value of a placeholder key",
+			fileName: "config.json",
+			content: `{
+  "${SNAP_CHECK_OVERRIDES | fragment}": null,
+  "${SNAP_CHECK_NAME}": {"old": true}
+}
+`,
+			env: map[string]string{
+				"SNAP_CHECK_OVERRIDES": `{"${SNAP_CHECK_NAME}": {"new": "${SNAP_CHECK_PORT}"}}`,
+				"SNAP_CHECK_NAME":      "db",
+				"SNAP_CHECK_PORT":      "5432",
+			},
+			args: []string{"--diff"},
+		},
+		{
 			name:     "diff of an xml file",
 			fileName: "server.xml",
 			content: `<server port="${SNAP_CHECK_PORT}">

@@ -115,6 +115,16 @@ data: ${FRAGMENT | fragment}
 			fragment: `[{"type": "console"}, {"type": "file", "path": "/var/log/app.log"}]`,
 		},
 		{
+			name:     "json key fragment replacing the value of a placeholder key",
+			fileType: general.JSON,
+			content: `{
+  "${FRAGMENT | fragment}": null,
+  "${FRAGMENT_SECRET}": {"old": true},
+  "keep": "${FRAGMENT_PORT}"
+}`,
+			fragment: `{"${FRAGMENT_SECRET}": {"new": "${FRAGMENT_PORT}"}}`,
+		},
+		{
 			name:     "json key merging environment overrides",
 			fileType: general.JSON,
 			content: `{

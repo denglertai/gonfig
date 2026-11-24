@@ -721,3 +721,39 @@ config.yaml: 1 entry with placeholders
 (exit code 0)
 
 ---
+
+[TestCheckSnapshots/diff_of_a_json_key_fragment_replacing_the_value_of_a_placeholder_key - 1]
+environment:
+SNAP_CHECK_NAME="db"
+SNAP_CHECK_OVERRIDES="{\"${SNAP_CHECK_NAME}\": {\"new\": \"${SNAP_CHECK_PORT}\"}}"
+SNAP_CHECK_PORT="5432"
+
+config.json:
+{
+  "${SNAP_CHECK_OVERRIDES | fragment}": null,
+  "${SNAP_CHECK_NAME}": {"old": true}
+}
+
+$ gonfig config check -f config.json --diff
+config.json: 3 entries with placeholders
+  ${SNAP_CHECK_OVERRIDES | fragment}
+    SNAP_CHECK_OVERRIDES     set
+  ${SNAP_CHECK_NAME}.new
+    SNAP_CHECK_PORT          set
+  ${SNAP_CHECK_NAME}
+    SNAP_CHECK_NAME          set
+0 missing variables, 0 errors
+--- config.json
++++ config.json
+@@ -1,4 +1,6 @@
+ {
+-  "${SNAP_CHECK_OVERRIDES | fragment}": null,
+-  "${SNAP_CHECK_NAME}": {"old": true}
++  "***": {
++    "old": true,
++    "new": "***"
++  }
+ }
+(exit code 0)
+
+---

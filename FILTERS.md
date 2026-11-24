@@ -694,6 +694,8 @@ The fragment is merged deeply:
 - **Other values**, like scalars and lists, are replaced by the ones of the fragment.
 - **Comments and key order** of the file are kept, and new keys are appended in the order of the fragment.
 
+Keys of the file with placeholders are matched as they are when the fragment is inserted, so the order matters. A key before the fragment's key is already processed and matched by its result, while a key after it is matched as written, like `${NAME}`, and gets its processed name afterwards.
+
 In YAML files, the key must not have an anchor, since the key is removed and aliases of it would refer to nothing. This fails even if no alias uses the anchor:
 
 `anchored.yaml`:
