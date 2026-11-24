@@ -2,6 +2,8 @@ package file
 
 import (
 	"bytes"
+	"errors"
+	"io"
 	"maps"
 	"math"
 	"os"
@@ -14,6 +16,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/pelletier/go-toml/v2"
+	"go.yaml.in/yaml/v4"
 
 	"github.com/denglertai/gonfig/internal/filter"
 	"github.com/denglertai/gonfig/internal/general"
@@ -384,4 +387,67 @@ func tomlValuesEqual(a, b any) bool {
 	default:
 		return reflect.DeepEqual(a, b)
 	}
+}
+
+// FuzzYamlFragmentAnchors checks that inserting any fragment into anchored values and keys of YAML documents with
+// aliases of them never panics, and that the output is either rejected by Write or decodes as YAML, so no alias is
+// left without its anchor and no merge key has a value other than mappings
+func FuzzYamlFragmentAnchors(f *testing.F) {
+	for _, seed := range []string{"s", "x: 1", "[1, 2]", "&k s", "&k {x: &k 1, y: *k}", "x: &k 1\ny: *k", "&k_1 [1]", "a: &k 1\nb: &k_1 2\nc: *k",
+		"*k", "<<: *k", "a: &m {y: 1}\nb: *m", "{}", "[]", "", "# c", "a: &k 1\n---\nb: &k 2", "<<: [{x: 1}]", "- &k a\n- *k", "a: &k\n  b: *k"} {
+		for variant := range 4 {
+			f.Add(uint8(variant), seed)
+		}
+	}
+	documents := []string{
+		// the value of an anchored mapping entry, with aliases as value, key and merge value
+		"a: &k ${X}\nb: *k\nm: {*k : 1}\nn:\n  <<: *k\nl: [*k]\n---\nc: &k ${X}\nd: *k\n",
+		// a key overriding anchored values, and merge keys with lists
+		"a: &k {o: 1}\nm: &m {p: 1}\n${X}:\nb: *k\nn:\n  <<: [*m, *k]\n  q: *m\n",
+		// an anchored key and value of the fragment key and aliases before and after a fragment
+		"a: &k ${X}\nb: &k_1 ${X}\nc: *k\nd:\n  <<: [*k_1, *k]\n---\ne: &k ${X}\nf: *k\n",
+		// a fragment in a sequence and as a merge value
+		"- &k ${X}\n- *k\n- <<: ${X}\n  y: *k\n- <<: [*k]\n",
+	}
+	f.Fuzz(func(t *testing.T, variant uint8, text string) {
+		handler := NewYamlConfigFileHandler()
+		if err := handler.Read(strings.NewReader(documents[int(variant)%len(documents)])); err != nil {
+			t.Fatal(err)
+		}
+		// Processing stops at the first fragment that cannot be inserted, so nothing is written then, like a placeholder
+		// left in a merge key of the input, which is written as read
+		entries, _ := handler.Process()
+		for entry := range entries {
+			if !strings.Contains(entry.GetValue(), "${X}") {
+				continue
+			}
+			if _, err := entry.(FragmentConfigEntry).SetFragment(filter.Fragment{Text: text}); err != nil {
+				t.Skip("rejected")
+			}
+		}
+
+		// Write only rejects the documents with the problems its checks are for, so it doesn't reject too much
+		var output bytes.Buffer
+		if err := handler.Write(&output); err != nil {
+			if !slices.ContainsFunc([]string{"not defined before it", "merge key", "not valid UTF-8"},
+				func(known string) bool { return strings.Contains(err.Error(), known) }) {
+				t.Fatalf("unexpected error writing fragment %q: %v", text, err)
+			}
+			return
+		}
+		decoder := yaml.NewDecoder(bytes.NewReader(output.Bytes()))
+		for {
+			var document any
+			err := decoder.Decode(&document)
+			if errors.Is(err, io.EOF) {
+				return
+			}
+			// An alias of a mapping or sequence used as a key, an anchor containing an alias of itself and duplicate keys
+			// are accepted by the parser, but not by the decoder, no matter whether they come from a fragment or the input
+			if err != nil && !slices.ContainsFunc([]string{"as a map key", "contains itself", "already defined"},
+				func(known string) bool { return strings.Contains(err.Error(), known) }) {
+				t.Fatalf("the output of fragment %q cannot be read: %v\n%s", text, err, output.String())
+			}
+		}
+	})
 }

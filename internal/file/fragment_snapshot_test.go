@@ -308,6 +308,48 @@ replicas = ["db-1", "db-2"]
 			fragment: "a: 1\n",
 		},
 		{
+			name:     "yaml anchored value replaced by a mapping used by a merge key",
+			fileType: general.YAML,
+			content: `defaults: &defaults ${FRAGMENT | fragment}
+production:
+  <<: *defaults
+  replicas: 3
+`,
+			fragment: `replicas: 1
+image: app:latest
+`,
+		},
+		{
+			name:     "yaml anchored value replaced by a scalar used as a key",
+			fileType: general.YAML,
+			content: `region: &region ${FRAGMENT | fragment}
+endpoints: {*region : "https://made-up.example"}
+`,
+			fragment: "eu-west-1",
+		},
+		{
+			name:     "yaml anchors kept per document",
+			fileType: general.YAML,
+			content: `pool: &pool ${FRAGMENT | fragment}
+primary: *pool
+---
+pool: &pool {size: 1}
+replica: *pool
+`,
+			fragment: `size: 20
+fallback: &pool {size: 5}
+backup: *pool
+`,
+		},
+		{
+			name:     "error for an anchored yaml key with a fragment",
+			fileType: general.YAML,
+			content: `&overrides ${FRAGMENT | fragment}:
+copy: *overrides
+`,
+			fragment: "a: 1\n",
+		},
+		{
 			name:     "error for a properties file",
 			fileType: general.PROPERTIES,
 			content:  "key=${FRAGMENT | fragment}\n",

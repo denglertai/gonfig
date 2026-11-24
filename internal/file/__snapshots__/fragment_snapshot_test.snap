@@ -568,3 +568,73 @@ host = "db.prod"
 result:
 error: failed to insert the fragment of ${FRAGMENT | fragment} in config.toml: a fragment used as a key in a TOML file must be the only key of a key/value pair outside inline tables, with an empty string as its value, e.g. "${X | fragment}" = ""
 ---
+
+[TestFragmentSnapshots/yaml_anchored_value_replaced_by_a_mapping_used_by_a_merge_key - 1]
+file (config.yaml):
+defaults: &defaults ${FRAGMENT | fragment}
+production:
+  <<: *defaults
+  replicas: 3
+
+FRAGMENT:
+replicas: 1
+image: app:latest
+
+result:
+defaults: &defaults
+  replicas: 1
+  image: app:latest
+production:
+  <<: *defaults
+  replicas: 3
+---
+
+[TestFragmentSnapshots/yaml_anchored_value_replaced_by_a_scalar_used_as_a_key - 1]
+file (config.yaml):
+region: &region ${FRAGMENT | fragment}
+endpoints: {*region : "https://made-up.example"}
+
+FRAGMENT:
+eu-west-1
+
+result:
+region: &region eu-west-1
+endpoints: {*region: "https://made-up.example"}
+---
+
+[TestFragmentSnapshots/yaml_anchors_kept_per_document - 1]
+file (config.yaml):
+pool: &pool ${FRAGMENT | fragment}
+primary: *pool
+/-/-/-/
+pool: &pool {size: 1}
+replica: *pool
+
+FRAGMENT:
+size: 20
+fallback: &pool {size: 5}
+backup: *pool
+
+result:
+pool: &pool
+  size: 20
+  fallback: &pool_1
+    size: 5
+  backup: *pool_1
+primary: *pool
+/-/-/-/
+pool: &pool {size: 1}
+replica: *pool
+---
+
+[TestFragmentSnapshots/error_for_an_anchored_yaml_key_with_a_fragment - 1]
+file (config.yaml):
+&overrides ${FRAGMENT | fragment}:
+copy: *overrides
+
+FRAGMENT:
+a: 1
+
+result:
+error: failed to insert the fragment of ${FRAGMENT | fragment} in config.yaml: a key with a fragment must not have an anchor
+---

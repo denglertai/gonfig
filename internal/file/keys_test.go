@@ -334,8 +334,9 @@ func TestKeyLocatorOfOtherHandlers(t *testing.T) {
 }
 
 // TestRedactKeysSafetyNet checks that keys the locator misses are masked since they are no keys of the input: a
-// sequence item tagged as a merge key, which the decoder skips, an anchor redefined by a fragment and an integer key
-// merged into a mapping with string keys, which the decoder keeps as written
+// sequence item tagged as a merge key, which the decoder skips, and an integer key merged into a mapping with string
+// keys, which the decoder keeps as written. An anchor of a fragment with the name of an anchor of the document is
+// renamed, so the alias still refers to the static anchor of the document, which is shown.
 func TestRedactKeysSafetyNet(t *testing.T) {
 	t.Setenv("KEYS_TEST_PW", "made-up-s3cret")
 	t.Setenv("KEYS_TEST_FRAGMENT", `[&k "${KEYS_TEST_PW}"]`)
@@ -350,9 +351,9 @@ func TestRedactKeysSafetyNet(t *testing.T) {
 		{desc: "merge tagged sequence item", content: "l:\n  - !!merge x\n  - {\"${KEYS_TEST_PW}\": 1}\n",
 			schema: `{"properties": {"l": {"items": {"additionalProperties": false}}}}`,
 			want:   []string{"l.0: additional properties '***' not allowed"}},
-		{desc: "anchor redefined by a fragment", content: "a: &k static-anchor\nf: ${KEYS_TEST_FRAGMENT | fragment}\nm:\n  *k : {c: x}\n",
+		{desc: "anchor of a fragment with the name of an anchor of the document", content: "a: &k static-anchor\nf: ${KEYS_TEST_FRAGMENT | fragment}\nm:\n  *k : {c: x}\n",
 			schema: `{"properties": {"m": {"additionalProperties": {"additionalProperties": {"type": "integer"}}}}}`,
-			want:   []string{"m.***.c: got string, want integer"}},
+			want:   []string{"m.static-anchor.c: got string, want integer"}},
 		{desc: "integer key merged into string keys", content: "base: &b {!!int \"${KEYS_TEST_HEX}\": 1}\nd:\n  s: 1\n  <<: *b\n",
 			schema: `{"properties": {"d": {"properties": {"s": {}}, "additionalProperties": false}}}`,
 			want:   []string{"d: additional properties '***' not allowed"}},
@@ -403,13 +404,15 @@ func TestRecordStaticKeysOfFragments(t *testing.T) {
 }
 
 // TestRedactKeysAnchoredScalarsOfFragments checks that anchored scalars of fragments, which are results of
-// placeholders, are not shown when an alias uses them as a key, while anchored scalars of the input are
+// placeholders, are not shown when an alias within the fragment uses them as a key, while anchored scalars of the input
+// are. An anchor of a fragment with the name of an anchor of the document is renamed, so an alias of the document
+// still refers to the anchored scalar of the input, which is shown.
 func TestRedactKeysAnchoredScalarsOfFragments(t *testing.T) {
 	const schemaText = `{"additionalProperties": {"additionalProperties": false}}`
 	// The keys of a fragment are shown, like the key q
 	for fragment, want := range map[string][]string{
-		"&s made-up-anchored-s3cret":      {"a: additional properties '***' not allowed"},
-		"{q: &s made-up-anchored-s3cret}": {"a: additional properties '***' not allowed", "f: additional properties 'q' not allowed"},
+		"&s made-up-anchored-s3cret":      {"a: additional properties 'plain' not allowed"},
+		"{q: &s made-up-anchored-s3cret}": {"a: additional properties 'plain' not allowed", "f: additional properties 'q' not allowed"},
 	} {
 		t.Setenv("KEYS_TEST_FRAGMENT", fragment)
 		assert.Equal(t, want,
@@ -423,4 +426,15 @@ func TestRedactKeysAnchoredScalarsOfFragments(t *testing.T) {
 
 	assert.Equal(t, []string{"a: additional properties 'plain' not allowed"},
 		redactedViolations(t, general.YAML, "x: &s plain\na: {*s : 1}\n", schemaText))
+}
+
+// TestRedactKeysKeptAnchorOfFragment checks that a fragment replacing an anchored value, which keeps the anchor, is
+// masked when an alias uses it as a key, also if the fragment had an anchor of its own
+func TestRedactKeysKeptAnchorOfFragment(t *testing.T) {
+	for _, fragment := range []string{"made-up-anchored-s3cret", "&s made-up-anchored-s3cret"} {
+		t.Setenv("KEYS_TEST_FRAGMENT", fragment)
+		assert.Equal(t, []string{"m: additional properties '***' not allowed"},
+			redactedViolations(t, general.YAML, "a: &k ${KEYS_TEST_FRAGMENT | fragment}\nm: {*k : 1}\n",
+				`{"properties": {"m": {"additionalProperties": false}}}`), fragment)
+	}
 }

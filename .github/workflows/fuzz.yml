@@ -52,6 +52,8 @@ jobs:
             target: FuzzTomlFragment
           - package: ./internal/file
             target: FuzzTomlKeyFragment
+          - package: ./internal/file
+            target: FuzzYamlFragmentAnchors
 
     steps:
     - name: Checkout code
