@@ -2,6 +2,8 @@ package file
 
 import (
 	"bytes"
+	"errors"
+	"io"
 	"os"
 	"path"
 	"strings"
@@ -10,6 +12,7 @@ import (
 	"github.com/denglertai/gonfig/internal/filter"
 	"github.com/denglertai/gonfig/internal/general"
 	"github.com/stretchr/testify/assert"
+	"go.yaml.in/yaml/v4"
 )
 
 // processFragment processes the content as a file of the given type with the environment variable FRAGMENT set to the fragment
@@ -410,5 +413,22 @@ func TestListFragmentWithDel(t *testing.T) {
 		output, err := processFragment(t, fileType, testCase.content, "a\x7fb,c")
 		assert.NoError(t, err, fileType)
 		assert.Equal(t, testCase.want, output, fileType)
+	}
+}
+
+// assertDecodableYaml checks that every document of the output decodes, which fails for aliases without an anchor
+// and merge keys of values other than mappings
+func assertDecodableYaml(t *testing.T, output string) {
+	t.Helper()
+	decoder := yaml.NewDecoder(strings.NewReader(output))
+	for {
+		var document any
+		err := decoder.Decode(&document)
+		if errors.Is(err, io.EOF) {
+			return
+		}
+		if !assert.NoError(t, err) {
+			return
+		}
 	}
 }

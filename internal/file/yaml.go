@@ -8,6 +8,7 @@ import (
 	"iter"
 	"slices"
 	"strconv"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/denglertai/gonfig/internal/filter"
@@ -320,6 +321,9 @@ func (y *YamlConfigFileHandler) Write(target io.Writer) error {
 	if err := y.checkUTF8(); err != nil {
 		return err
 	}
+	for _, document := range y.documents {
+		moveYamlBlockComments(document)
+	}
 
 	// NewDumper only fails for invalid options, and these are constant
 	dumper, _ := yaml.NewDumper(target, yaml.WithV3Defaults(), yaml.WithIndent(2), yaml.WithLineWidth(-1))
@@ -347,4 +351,89 @@ func (y *YamlConfigFileHandler) checkUTF8() error {
 		return fmt.Errorf("the value of %s is not valid UTF-8", yamlEntry.path)
 	}
 	return nil
+}
+
+// moveYamlBlockComments moves line comments the encoder cannot write where they were to the first entry of a block
+// mapping or sequence: the line comment of a key whose value is a block with an anchor or tag, which the encoder would
+// write before the anchor, e.g. "a: # c\n&k\n  x: 1", and the line comment of a block itself, which the encoder
+// defers to the next line it writes, e.g. after the key of the next value and so before its anchor, and the line
+// comment of a key whose value is an alias or written inline, which is deferred as well. Such comments come
+// from fragments, e.g. "[1] # c" written as a block, or from the parser, which reads the comment after an anchor, e.g.
+// "a: &k # c\n  x: 1", as the comment of the first entry as well.
+func moveYamlBlockComments(node *yaml.Node) {
+	if node.Kind == yaml.MappingNode {
+		for i := 0; i+1 < len(node.Content); i += 2 {
+			key, value := node.Content[i], node.Content[i+1]
+			if key.LineComment == "" {
+				continue
+			}
+			switch {
+			case hasYamlBlockProperties(value):
+				moveYamlCommentToFirstEntry(value, key.LineComment)
+				key.LineComment = ""
+			case value.Kind == yaml.AliasNode || (value.Kind == yaml.MappingNode || value.Kind == yaml.SequenceNode) && !isYamlBlock(value):
+				// The encoder defers the comment of a key whose value is an alias or written inline, e.g. "a: []", but
+				// writes the comment of such a value on its line
+				value.LineComment = joinYamlComments(key.LineComment, value.LineComment)
+				key.LineComment = ""
+			}
+		}
+	}
+	if node.LineComment != "" && isYamlBlock(node) {
+		moveYamlCommentToFirstEntry(node, node.LineComment)
+		node.LineComment = ""
+	}
+	for _, child := range node.Content {
+		moveYamlBlockComments(child)
+	}
+}
+
+// isYamlBlock returns whether the node is a nonempty mapping or sequence the encoder writes in block style. Empty ones
+// are written as {} and [].
+func isYamlBlock(node *yaml.Node) bool {
+	return (node.Kind == yaml.MappingNode || node.Kind == yaml.SequenceNode) && node.Style&yaml.FlowStyle == 0 &&
+		len(node.Content) > 0
+}
+
+// hasYamlBlockProperties returns whether the node is a block mapping or sequence written with an anchor or a tag on
+// the line of its key. The encoder omits the default tags !!map and !!seq unless they were written explicitly.
+func hasYamlBlockProperties(node *yaml.Node) bool {
+	if !isYamlBlock(node) {
+		return false
+	}
+	if node.Anchor != "" || node.Style&yaml.TaggedStyle != 0 {
+		return true
+	}
+	tag := node.ShortTag()
+	return tag != "!!map" && tag != "!!seq"
+}
+
+// moveYamlCommentToFirstEntry makes the comment the line comment of the first entry of the block if it is a scalar
+// without one, or of a first key whose value is a scalar without one either, since the encoder writes only one of
+// them. Otherwise it puts the comment before the first entry, after the head comment of the block, so no comment is
+// lost.
+func moveYamlCommentToFirstEntry(block *yaml.Node, comment string) {
+	first := block.Content[0]
+	free := first.Kind == yaml.ScalarNode && first.LineComment == ""
+	if block.Kind == yaml.MappingNode && len(block.Content) > 1 {
+		value := block.Content[1]
+		free = free && value.Kind == yaml.ScalarNode && value.LineComment == ""
+	}
+	if free {
+		first.LineComment = comment
+		return
+	}
+	// The encoder writes only one of the head comments of the block and its first entry, so they are joined in the
+	// order they are written
+	first.HeadComment = strings.Join(slices.DeleteFunc([]string{block.HeadComment, comment, first.HeadComment},
+		func(c string) bool { return c == "" }), "\n")
+	block.HeadComment = ""
+}
+
+// joinYamlComments returns the line comments as one, e.g. "# a # b", since a node has only one
+func joinYamlComments(first string, second string) string {
+	if first == "" || second == "" {
+		return first + second
+	}
+	return first + " " + second
 }

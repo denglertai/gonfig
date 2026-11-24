@@ -393,7 +393,7 @@ It has two subcommands: `process` processes the given config files and is descri
 `process` parses each file in its format and collects the entries that may contain placeholders: depending on the file type, values and keys, the text and attributes of XML elements, or lines.
 Each entry is then processed on its own, by replacing its placeholders and applying their filters.
 
-Only the processed values are changed, the rest of the file is preserved as far as the format allows: comments are kept for YAML, XML, properties and TOML files, the order of keys for every file type, and YAML files may contain multiple documents.
+Only the processed values are changed, the rest of the file is preserved as far as the format allows: comments are kept for YAML, XML, properties and TOML files (a YAML line comment between a key and the anchor or tag of its block value is moved onto the first entry of the block, since YAML cannot place it there), the order of keys for every file type, and YAML files may contain multiple documents.
 TOML files are written as they were read, with only the changed strings and keys replaced.
 Properties files are written line by line as they were read, so separators, blank lines, continuation lines and duplicate keys are kept as well. Only lines whose value changes are rewritten, after the key and separator as they were, with the value on a single line.
 CRLF line endings and a UTF-8 byte order mark are kept for every file type. Other than plain text, properties and TOML files, which keep the line ending of every line, files with mixed line endings are written with the line ending of their first line.
