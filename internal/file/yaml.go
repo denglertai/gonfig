@@ -137,6 +137,10 @@ func (y *YamlConfigEntry) SetFragment(f filter.Fragment) ([]ConfigEntry, error) 
 	// Replace the node in place, so the parent refers to the fragment
 	*y.node = *fragment
 	y.handler.addFragmentNode(y.node)
+	if y.handler.fragmentCopies == nil {
+		y.handler.fragmentCopies = map[*yaml.Node]*yaml.Node{}
+	}
+	y.handler.fragmentCopies[fragment] = y.node
 	return y.handler.collectEntries(func() { y.handler.handleNode(y.node, y.path, y.key) }), nil
 }
 
@@ -233,6 +237,9 @@ type YamlConfigFileHandler struct {
 	// fragmentNodes are the nodes of inserted fragments, including the nodes values are replaced in, see checkAliases.
 	// Their anchor names and lines come from the fragment and are not named in errors.
 	fragmentNodes map[*yaml.Node]struct{}
+	// fragmentCopies are the nodes fragment roots were copied into, by the roots, since the aliases of a fragment refer
+	// to the root it was parsed with, see checkAliases
+	fragmentCopies map[*yaml.Node]*yaml.Node
 	// insertedFragment is set once a fragment was inserted, which is the only way an alias may lose its anchor
 	insertedFragment bool
 	// masked is set while values are masked, so the comments of fragments are not written, see maskingHandler
@@ -654,7 +661,8 @@ func joinYamlComments(first string, second string) string {
 // checkAliases rejects aliases whose anchor is not defined before them in their document, e.g. an alias of a value
 // whose anchor a fragment dropped, and merge keys whose value is a fragment, or an alias of one, other than a mapping
 // or a list of mappings, e.g. an alias of a scalar fragment used as a merge key, which the decoder would reject. Only
-// fragments can cause undefined aliases, since the input was decoded, so nothing is checked without them. An invalid
+// fragments can cause undefined aliases, since the input was decoded, so nothing is checked without them. An alias of a
+// fragment must refer to the node it referred to in the fragment, see keepsFragmentBinding. An invalid
 // merge key of the input is written as read, like without fragments, since the decoder of the input doesn't check
 // them either. An alias of the input is named by its anchor and line, while an alias of a fragment isn't, see
 // aliasError.
@@ -669,11 +677,16 @@ func (y *YamlConfigFileHandler) checkAliases() error {
 	var visit func(node *yaml.Node) error
 	visit = func(node *yaml.Node) error {
 		if node.Kind == yaml.AliasNode {
-			if target, found := defined[node.Value]; found {
-				targets[node] = target
-				return nil
+			target, found := defined[node.Value]
+			if !found {
+				return y.aliasError(node, "refers to an anchor that is not defined before it")
 			}
-			return y.aliasError(node, "refers to an anchor that is not defined before it")
+			if !y.keepsFragmentBinding(node, target) {
+				return errors.New("an alias within a fragment would refer to another value, " +
+					"since an anchor of the same name is defined between them")
+			}
+			targets[node] = target
+			return nil
 		}
 		if node.Anchor != "" {
 			defined[node.Anchor] = node
@@ -697,6 +710,22 @@ func (y *YamlConfigFileHandler) checkAliases() error {
 		}
 	}
 	return nil
+}
+
+// keepsFragmentBinding returns whether an alias of a fragment refers to the node it referred to in the fragment when it
+// resolves to the target by name. The anchor of a fragment's node may get the name of the anchor of the value it
+// replaces, which the input may define again between the node and the alias, e.g. "a: &k old", "b: &k other" and a
+// fragment "a: &v new\nc: *v" used as a key. Aliases of the input keep referring to their nodes, since anchors of
+// fragments with names of the document are renamed and kept anchors stay at the position of the replaced value.
+func (y *YamlConfigFileHandler) keepsFragmentBinding(alias *yaml.Node, target *yaml.Node) bool {
+	if !y.isFragmentNode(alias) || alias.Alias == nil {
+		return true
+	}
+	intended := alias.Alias
+	if copied, found := y.fragmentCopies[intended]; found {
+		intended = copied
+	}
+	return target == intended
 }
 
 // checkMergeValue rejects the value of the merge key if it is a node of a fragment, or a list containing one, or an

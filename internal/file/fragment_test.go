@@ -684,6 +684,19 @@ func TestYamlFragmentAnchors(t *testing.T) {
 			want:     "a: &k {p: 1}\nx:\n  <<: [*k, {n: &k made-up-frag}]\n",
 		},
 		{
+			desc:     "alias of a fragment whose kept anchor the input defines again before it",
+			content:  "a: &k made-up-old\nb: &k made-up-other\n${FRAGMENT | fragment}:\n",
+			fragment: "a: &v made-up-new\nc: *v",
+			wantErr: "config.yaml: an alias within a fragment would refer to another value, " +
+				"since an anchor of the same name is defined between them",
+		},
+		{
+			desc:     "alias of a fragment with a kept anchor",
+			content:  "a: &k made-up-old\nb: made-up-other\n${FRAGMENT | fragment}:\n",
+			fragment: "a: &v made-up-new\nc: *v",
+			want:     "a: &k made-up-new\nb: made-up-other\nc: *k\n",
+		},
+		{
 			desc:     "anchored key with a fragment",
 			content:  "&k ${FRAGMENT | fragment}:\n",
 			fragment: "a: made-up-a",
@@ -855,4 +868,14 @@ func TestYamlAnchorReservedBeforeFragmentsWithoutAnchors(t *testing.T) {
 		"a: {nested: &k old}\nc: old-c\n${FIRST | fragment}:\n${SECOND | fragment}:\nb: *k\n", "")
 	assert.ErrorContains(t, err, "the alias *k on line 5 refers to an anchor that is not defined before it")
 	assert.NotContains(t, err.Error(), "made-up")
+}
+
+// TestYamlFragmentRootAliasKeepsBinding checks that an alias within a fragment referring to the fragment's root, which
+// is copied into the replaced node, is not reported as referring to another value. The alias contains itself, which
+// the parser accepts and the decoder rejects, like without fragments, so the output is only compared.
+func TestYamlFragmentRootAliasKeepsBinding(t *testing.T) {
+	output, err := processFragment(t, general.YAML, "a: &k ${FRAGMENT | fragment}\nb: &k made-up-other\n",
+		"&r [made-up-1, *r]")
+	assert.NoError(t, err)
+	assert.Equal(t, "a: &k\n  - made-up-1\n  - *k\nb: &k made-up-other\n", output)
 }

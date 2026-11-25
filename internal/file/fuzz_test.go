@@ -558,7 +558,7 @@ func FuzzYamlFragmentAnchors(f *testing.F) {
 		// Write only rejects the documents with the problems its checks are for, so it doesn't reject too much
 		var output bytes.Buffer
 		if err := handler.Write(&output); err != nil {
-			if !slices.ContainsFunc([]string{"not defined before it", "merge key", "not valid UTF-8"},
+			if !slices.ContainsFunc([]string{"not defined before it", "merge key", "not valid UTF-8", "would refer to another value"},
 				func(known string) bool { return strings.Contains(err.Error(), known) }) {
 				t.Fatalf("unexpected error writing fragment %q: %v", text, err)
 			}
