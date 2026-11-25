@@ -518,8 +518,8 @@ func (t *TomlFileHandler) Write(destination io.Writer) error {
 	return err
 }
 
-// distinctKeysDocument returns the document with every key produced by placeholders replaced by a distinct name, which
-// is only validated, never written or shown. Keys masked as *** collide whatever their values are, while collisions with
+// distinctKeysDocument returns the document with every key produced by placeholders replaced by a distinct name that
+// no other key has, see freeKeyPrefix, which is only validated, never written or shown. Keys masked as *** collide whatever their values are, while collisions with
 // static keys, keys of fragments and table headers are still found, so check fails like process for them. Only
 // collisions between the values of placeholders go undetected while values are masked.
 func (t *TomlFileHandler) distinctKeysDocument() []byte {
@@ -540,10 +540,14 @@ func (t *TomlFileHandler) distinctKeysDocument() []byte {
 	}
 	collect(t.entries)
 
+	prefix := ""
+	if len(renamed) > 0 {
+		prefix = t.freeKeyPrefix()
+	}
 	values := make([]string, len(renamed))
 	for i, entry := range renamed {
 		values[i] = entry.val
-		entry.val = "gonfig-masked-key-" + strconv.Itoa(i)
+		entry.val = prefix + strconv.Itoa(i)
 	}
 	var document bytes.Buffer
 	document.Grow(len(t.data))
@@ -552,6 +556,59 @@ func (t *TomlFileHandler) distinctKeysDocument() []byte {
 		entry.val = values[i]
 	}
 	return document.Bytes()
+}
+
+// freeKeyPrefix returns a prefix for the names of distinctKeysDocument that no key of the document or a fragment
+// contains as decoded, e.g. a static key "gonfig-masked-key-0" or one written with escapes, so the names collide with
+// no other key. The keys are decoded once and joined by newlines, which the prefix doesn't contain.
+func (t *TomlFileHandler) freeKeyPrefix() string {
+	var keys strings.Builder
+	addKeys := func(text []byte) {
+		var document map[string]any
+		if toml.Unmarshal(text, &document) == nil {
+			writeTomlKeys(&keys, document)
+		}
+	}
+	addKeys(t.data)
+	for _, entry := range t.entries {
+		switch {
+		case entry.fragment == nil:
+		case entry.isKey:
+			addKeys(entry.fragment.text)
+			for _, override := range entry.fragment.overrides {
+				addKeys(append([]byte(tomlFragmentKey), override.value.text...))
+			}
+		default:
+			addKeys(append([]byte(tomlFragmentKey), entry.fragment.text...))
+		}
+	}
+
+	written := keys.String()
+	for attempt := 0; ; attempt++ {
+		prefix := "gonfig-masked-key-"
+		if attempt > 0 {
+			prefix = "gonfig-masked-key-" + strconv.Itoa(attempt) + "-"
+		}
+		if !strings.Contains(written, prefix) {
+			return prefix
+		}
+	}
+}
+
+// writeTomlKeys writes the keys of the decoded value and of the tables within it, each followed by a newline
+func writeTomlKeys(keys *strings.Builder, value any) {
+	switch v := value.(type) {
+	case map[string]any:
+		for key, item := range v {
+			keys.WriteString(key)
+			keys.WriteByte('\n')
+			writeTomlKeys(keys, item)
+		}
+	case []any:
+		for _, item := range v {
+			writeTomlKeys(keys, item)
+		}
+	}
 }
 
 // removeFragmentComments removes the comments of the fragments, so check doesn't show them, since the text of fragments

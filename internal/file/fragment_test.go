@@ -666,6 +666,24 @@ func TestYamlFragmentAnchors(t *testing.T) {
 			wantErr:  "config.yaml: the value of a merge key within a fragment is neither a mapping nor a list of mappings",
 		},
 		{
+			desc:     "anchor removed by a fragment without anchors stays reserved for later fragments",
+			content:  "a: {nested: &k old}\nc: old-c\n${FRAGMENT | fragment}:\nb: *k\n",
+			fragment: "a: made-up-plain\nc: &k made-up-other",
+			wantErr:  "config.yaml: the alias *k on line 4 refers to an anchor that is not defined before it",
+		},
+		{
+			desc:     "merge alias of a scalar fragment followed by a mapping with the same anchor",
+			content:  "a: &k ${FRAGMENT | fragment}\nx:\n  <<: [*k, &k {m: 1}]\n",
+			fragment: "made-up-frag",
+			wantErr:  "config.yaml: the alias *k on line 3 is used as the value of a merge key, but does not refer to a mapping",
+		},
+		{
+			desc:     "merge alias of a mapping followed by a scalar fragment with the same anchor",
+			content:  "a: &k {p: 1}\nx:\n  <<: [*k, {n: &k \"${FRAGMENT | fragment}\"}]\n",
+			fragment: "made-up-frag",
+			want:     "a: &k {p: 1}\nx:\n  <<: [*k, {n: &k made-up-frag}]\n",
+		},
+		{
 			desc:     "anchored key with a fragment",
 			content:  "&k ${FRAGMENT | fragment}:\n",
 			fragment: "a: made-up-a",
@@ -825,4 +843,16 @@ func TestYamlInvalidMergeKeyOfInputWithFragment(t *testing.T) {
 	output, err := processFragment(t, general.YAML, input+"other: ${FRAGMENT | fragment}\n", "{k: v}")
 	assert.NoError(t, err)
 	assert.Equal(t, input+"other:\n  k: v\n", output)
+}
+
+// TestYamlAnchorReservedBeforeFragmentsWithoutAnchors checks that the anchor names of a document are reserved before a
+// first fragment without anchors removes an anchored node, so the anchor of a later fragment with that name is renamed
+// and the alias of the removed node fails writing instead of referring to the later fragment
+func TestYamlAnchorReservedBeforeFragmentsWithoutAnchors(t *testing.T) {
+	t.Setenv("FIRST", "a: made-up-plain")
+	t.Setenv("SECOND", "c: &k made-up-other")
+	_, err := processFragment(t, general.YAML,
+		"a: {nested: &k old}\nc: old-c\n${FIRST | fragment}:\n${SECOND | fragment}:\nb: *k\n", "")
+	assert.ErrorContains(t, err, "the alias *k on line 5 refers to an anchor that is not defined before it")
+	assert.NotContains(t, err.Error(), "made-up")
 }

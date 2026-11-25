@@ -382,6 +382,8 @@ func TestYamlCommentsOfNodesBeforeAnchors(t *testing.T) {
 	}{
 		{desc: "key with an alias", input: "q: &m 1\np: *m\nz: &k\n  y: 1\n",
 			comment: func(m *yaml.Node) *yaml.Node { return m.Content[2] }, want: "q: &m 1\np: *m # c\nz: &k\n  y: 1\n"},
+		{desc: "key with a scalar with a comment of its own", input: "p: 1 # d\nz: &k\n  y: 1\n",
+			comment: func(m *yaml.Node) *yaml.Node { return m.Content[0] }, want: "p: 1 # c # d\nz: &k\n  y: 1\n"},
 		{desc: "key with a flow mapping", input: "p: {x: 1}\nz: &k\n  y: 1\n",
 			comment: func(m *yaml.Node) *yaml.Node { return m.Content[0] }, want: "p: {x: 1} # c\nz: &k\n  y: 1\n"},
 		{desc: "block mapping", input: "p:\n  x: 1\nz: &k\n  y: 1\n",
@@ -428,4 +430,18 @@ func TestYamlCommentsJoined(t *testing.T) {
 		assert.Equal(t, "q: &m 1\np: *m # k # v\nz: &k\n  y: 1\n", output.String())
 		assertDecodableYaml(t, output.String())
 	})
+}
+
+// TestYamlCommentOfMappingKey checks that the comment of a key that is a mapping, which a fragment may bring, is moved
+// to its value, since the encoder would write it before the colon. Such a key can be parsed, but not decoded into Go
+// values, so the output is parsed into nodes.
+func TestYamlCommentOfMappingKey(t *testing.T) {
+	handler := NewYamlConfigFileHandler()
+	assert.NoError(t, handler.Read(strings.NewReader("{}: 1\nz: &k\n  y: 1\n")))
+	handler.documents[0].Content[0].Content[0].LineComment = "# c"
+	var output bytes.Buffer
+	assert.NoError(t, handler.Write(&output))
+	assert.Equal(t, "{}: 1 # c\nz: &k\n  y: 1\n", output.String())
+	var document yaml.Node
+	assert.NoError(t, yaml.Unmarshal(output.Bytes(), &document))
 }

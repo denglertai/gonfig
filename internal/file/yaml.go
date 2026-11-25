@@ -98,11 +98,15 @@ func (y *YamlConfigEntry) SetFragment(f filter.Fragment) ([]ConfigEntry, error) 
 		return nil, err
 	}
 
-	// The anchor names of the document are collected before the fragment is inserted, so they don't contain the ones of
-	// the fragment. A fragment without anchors has no aliases either, so there is nothing to rename.
+	// The anchor names of the document are collected before the first fragment changes it, even one without anchors,
+	// since it may remove an anchored node, whose name must stay reserved, so its aliases fail writing rather than
+	// referring to an anchor of a later fragment. A fragment without anchors has no aliases either, so there is nothing
+	// to rename in it.
 	var names map[string]int
-	if y.handler.registerFragment(fragment) {
-		names = y.handler.documentAnchors(y.document)
+	hasAnchors := y.handler.registerFragment(fragment)
+	documentNames := y.handler.documentAnchors(y.document)
+	if hasAnchors {
+		names = documentNames
 	}
 	y.handler.document = y.document
 
@@ -563,7 +567,8 @@ func freeYamlAnchor(names map[string]int, own map[string]struct{}, anchor string
 // mapping or sequence: the line comment of a key whose value is a block with an anchor or tag, which the encoder would
 // write before the anchor, e.g. "a: # c\n&k\n  x: 1", and the line comment of a block itself, which the encoder
 // defers to the next line it writes, e.g. after the key of the next value and so before its anchor, and the line
-// comment of a key whose value is an alias or written inline, which is deferred as well. Such comments come
+// comment of a key whose value is an alias, written inline or a scalar with a comment of its own, or of a key that is
+// a mapping or sequence, e.g. "{}: v", which is deferred or written before the colon as well. Such comments come
 // from fragments, e.g. "[1] # c" written as a block, or from the parser, which reads the comment after an anchor, e.g.
 // "a: &k # c\n  x: 1", as the comment of the first entry as well.
 func moveYamlBlockComments(node *yaml.Node) {
@@ -574,12 +579,14 @@ func moveYamlBlockComments(node *yaml.Node) {
 				continue
 			}
 			switch {
-			case hasYamlBlockProperties(value):
+			case hasYamlBlockProperties(value), key.Kind != yaml.ScalarNode && isYamlBlock(value):
 				moveYamlCommentToFirstEntry(value, key.LineComment)
 				key.LineComment = ""
-			case value.Kind == yaml.AliasNode || (value.Kind == yaml.MappingNode || value.Kind == yaml.SequenceNode) && !isYamlBlock(value):
-				// The encoder defers the comment of a key whose value is an alias or written inline, e.g. "a: []", but
-				// writes the comment of such a value on its line
+			case value.Kind == yaml.AliasNode || (value.Kind == yaml.MappingNode || value.Kind == yaml.SequenceNode) && !isYamlBlock(value),
+				value.Kind == yaml.ScalarNode && value.LineComment != "", key.Kind != yaml.ScalarNode:
+				// The encoder defers the comment of a key whose value is an alias or written inline, e.g. "a: []", or a
+				// scalar with a comment of its own, since a line has one comment, but writes the comment of the value on
+				// its line
 				value.LineComment = joinYamlComments(key.LineComment, value.LineComment)
 				key.LineComment = ""
 			}
@@ -656,10 +663,14 @@ func (y *YamlConfigFileHandler) checkAliases() error {
 		return nil
 	}
 	var defined map[string]*yaml.Node
+	// targets are the nodes the aliases refer to where they are written, since a later anchor of the same name, e.g.
+	// within the same list of merge values, doesn't change them
+	targets := map[*yaml.Node]*yaml.Node{}
 	var visit func(node *yaml.Node) error
 	visit = func(node *yaml.Node) error {
 		if node.Kind == yaml.AliasNode {
-			if _, found := defined[node.Value]; found {
+			if target, found := defined[node.Value]; found {
+				targets[node] = target
 				return nil
 			}
 			return y.aliasError(node, "refers to an anchor that is not defined before it")
@@ -672,7 +683,7 @@ func (y *YamlConfigFileHandler) checkAliases() error {
 				return err
 			}
 			if node.Kind == yaml.MappingNode && i%2 == 1 && isYamlMergeKey(node.Content[i-1]) {
-				if err := y.checkMergeValue(node.Content[i-1], child, defined); err != nil {
+				if err := y.checkMergeValue(node.Content[i-1], child, targets); err != nil {
 					return err
 				}
 			}
@@ -689,10 +700,11 @@ func (y *YamlConfigFileHandler) checkAliases() error {
 }
 
 // checkMergeValue rejects the value of the merge key if it is a node of a fragment, or a list containing one, or an
-// alias referring to one, other than a mapping. The aliases are resolved by name with the anchors defined before them,
-// like the decoder does when it reads the output; they are all defined, since checkAliases visits them first. Values
-// of the input are not checked, see checkAliases. The error names the line of a merge key of the input.
-func (y *YamlConfigFileHandler) checkMergeValue(key *yaml.Node, value *yaml.Node, defined map[string]*yaml.Node) error {
+// alias referring to one, other than a mapping. The aliases are resolved through targets, the nodes they refer to where
+// they are written, like the decoder does when it reads the output; they are all recorded, since checkAliases visits
+// them first. Values of the input are not checked, see checkAliases. The error names the line of a merge key of the
+// input.
+func (y *YamlConfigFileHandler) checkMergeValue(key *yaml.Node, value *yaml.Node, targets map[*yaml.Node]*yaml.Node) error {
 	items := []*yaml.Node{value}
 	if value.Kind == yaml.SequenceNode {
 		items = value.Content
@@ -700,7 +712,7 @@ func (y *YamlConfigFileHandler) checkMergeValue(key *yaml.Node, value *yaml.Node
 	for _, item := range items {
 		target := item
 		if item.Kind == yaml.AliasNode {
-			target = defined[item.Value]
+			target = targets[item]
 		}
 		if !y.isFragmentNode(target) || target.Kind == yaml.MappingNode {
 			continue

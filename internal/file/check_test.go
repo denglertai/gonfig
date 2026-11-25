@@ -484,3 +484,36 @@ func TestCheckMaskedTomlKeysWithPlaceholderKeysOfFragments(t *testing.T) {
 	assert.NotContains(t, diff, "gonfig-masked-key")
 	assert.NotContains(t, diff, "made-up")
 }
+
+// TestCheckMaskedTomlKeysNextToKeysLikeTheirNames checks that the names masked keys are validated with collide with no
+// static key, also one written with escapes, so check passes like process
+func TestCheckMaskedTomlKeysNextToKeysLikeTheirNames(t *testing.T) {
+	t.Setenv("CHECK_KEY", "made-up-actual")
+	content := "\"${CHECK_KEY}\" = 1\ngonfig-masked-key-0 = 2\n\"gonfig\\u002Dmasked-key-1-0\" = 3\n"
+
+	_, err := processFragment(t, general.TOML, content, "")
+	assert.NoError(t, err)
+	report := checkFile(t, general.TOML, content)
+	assert.Empty(t, report.Error)
+	assert.False(t, report.Failed())
+}
+
+// TestTomlFreeKeyPrefix checks that the prefix of the names masked keys are validated with is contained in no key of
+// the document or its fragments as decoded: static keys, also with escapes, keys a fragment used as a key adds or
+// overrides a value with, and keys within a fragment used as a value
+func TestTomlFreeKeyPrefix(t *testing.T) {
+	handler := NewTomlConfigFileHandler()
+	assert.NoError(t, handler.Read(strings.NewReader("a = 1\n[t]\n\"x-gonfig\\u002Dmasked-key-\" = 1\n"+
+		"l = [{gonfig-masked-key-1-z = 1}]\n\"${F | fragment}\" = \"\"\nv = \"${G | fragment}\"\n")))
+	fragments := map[string]string{
+		"${F | fragment}": "gonfig-masked-key-2- = 1\nl = [{gonfig-masked-key-3- = 1}]",
+		"${G | fragment}": "{gonfig-masked-key-4- = 1}",
+	}
+	for _, entry := range handler.entries {
+		if text, ok := fragments[entry.GetValue()]; ok {
+			_, err := entry.SetFragment(filter.Fragment{Text: text})
+			assert.NoError(t, err)
+		}
+	}
+	assert.Equal(t, "gonfig-masked-key-5-", handler.freeKeyPrefix())
+}
