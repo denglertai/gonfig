@@ -407,11 +407,12 @@ func BenchmarkExecutablePlugin(b *testing.B) {
 	})
 }
 
-// TestDefaultPluginPaths checks that the system directory is searched before the local one, except on Windows
+// TestDefaultPluginPaths checks the system directories searched per OS: macOS adds the one under /usr/local, which is
+// writable under System Integrity Protection, and Windows has none
 func TestDefaultPluginPaths(t *testing.T) {
-	assert.Equal(t, []string{"/usr/libexec/gonfig/plugins", "./plugins"}, defaultPluginPaths("linux"))
-	assert.Equal(t, []string{"/usr/libexec/gonfig/plugins", "./plugins"}, defaultPluginPaths("darwin"))
-	assert.Equal(t, []string{"./plugins"}, defaultPluginPaths("windows"))
+	assert.Equal(t, []string{"/usr/libexec/gonfig/plugins"}, defaultPluginPaths("linux"))
+	assert.Equal(t, []string{"/usr/libexec/gonfig/plugins", "/usr/local/libexec/gonfig/plugins"}, defaultPluginPaths("darwin"))
+	assert.Empty(t, defaultPluginPaths("windows"))
 }
 
 // useSystemPluginDir makes the directory the system plugin directory for the test
@@ -422,11 +423,15 @@ func useSystemPluginDir(t *testing.T, dir string) {
 	t.Cleanup(func() { systemPluginDir = previous })
 }
 
-// TestInitPluginsSearchesDefaultPaths checks that both default directories are searched without a plugin path, and
-// that the plugin of the system directory keeps its filters if a plugin in ./plugins provides the same ones
+// TestInitPluginsSearchesDefaultPaths checks that the system directory is searched without a plugin path, and that
+// ./plugins in the working directory is not, so running gonfig in a directory never starts plugins found there
 func TestInitPluginsSearchesDefaultPaths(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no default plugin directory, see TestInitPluginsWithoutDefaultPaths")
+	}
 	systemDir, prefix := installTestPlugin(t, "serve")
 	useSystemPluginDir(t, systemDir)
+	useLocalSystemPluginDir(t, filepath.Join(t.TempDir(), "missing"))
 
 	executable, err := os.Executable()
 	assert.NoError(t, err)
@@ -438,12 +443,36 @@ func TestInitPluginsSearchesDefaultPaths(t *testing.T) {
 	InitPlugins("")
 	t.Cleanup(ClosePlugins)
 
-	if assert.Len(t, running, 2) {
+	assert.NotContains(t, SearchedPaths(), "./plugins")
+	if assert.Len(t, running, 1) {
 		assert.Equal(t, filepath.Join(systemDir, executablePrefix+"test"), running[0].path)
 		assert.Contains(t, running[0].filters, prefix+"upper")
-		assert.Equal(t, filepath.Join("plugins", executablePrefix+"local"), running[1].path)
-		assert.Empty(t, running[1].filters)
 	}
+}
+
+// useLocalSystemPluginDir makes the directory the macOS plugin directory under /usr/local for the test
+func useLocalSystemPluginDir(t *testing.T, dir string) {
+	t.Helper()
+	previous := localSystemPluginDir
+	localSystemPluginDir = dir
+	t.Cleanup(func() { localSystemPluginDir = previous })
+}
+
+// TestInitPluginsWithoutDefaultPaths checks that on Windows, which has no default plugin directory, nothing is searched
+// and no plugins are started without a plugin path, not even from ./plugins
+func TestInitPluginsWithoutDefaultPaths(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("only Windows has no default plugin directory")
+	}
+	workDir := t.TempDir()
+	assert.NoError(t, os.Mkdir(filepath.Join(workDir, "plugins"), 0o755))
+	t.Chdir(workDir)
+
+	InitPlugins("")
+	t.Cleanup(ClosePlugins)
+
+	assert.Empty(t, SearchedPaths())
+	assert.Empty(t, Plugins())
 }
 
 // TestInitPluginsConfiguredPathOnly checks that a configured plugin path replaces the default ones
@@ -535,7 +564,8 @@ func TestPluginInfoFailures(t *testing.T) {
 func TestPluginInfoReset(t *testing.T) {
 	t.Cleanup(ClosePlugins)
 	dir := t.TempDir()
-	assert.NoError(t, os.WriteFile(filepath.Join(dir, "broken.so"), []byte("not a plugin"), 0o644))
+	// An ignored Go plugin is listed on every OS without starting a process
+	assert.NoError(t, os.WriteFile(filepath.Join(dir, "old.so"), []byte("not a plugin"), 0o644))
 
 	InitPlugins(dir)
 	assert.Len(t, Plugins(), 1)
@@ -543,72 +573,4 @@ func TestPluginInfoReset(t *testing.T) {
 	InitPlugins(empty)
 	assert.Empty(t, Plugins())
 	assert.Equal(t, []string{empty}, SearchedPaths())
-}
-
-// goPluginFilter is a filter of a fake Go plugin
-type goPluginFilter struct{}
-
-// Process returns the value unchanged
-func (goPluginFilter) Process(value any) (any, error) {
-	return value, nil
-}
-
-// describedGoPluginFilter is a filter of a fake Go plugin with a description and declared params
-type describedGoPluginFilter struct {
-	goPluginFilter
-	declared []string
-}
-
-// Description describes the filter
-func (describedGoPluginFilter) Description() string {
-	return "Returns the value"
-}
-
-// DeclaredParams returns the declared params, which gonfig validates
-func (f describedGoPluginFilter) DeclaredParams() []string {
-	return f.declared
-}
-
-// TestRegisterGoPlugin checks that the filters of a loaded Go plugin are registered and recorded with their descriptions
-// and declared params, with filters whose name is taken marked as skipped. Loading a real Go plugin needs cgo and the
-// same Go version, so registering is tested on its own.
-func TestRegisterGoPlugin(t *testing.T) {
-	names := []string{"test_go_plain", "test_go_described", "test_go_none"}
-	t.Cleanup(ClosePlugins)
-	t.Cleanup(func() { filter.RemovePluginFilters(names) })
-
-	registerGoPlugin("plugins/old.so", map[string]any{
-		"test_go_plain":     goPluginFilter{},
-		"test_go_described": describedGoPluginFilter{declared: []string{"a", "b"}},
-		"test_go_none":      describedGoPluginFilter{},
-		"upper":             goPluginFilter{},
-	})
-
-	for _, name := range names {
-		assert.True(t, filter.IsKnown(name), name)
-	}
-	assert.Equal(t, []Info{{Path: "plugins/old.so", Type: TypeGo, Filters: []FilterInfo{
-		{Name: "test_go_described", Description: "Returns the value", Params: []string{"a", "b"}},
-		// gonfig accepts no params for filters declaring nil, so they are listed as an empty list
-		{Name: "test_go_none", Description: "Returns the value", Params: []string{}},
-		// Filters without declared params accept any params
-		{Name: "test_go_plain"},
-		{Name: "upper", Skipped: true},
-	}}}, Plugins())
-	assert.EqualError(t, filter.ValidateParams("test_go_none", filter.NewFilter("test_go_none"), map[string]string{"x": "1"}),
-		`filter test_go_none accepts no params, but got "x"`)
-}
-
-// TestPluginInfoGoPlugin checks that a Go plugin failing to load is listed with its error
-func TestPluginInfoGoPlugin(t *testing.T) {
-	dir := t.TempDir()
-	assert.NoError(t, os.WriteFile(filepath.Join(dir, "broken.so"), []byte("not a plugin"), 0o644))
-
-	InitPlugins(dir)
-	t.Cleanup(ClosePlugins)
-
-	if assert.Len(t, Plugins(), 1) {
-		assert.Equal(t, TypeGo, Plugins()[0].Type)
-		assert.NotEmpty(t, Plugins()[0].Error)
-	}
 }

@@ -69,7 +69,7 @@ func moduleVersion(info *debug.BuildInfo, ok bool) string {
 
 // Serve runs an executable plugin providing the filters: it writes the Handshake and answers requests of gonfig
 // until stdin is closed. The keys of the map are the filter names, the values the filters, which are the same as
-// for the deprecated Go plugins:
+// for the former Go plugins (.so files):
 //
 //	// Required: transforms the value, which is usually a string but may be an int, float64, bool or []string
 //	Process(value any) (any, error)

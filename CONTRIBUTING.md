@@ -38,7 +38,7 @@ The repository consists of several Go modules:
 | `plugins/openbao`, `plugins/azure-keyvault` | The plugins for secret managers, each a module of its own |
 | `cmd/benchmarks` | Benchmarks, see [cmd/benchmarks/README.md](./cmd/benchmarks/README.md) |
 
-When running a self-built binary, pass `--plugin-path ./none` unless you test plugins, so no plugins of the system or of `./plugins` are loaded.
+When running a self-built binary, pass `--plugin-path ./none` unless you test plugins, so no plugins of the system are loaded.
 
 ## Making changes
 

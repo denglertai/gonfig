@@ -6,7 +6,7 @@ import "slices"
 const (
 	// TypeExecutable is an executable plugin (gonfig-plugin-*)
 	TypeExecutable = "executable"
-	// TypeGo is a deprecated Go plugin (.so file)
+	// TypeGo is a leftover Go plugin (.so file), which is not loaded anymore and listed with an error
 	TypeGo = "go"
 )
 
@@ -21,7 +21,7 @@ type Info struct {
 	Description string `json:"description,omitempty"`
 	// Filters are the filters the plugin provides, sorted by name
 	Filters []FilterInfo `json:"filters"`
-	// Error is why the plugin failed to start or load, in which case it has no filters
+	// Error is why the plugin failed to start or was ignored, in which case it has no filters
 	Error string `json:"error,omitempty"`
 }
 

@@ -20,12 +20,17 @@ A plugin is a separate executable, which gonfig starts once and talks to over st
 Plugins and gonfig don't have to be built with the same Go version, and plugins may be written in any language.
 
 On startup gonfig walks the plugin directory recursively and starts every executable whose name starts with `gonfig-plugin-`, e.g. `gonfig-plugin-crypto` (`gonfig-plugin-crypto.exe` on Windows).
-Other files are ignored, so build scripts next to the sources of a plugin are never started. The exception are deprecated Go plugins (`.so` files), which are still loaded, see [migrating from Go plugins](#migrating-from-go-plugins).
-By default, gonfig searches two plugin directories:
-1. `/usr/libexec/gonfig/plugins`, where plugin packages install their plugins, see [packaging](#packaging-with-melange-and-apko). Windows has no such directory.
-1. `./plugins`, relative to the current working directory
+Other files are ignored, so build scripts next to the sources of a plugin are never started. Go plugins (`.so` files) are ignored with a warning as well, see [migrating from Go plugins](#migrating-from-go-plugins). This applies to every file ending in `.so`, so an executable plugin must not be named like `gonfig-plugin-crypto.so`.
+By default, gonfig searches the system plugin directory, where plugin packages install their plugins, see [packaging](#packaging-with-melange-and-apko):
 
-Directories that don't exist are skipped. The system directory is searched first, so a plugin in `./plugins` cannot replace a filter of an installed plugin, since filter names are unique (see below).
+| System | Default plugin directories, in the order they are searched |
+| --- | --- |
+| Linux | `/usr/libexec/gonfig/plugins` |
+| macOS | `/usr/libexec/gonfig/plugins`, then `/usr/local/libexec/gonfig/plugins`, since `/usr` is read-only with System Integrity Protection |
+| Windows | none |
+
+Directories that don't exist are skipped. The working directory is not searched, so plugins in a `plugins` directory next to the processed files are never started.
+**On Windows, plugins are only loaded if a plugin directory is set**, since there is no default directory. Without one, gonfig starts no plugins.
 Another plugin directory may be set, which is then the only one searched, by:
 1. the CLI flag `--plugin-path`
 1. the environment variable `GONFIG_PLUGIN_PATH`
@@ -57,7 +62,7 @@ Avoid it for plugins that hash or encrypt secrets, since a plugin failing to sta
 ## Listing plugins
 
 `gonfig plugin list` lists the plugins found in the plugin path, in the order they were found, with their version, description and filters, if the plugins provide them.
-A filter shows its params in brackets if the plugin declares them, e.g. `openbao(mount, kv, version)`, or `()` if it accepts none. Plugins that failed to start and filters skipped because another filter has their name already are listed as well:
+A filter shows its params in brackets if the plugin declares them, e.g. `openbao(mount, kv, version)`, or `()` if it accepts none. Plugins that failed to start, ignored Go plugins (`.so` files) and filters skipped because another filter has their name already are listed as well:
 
 ```console
 $ gonfig plugin list
@@ -85,6 +90,12 @@ The error of a plugin failing to start is logged as well, on stderr, since gonfi
 ```console
 $ gonfig --plugin-path ./none plugin list
 No plugins found in ./none
+```
+
+If no plugin directory is searched, which is the case on Windows without a configured plugin path, the command says so, and `--output json` lists `"paths": []`:
+
+```text
+No plugins found, no plugin path is set, see --plugin-path
 ```
 
 ## Writing a filter plugin
@@ -150,7 +161,7 @@ This guide creates a plugin providing a filter `shout`, which converts the value
     $ go build -o gonfig-plugin-shout .
     ```
 
-1. Copy `gonfig-plugin-shout` into the plugin directory, e.g. `./plugins` or the directory given by `--plugin-path`.
+1. Copy `gonfig-plugin-shout` into the plugin directory, e.g. `/usr/libexec/gonfig/plugins` or the directory given by `--plugin-path`, which is required on Windows.
 
 1. Use the filter. `gonfig plugin list` shows whether gonfig finds the plugin:
     ```console
@@ -202,11 +213,11 @@ Params() []string
 - `ReverseFilter` implements `Process` and reverses the value rune by rune, so multi-byte characters stay intact.
 - `DummyFilterRegister` returns the filters, which `main` passes to `plugin.Serve`. This is how [Go plugins](#migrating-from-go-plugins) provided their filters, and shows that they can be served unchanged.
 
-Build it within its directory and use it from the root of the repository, where it is found in the default plugin directory `./plugins`:
+Build it within its directory and point `--plugin-path` to the directory with the executable:
 
 ```console
-$ cd plugins/dummy && go build -o gonfig-plugin-dummy . && cd ../..
-$ V=gonfig gonfig value '${V | reverse | upper}'
+$ (cd plugins/dummy && go build -o gonfig-plugin-dummy .)
+$ V=gonfig gonfig --plugin-path ./plugins/dummy value '${V | reverse | upper}'
 GIFNOG
 ```
 
@@ -481,12 +492,20 @@ tbasvt
 ## Migrating from Go plugins
 
 Before executable plugins, plugins were built with Go's [plugin](https://pkg.go.dev/plugin) package as shared objects (`.so` files).
-gonfig still loads them, but they are deprecated and will be removed in a future version, since they have to be built with exactly the same Go version, build flags and dependency versions as the gonfig binary, and don't work on Windows.
+Support for them was removed, since they had to be built with exactly the same Go version, build flags and dependency versions as the gonfig binary, didn't work on Windows and required gonfig to be built with cgo, which made its binaries dynamically linked.
+gonfig no longer loads `.so` files. One found in the plugin directory is ignored with a warning, and its filters are unknown:
+
+```json
+{"time":"...","level":"WARN","msg":"Ignoring Go plugin (.so): Go plugins are no longer supported, see PLUGINS.md#migrating-from-go-plugins","path":"plugins/hash.so"}
+```
+
+`gonfig plugin list` shows it as `<path> (Go plugin, ignored)` followed by `  ignored: <reason>`, with exit code 0. With `--output json`, it has `"type": "go"`, no filters (`"filters": []`) and the reason as `"error"`. See [listing plugins](#listing-plugins).
+The package `pkg/plugin` no longer has `PluginFilter`, the interface of the `Filter` symbol of a Go plugin.
 
 The filters of a Go plugin can be served unchanged:
 
 1. Add gonfig as a dependency of the plugin: `go get github.com/denglertai/gonfig@latest`.
-1. Add a `main` function serving the filters the plugin's `Filter` symbol returns:
+1. Add a `main` function serving the filters the plugin's `Filter` symbol returned:
     ```go
     func main() {
     	if err := plugin.Serve(Filter.Filters()); err != nil {
@@ -512,6 +531,6 @@ The reason is logged with the message `Failed to start plugin` when gonfig start
 
 The debug log (`--log-level debug`) lists the started plugins with the number of their filters, and files named `gonfig-plugin-*` that were skipped because they are not executable.
 
-Go plugins (`.so` files) that fail to load are logged with the message `Failed to load plugin`.
-The usual cause is `plugin was built with a different version of package ...`, which [migrating](#migrating-from-go-plugins) to an executable plugin solves.
-A Go plugin built with a much older Go version may crash gonfig on startup instead, e.g. with `fatal error: runtime: no plugin module data`.
+Go plugins (`.so` files) are never loaded and logged with the warning `Ignoring Go plugin (.so)`. [Migrating](#migrating-from-go-plugins) them to executable plugins makes their filters available again.
+
+On Windows, gonfig starts no plugins unless `--plugin-path`, `GONFIG_PLUGIN_PATH` or `plugin-path` in `.gonfig.yaml` is set. `gonfig plugin list` then reports `No plugins found, no plugin path is set, see --plugin-path`.

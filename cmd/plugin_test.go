@@ -107,20 +107,43 @@ func TestPluginListWithoutPlugins(t *testing.T) {
 	assert.JSONEq(t, `{"paths": [`+jsonQuote(dir)+`], "plugins": []}`, runPluginList(t, "--plugin-path", dir, "plugin", "list", "-o", "json"))
 }
 
+// TestPluginListIgnoredGoPlugin checks that a leftover Go plugin (.so file) is listed as ignored with the reason, and
+// keeps the type go in JSON, so users and scripts see why its filters are missing
+func TestPluginListIgnoredGoPlugin(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "old.so")
+	assert.NoError(t, os.WriteFile(path, []byte("not a plugin"), 0o644))
+	reason := "Go plugins are no longer supported, see PLUGINS.md#migrating-from-go-plugins"
+
+	assert.Equal(t, path+" (Go plugin, ignored)\n  ignored: "+reason+"\n", runPluginList(t, "--plugin-path", dir, "plugin", "list"))
+	assert.JSONEq(t, `{"paths": [`+jsonQuote(dir)+`], "plugins": [{"path": `+jsonQuote(path)+`, "type": "go", "filters": [], "error": "`+reason+`"}]}`,
+		runPluginList(t, "--plugin-path", dir, "plugin", "list", "-o", "json"))
+}
+
+// TestWritePluginsWithoutPaths checks the output without searched paths, as on Windows without a plugin path, which
+// has no default plugin directory
+func TestWritePluginsWithoutPaths(t *testing.T) {
+	var text, jsonOut bytes.Buffer
+	assert.NoError(t, writePluginsText(&text, nil, nil))
+	assert.Equal(t, "No plugins found, no plugin path is set, see --plugin-path\n", text.String())
+	assert.NoError(t, writePluginsJson(&jsonOut, nil, nil))
+	assert.JSONEq(t, `{"paths": [], "plugins": []}`, jsonOut.String())
+}
+
 // jsonQuote quotes the text as a JSON string, e.g. for paths with backslashes on Windows
 func jsonQuote(text string) string {
 	quoted, _ := json.Marshal(text)
 	return string(quoted)
 }
 
-// TestWritePluginsText checks the text of plugins without optional fields, failed and skipped ones and Go plugins
+// TestWritePluginsText checks the text of plugins without optional fields, failed and skipped ones and ignored Go plugins
 func TestWritePluginsText(t *testing.T) {
 	var out bytes.Buffer
 	assert.NoError(t, writePluginsText(&out, []string{"./plugins"}, []plugin.Info{
 		{Path: "plugins/gonfig-plugin-a", Type: plugin.TypeExecutable, Version: "1.0.0", Description: "Plugin A",
 			Filters: []plugin.FilterInfo{{Name: "a", Description: "Filter A", Params: []string{"x", "y"}}, {Name: "upper", Skipped: true}}},
 		{Path: "plugins/gonfig-plugin-b", Type: plugin.TypeExecutable, Filters: []plugin.FilterInfo{}, Error: "no handshake: the plugin exited"},
-		{Path: "plugins/old.so", Type: plugin.TypeGo, Filters: []plugin.FilterInfo{{Name: "old"}}},
+		{Path: "plugins/old.so", Type: plugin.TypeGo, Filters: []plugin.FilterInfo{}, Error: "Go plugins are no longer supported"},
 	}))
 	assert.Equal(t, `plugins/gonfig-plugin-a 1.0.0
   Plugin A
@@ -130,8 +153,8 @@ func TestWritePluginsText(t *testing.T) {
       skipped: another filter has the name already
 plugins/gonfig-plugin-b
   failed to start: no handshake: the plugin exited
-plugins/old.so (deprecated Go plugin)
-  old
+plugins/old.so (Go plugin, ignored)
+  ignored: Go plugins are no longer supported
 `, out.String())
 }
 
@@ -147,4 +170,31 @@ func TestPluginListInvalidOutput(t *testing.T) {
 func TestWritePluginsErrors(t *testing.T) {
 	assert.Error(t, writePluginsText(failingCheckWriter{}, nil, nil))
 	assert.Error(t, writePluginsJson(failingCheckWriter{}, nil, nil))
+}
+
+// TestPluginListMixedEntries checks the text and JSON of a started plugin next to an ignored Go plugin in the same
+// directory, and that the content of the .so file is never printed
+func TestPluginListMixedEntries(t *testing.T) {
+	dir, name := buildDummyPlugin(t)
+	goPath := filepath.Join(dir, "old.so")
+	assert.NoError(t, os.WriteFile(goPath, []byte("s3cret-content"), 0o644))
+	reason := "Go plugins are no longer supported, see PLUGINS.md#migrating-from-go-plugins"
+
+	text := runPluginList(t, "--plugin-path", dir, "plugin", "list")
+	assert.Contains(t, text, filepath.Join(dir, name))
+	assert.Contains(t, text, goPath+" (Go plugin, ignored)\n  ignored: "+reason+"\n")
+	assert.NotContains(t, text, "failed to start")
+	assert.NotContains(t, text, "s3cret-content")
+
+	jsonOut := runPluginList(t, "--plugin-path", dir, "plugin", "list", "-o", "json")
+	var result struct {
+		Plugins []plugin.Info `json:"plugins"`
+	}
+	assert.NoError(t, json.Unmarshal([]byte(jsonOut), &result))
+	if assert.Len(t, result.Plugins, 2) {
+		assert.Equal(t, plugin.TypeExecutable, result.Plugins[0].Type)
+		assert.Empty(t, result.Plugins[0].Error)
+		assert.Equal(t, plugin.Info{Path: goPath, Type: plugin.TypeGo, Filters: []plugin.FilterInfo{}, Error: reason}, result.Plugins[1])
+	}
+	assert.NotContains(t, jsonOut, "s3cret-content")
 }

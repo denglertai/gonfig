@@ -93,7 +93,7 @@ COPY --from=gonfig /usr/bin/gonfig /usr/bin/gonfig
 ```
 
 The image is tagged with the version both with and without a leading `v`, e.g. `v0.2.0` and `0.2.0`, and `latest` for the newest release that is not a prerelease.
-The binary is linked against glibc, so it runs in images based on e.g. Debian, Ubuntu, Wolfi or distroless `base`, but not in Alpine or `scratch` images.
+The binary is static, built without cgo, so it needs no libc and runs in every image, e.g. Alpine, Debian, distroless or `scratch`. The [plugins for secret managers](./PLUGINS.md#plugins-for-secret-managers) connect over TLS, so an image with them needs CA certificates, which `scratch` doesn't have. The image itself is based on `cgr.dev/chainguard/static`.
 
 The image contains no config file and sets no `GONFIG_*` variables, so the built-in defaults apply. To change them, set the [environment variables](#options) in your own image or deployment, or mount a [config file](#config-file) as `/etc/gonfig/.gonfig.yaml`.
 
@@ -124,7 +124,7 @@ $ gh attestation verify gonfig_Linux_x86_64.tar.gz --repo denglertai/gonfig
 
 The [plugins for secret managers](./PLUGINS.md#plugins-for-secret-managers) are released with gonfig:
 
-- **Release archives:** `gonfig-plugin-openbao` and `gonfig-plugin-azure-keyvault` for Linux, macOS and Windows, e.g. `gonfig-plugin-openbao_Linux_x86_64.tar.gz`. Unpack the binary into `/usr/libexec/gonfig/plugins`, which gonfig searches by default on Linux and macOS. On Windows, gonfig searches `.\plugins` in the working directory by default instead. Another directory can be set with `--plugin-path` on every system.
+- **Release archives:** `gonfig-plugin-openbao` and `gonfig-plugin-azure-keyvault` for Linux, macOS and Windows, e.g. `gonfig-plugin-openbao_Linux_x86_64.tar.gz`. Unpack the binary into `/usr/libexec/gonfig/plugins`, which gonfig searches by default on Linux and macOS, on macOS also `/usr/local/libexec/gonfig/plugins`. Windows has no default plugin directory, so plugins are only loaded there if `--plugin-path`, `GONFIG_PLUGIN_PATH` or `plugin-path` in `.gonfig.yaml` is set. Another directory can be set the same way on every system.
 - **apk:** each plugin is a package of its own, which installs into `/usr/libexec/gonfig/plugins` and installs gonfig as well:
   ```bash
   $ apk add gonfig-plugin-openbao gonfig-plugin-azure-keyvault
@@ -920,7 +920,7 @@ Order of precedence (highest to lowest):
 | Log format | `--log-format` | `GONFIG_LOG_FORMAT` | `json` | `json` for containers and log collectors, `text` for reading, or `auto` for `text` if stderr is a terminal and `json` otherwise |
 | Include source location | `--log-source`, `-s` | `GONFIG_LOG_SOURCE` | `false` | Includes source location in log output |
 | Config directory | `--config-path` | `GONFIG_CONFIG_PATH` | empty | Directory that contains `.gonfig.yaml` |
-| Plugin directory | `--plugin-path` | `GONFIG_PLUGIN_PATH` | `/usr/libexec/gonfig/plugins` (except on Windows) and `./plugins` | Directory scanned recursively for executable plugins (`gonfig-plugin-*`) and deprecated Go plugins (`.so` files). If set, only this directory is scanned |
+| Plugin directory | `--plugin-path` | `GONFIG_PLUGIN_PATH` | `/usr/libexec/gonfig/plugins`, on macOS also `/usr/local/libexec/gonfig/plugins`, none on Windows | Directory scanned recursively for executable plugins (`gonfig-plugin-*`). Go plugins (`.so` files) are ignored. If set, only this directory is scanned. On Windows, plugins are only loaded if it is set |
 | Log values | `--log-values` | `GONFIG_LOG_VALUES` | `false` | Includes processed values in debug logs, the keys and lengths in the violations of schema validation, error messages of filters, the parser messages of invalid fragments, the parser messages of files that cannot be decoded for schema validation and the diff of `config check --diff`. Values may contain secrets, so only use it for debugging; gonfig warns on startup while it is enabled |
 | Fail on missing variables | `--fail-on-missing` | `GONFIG_FAIL_ON_MISSING` | `false` | Fails for [environment variables that are not set](./FILTERS.md#missing-variables) instead of using empty strings, unless the placeholder provides a default |
 | Ignore write errors | `--ignore-write-errors` (`config process` only) | `GONFIG_IGNORE_WRITE_ERRORS` | empty | Comma-separated kinds of errors writing files back with `-i` that skip the file with a warning instead of failing. Only `read-only` is supported, see [unchanged and read-only files](#unchanged-and-read-only-files). Has no effect without `-i` |
@@ -1031,9 +1031,9 @@ To include the values for debugging, enable `log-values` with `--log-values`, `G
 
 ## Plugins
 
-Plugins add custom filters. They are separate executables named `gonfig-plugin-*`, which gonfig starts from the plugin directory and talks to over stdin and stdout. By default, gonfig searches `/usr/libexec/gonfig/plugins` (except on Windows), where plugin packages install them, and `./plugins`. Another directory may be set with `--plugin-path`, `GONFIG_PLUGIN_PATH` or `plugin-path` in `.gonfig.yaml`.
+Plugins add custom filters. They are separate executables named `gonfig-plugin-*`, which gonfig starts from the plugin directory and talks to over stdin and stdout. By default, gonfig searches `/usr/libexec/gonfig/plugins`, where plugin packages install them, on macOS also `/usr/local/libexec/gonfig/plugins`. The working directory is not searched. **Windows has no default plugin directory**, so plugins are only loaded there if `--plugin-path`, `GONFIG_PLUGIN_PATH` or `plugin-path` in `.gonfig.yaml` is set, which may be used on every system to search another directory.
 
-Plugins don't depend on the Go version or build flags of the gonfig binary and may be written in any language. Go plugins (`.so` files) are still loaded, but deprecated.
+Plugins don't depend on the Go version or build flags of the gonfig binary and may be written in any language. Go plugins (`.so` files) are no longer supported and ignored with a warning, see the [migration](./PLUGINS.md#migrating-from-go-plugins).
 See [PLUGINS.md](./PLUGINS.md) for how plugins work, a step-by-step guide, examples and the migration from Go plugins, and [plugins/dummy](./plugins/dummy/) for a minimal plugin.
 `gonfig plugin list` shows the plugins gonfig finds, see [plugin](#plugin).
 

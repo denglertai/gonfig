@@ -2,19 +2,14 @@ package plugin
 
 import (
 	"errors"
-	"fmt"
 	"io/fs"
-	"maps"
 	"os"
 	"path/filepath"
-	"plugin"
 	"runtime"
-	"slices"
 	"strings"
 
 	"github.com/denglertai/gonfig/internal/filter"
 	"github.com/denglertai/gonfig/pkg/logging"
-	pkgplugin "github.com/denglertai/gonfig/pkg/plugin"
 )
 
 // running are the executable plugins started by InitPlugins, which ClosePlugins stops
@@ -24,27 +19,39 @@ var running []*processPlugin
 // repository. It is a variable, so tests can use another directory.
 var systemPluginDir = "/usr/libexec/gonfig/plugins"
 
-// localPluginDir is the plugin directory relative to the working directory
-const localPluginDir = "./plugins"
+// localSystemPluginDir is the plugin directory searched on macOS after systemPluginDir, since System Integrity
+// Protection makes /usr read-only there, except for /usr/local. It is a variable, so tests can use another directory.
+var localSystemPluginDir = "/usr/local/libexec/gonfig/plugins"
 
-// defaultPluginPaths returns the directories searched for plugins if no plugin path is configured. The system directory
-// comes first, so plugins in the working directory cannot replace the filters of installed plugins, since the plugin
-// registering a filter name first wins. Windows has no system directory.
+// goPluginError is why a leftover Go plugin (.so file) is ignored, logged and listed by gonfig plugin list
+const goPluginError = "Go plugins are no longer supported, see PLUGINS.md#migrating-from-go-plugins"
+
+// defaultPluginPaths returns the directories searched for plugins if no plugin path is configured. Nothing is
+// searched relative to the working directory, so running gonfig in a directory never starts plugins found there.
+// Windows has no system plugin directory, so nothing is searched there.
 func defaultPluginPaths(goos string) []string {
-	if goos == "windows" {
-		return []string{localPluginDir}
+	switch goos {
+	case "windows":
+		return nil
+	case "darwin":
+		return []string{systemPluginDir, localSystemPluginDir}
+	default:
+		return []string{systemPluginDir}
 	}
-	return []string{systemPluginDir, localPluginDir}
 }
 
-// InitPlugins starts all executable plugins (gonfig-plugin-*) and loads all Go plugins (.so files) found in the
-// plugin path, or in the default plugin paths if it is empty, see defaultPluginPaths. Plugins that fail to start or
-// load are logged and skipped, so they don't prevent other plugins from loading. ClosePlugins stops the executable
-// plugins again.
+// InitPlugins starts all executable plugins (gonfig-plugin-*) found in the plugin path, or in the default plugin
+// paths if it is empty, see defaultPluginPaths. Plugins that fail to start are logged and skipped, so they don't
+// prevent other plugins from starting. Leftover Go plugins (.so files) are not loaded anymore, but logged and listed
+// with an error. ClosePlugins stops the executable plugins again.
 func InitPlugins(pluginPath string) {
 	paths := []string{pluginPath}
 	if pluginPath == "" {
 		paths = defaultPluginPaths(runtime.GOOS)
+		if len(paths) == 0 {
+			// Debug only, since this applies to every run on Windows without a configured plugin path
+			logging.Debug("No plugin path configured and no default plugin path on this OS, so no plugins are started", "os", runtime.GOOS)
+		}
 	}
 	// The plugins found describe the latest initialization, see Plugins
 	searched = paths
@@ -54,7 +61,7 @@ func InitPlugins(pluginPath string) {
 	}
 }
 
-// loadPluginDir starts and loads the plugins of a plugin directory and its subdirectories.
+// loadPluginDir starts the plugins of a plugin directory and its subdirectories.
 // A directory that does not exist is skipped, since no plugins may be installed.
 func loadPluginDir(pluginPath string) {
 	logging.Trace("Starting loading plugins", "pluginPath", pluginPath)
@@ -69,11 +76,10 @@ func loadPluginDir(pluginPath string) {
 
 		switch {
 		case strings.HasSuffix(path, ".so"):
-			logging.Debug("Loading deprecated Go plugin, see PLUGINS.md for migrating to an executable plugin", "path", path)
-			if err := loadPlugin(path); err != nil {
-				logging.Error("Failed to load plugin", "path", path, "error", err)
-				found = append(found, Info{Path: path, Type: TypeGo, Filters: []FilterInfo{}, Error: err.Error()})
-			}
+			// Warn at the default level, so users of a Go plugin notice why its filters are missing. Only the path is
+			// logged, the file is never read.
+			logging.Warn("Ignoring Go plugin (.so): "+goPluginError, "path", path)
+			found = append(found, Info{Path: path, Type: TypeGo, Filters: []FilterInfo{}, Error: goPluginError})
 		case strings.HasPrefix(d.Name(), executablePrefix):
 			// Stat follows symbolic links, so linked plugins are started as well
 			info, err := os.Stat(path)
@@ -139,66 +145,4 @@ func runPlugin(path string) error {
 	})
 	found = append(found, info)
 	return nil
-}
-
-// loadPlugin loads a single Go plugin and registers the filters it provides.
-// It uses the deprecated PluginFilter, since loading the deprecated Go plugins is what it exists for.
-//
-//nolint:staticcheck
-func loadPlugin(path string) error {
-	p, err := plugin.Open(path)
-	if err != nil {
-		return err
-	}
-
-	pf, err := lookUpSymbol[pkgplugin.PluginFilter](p, "Filter")
-	if err != nil {
-		return err
-	}
-
-	registerGoPlugin(path, pf.Filters())
-	return nil
-}
-
-// registerGoPlugin registers the filters of a loaded Go plugin and records the plugin for Plugins. Go plugins have no
-// version, but their filters may describe themselves and declare their params, which gonfig validates.
-func registerGoPlugin(path string, filters map[string]any) {
-	added := filter.AddPluginFilters(filters)
-	logging.Debug("Loaded filter plugin", "plugin", path, "filters", len(filters))
-
-	names := slices.Sorted(maps.Keys(filters))
-	found = append(found, Info{Path: path, Type: TypeGo, Filters: filterInfos(names, added, func(name string) FilterInfo {
-		return goFilterInfo(filters[name])
-	})})
-}
-
-// goFilterInfo returns the description and declared params of a filter of a Go plugin. The filters run within gonfig,
-// which validates the params of filters implementing filter.ParamsDeclarer and accepts none if they declare none, so
-// nil declared params are listed as an empty list. Filters without it accept any params.
-func goFilterInfo(f any) FilterInfo {
-	var info FilterInfo
-	if described, ok := f.(interface{ Description() string }); ok {
-		info.Description = described.Description()
-	}
-	if declarer, ok := f.(filter.ParamsDeclarer); ok {
-		info.Params = append([]string{}, declarer.DeclaredParams()...)
-	}
-	return info
-}
-
-// lookUpSymbol looks up the symbol in the plugin and ensures it is of the expected type
-func lookUpSymbol[M any](p *plugin.Plugin, symbolName string) (M, error) {
-	var zero M
-
-	symbol, err := p.Lookup(symbolName)
-	if err != nil {
-		return zero, err
-	}
-
-	result, ok := symbol.(M)
-	if !ok {
-		return zero, fmt.Errorf("symbol %s is of type %T, which does not implement %T", symbolName, symbol, (*M)(nil))
-	}
-
-	return result, nil
 }

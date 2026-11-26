@@ -10,5 +10,5 @@ Run the following command within this directory:
 go build -o gonfig-plugin-dummy .
 ```
 
-gonfig finds the plugin when it runs from the root of the repository, since `./plugins` is the default plugin directory.
+Point `--plugin-path` to this directory to use it, e.g. `gonfig --plugin-path ./plugins/dummy value ...` from the root of the repository.
 The plugin is built against the gonfig sources of the repository, see the `replace` directive in [go.mod](./go.mod).
