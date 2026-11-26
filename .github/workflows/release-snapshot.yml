@@ -40,9 +40,6 @@ jobs:
           # Like the release, built without the cache, which a poisoned cache entry could alter
           cache: false
           go-version-file: go.mod
-      - name: Set up the cross toolchain
-        # actionlint does not support the self-repository syntax $/ yet
-        uses: ./.github/actions/setup-cross-toolchain # zizmor: ignore[self-repository]
       - name: Setup syft
         uses: anchore/sbom-action/download-syft@dfcb83b97731532d72be422cbc51ee64adb6fd56 # v0.24.4
       # The image only copies binaries, so building it for arm64 needs no QEMU
@@ -60,8 +57,8 @@ jobs:
       - name: Check the archives
         run: |
           set -euo pipefail
-          for archive in dist/gonfig_Linux_x86_64.tar.gz dist/gonfig_Linux_arm64.tar.gz; do
-            test "$(tar tzf "$archive" | sort | tr '\n' ' ')" = "LICENSE gonfig "
+          for platform in Linux_x86_64 Linux_arm64 Darwin_x86_64 Darwin_arm64; do
+            test "$(tar tzf "dist/gonfig_${platform}.tar.gz" | sort | tr '\n' ' ')" = "LICENSE gonfig "
           done
           test "$(unzip -Z1 dist/gonfig_Windows_x86_64.zip | sort | tr '\n' ' ')" = "LICENSE gonfig.exe "
           for plugin in gonfig-plugin-openbao gonfig-plugin-azure-keyvault; do
@@ -124,8 +121,8 @@ jobs:
           docker cp "$container:/usr/bin/gonfig" "$RUNNER_TEMP/gonfig"
           docker cp "$container:/usr/libexec/gonfig/plugins" "$RUNNER_TEMP/plugins"
           docker rm "$container"
-          # gonfig is linked against glibc for cgo, the plugins are static
-          file "$RUNNER_TEMP/gonfig" | tee /dev/stderr | grep -q 'ARM aarch64.*dynamically linked'
+          # gonfig and the plugins are built without cgo, so they are static
+          file "$RUNNER_TEMP/gonfig" | tee /dev/stderr | grep -q 'ARM aarch64.*statically linked'
           for plugin in gonfig-plugin-openbao gonfig-plugin-azure-keyvault; do
             file "$RUNNER_TEMP/plugins/$plugin" | tee /dev/stderr | grep -q 'ARM aarch64.*statically linked'
           done
