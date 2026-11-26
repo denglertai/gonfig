@@ -18,7 +18,7 @@ gonfig is a Go CLI that fills config files (YAML, JSON, XML, properties, TOML, d
 | `internal/schema` | JSON Schema validation of processed files (`config check`) |
 | `internal/output` | Writing processed files atomically, file modes and owners |
 | `internal/diff` | Unified diffs of old and new content |
-| `internal/plugin`, `pkg/plugin` | Executable plugins over a protocol, Go `.so` plugins loaded in-process |
+| `internal/plugin`, `pkg/plugin` | Executable plugins over a protocol; `.so` files are ignored with a warning |
 | `plugins/*` | Secret-manager plugins (OpenBao, Azure Key Vault), separate Go modules |
 | `cmd` | Cobra commands, wiring config into the packages |
 | `cmd/benchmarks` | Benchmark suite (`make bench`, `make profile`) |
@@ -100,7 +100,7 @@ go build -o "$SCRATCH/gonfig" .
 cd "$SCRATCH" && VAR=value ./gonfig -l error --plugin-path ./none config process -f example.yaml
 ```
 
-Run it from a scratch directory with `--plugin-path ./none`: the repo's `./plugins` may contain a stale `.so` that crashes the binary. Use `-l error` to keep logs out of the output.
+Run it from a scratch directory with `--plugin-path ./none`, which keeps plugins installed in the system plugin directory out of the run. Use `-l error` to keep logs out of the output.
 
 ### Documented examples
 

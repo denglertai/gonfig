@@ -65,9 +65,8 @@ Traps found while working on this codebase. Check the relevant section before ch
 
 ## Plugins
 
-- A stale `.so` in `./plugins` of the working directory can crash the binary on startup (`runtime: no plugin module data`). Run manual tests from a scratch directory with `--plugin-path ./none`.
-- Plugins must match the Go version and `-trimpath` of the binary; `go version -m` shows both.
-- **A `.so` plugin's `init()` runs as soon as it is loaded** (`plugin.Open`), inside gonfig's process. System-dir plugins win filter names, but a `.so` in `./plugins` of the working directory still executes code. `.so` plugins cannot be isolated or timed out, a panic crashes gonfig, and they don't exist on Windows.
+- Go plugins (`.so` files) are no longer loaded, only listed as ignored with a WARN. Any file ending in `.so` counts, even an executable named `gonfig-plugin-x.so`.
+- `./plugins` of the working directory is not searched by default (Linux: `/usr/libexec/gonfig/plugins`, macOS: also `/usr/local/libexec/gonfig/plugins`, Windows: none). Tests of discovery must set a path or replace `localSystemPluginDir`; manual runs use `--plugin-path ./none` to keep installed plugins out.
 
 ## go-snaps
 

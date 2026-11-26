@@ -18,7 +18,7 @@ You make sure a gonfig change is tested the way CI, Codecov and the maintainer e
 5. **Plugin modules:** `for m in plugins/*/go.mod; do (cd $(dirname $m) && go test ./...); done`.
 6. **Race detector** (as CI's `race` job) when package-level state, plugins or pipes are involved: `go test -race ./...` and the same in each `plugins/*` module.
 7. **OpenBao/Vault integration** when `plugins/openbao` changed: start `bao server -dev -dev-root-token-id=root` in the background, then `(cd plugins/openbao && TEST_OPENBAO_ADDR=http://127.0.0.1:8200 TEST_OPENBAO_TOKEN=root go test -count=1 -run Integration -v ./...)`, and stop the server afterwards. If `bao` isn't installed, say so - CI also runs them against Vault.
-8. **Go `.so` plugins** when the in-process loader changed: build the test plugin with `-buildmode=plugin` and the same Go version and `-trimpath` setting as the binary (`go version -m` shows both). These tests can't run on Windows, so guard them with a build tag or `runtime.GOOS` skip.
+8. **Leftover `.so` files** when plugin discovery changed: they are ignored, so test the WARN and the `plugin list` entry with a dummy `.so` file (no `-buildmode=plugin` build needed; this works on every OS).
 
 Do not run benchmarks - gonfig-perf-analyst does that alone, so CPU contention doesn't skew numbers.
 
