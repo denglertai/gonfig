@@ -10,6 +10,7 @@ import (
 
 	"github.com/denglertai/gonfig/internal/filter"
 	"github.com/denglertai/gonfig/internal/general"
+	"github.com/denglertai/gonfig/internal/value"
 	"github.com/gkampitakis/go-snaps/snaps"
 	"github.com/pelletier/go-toml/v2"
 	"github.com/stretchr/testify/assert"
@@ -373,4 +374,94 @@ func TestTomlKeyFragmentNotMergeable(t *testing.T) {
 	assert.NoError(t, err)
 	_, err = inserted[0].(FragmentConfigEntry).SetFragment(filter.Fragment{Text: "x = 1"})
 	assert.ErrorIs(t, err, errTomlKeyFragment)
+}
+
+// TestTomlComments checks that only a # outside strings starts a comment, which is returned with the spaces before it
+func TestTomlComments(t *testing.T) {
+	for text, want := range map[string][]string{
+		`["a#b", 'c#d'] # e`: {" # e"},
+		"[\n  \"\"\"x\\\"\"\"#\"\"\", # f\n  '''y#''''' #g\n]": {" # f", " #g"},
+		"\"\\\\\" # h": {" # h"},
+		"[\n# i\r\n1]": {"# i"},
+		`"" ''`:        nil,
+	} {
+		var got []string
+		for _, comment := range tomlComments([]byte(text)) {
+			got = append(got, text[comment.start:comment.end])
+		}
+		assert.Equal(t, want, got, text)
+	}
+}
+
+// TestTomlMaskedFragmentComments checks that the comments of fragments are removed while values are masked, whatever
+// they follow and wherever they are, the masked values stay in place, and the comments of the file are kept
+func TestTomlMaskedFragmentComments(t *testing.T) {
+	const comments = "# c1\r\n"
+	for name, tC := range map[string]struct {
+		document string
+		fragment string
+		want     string
+		// kept is a comment of the fragment written if values are not masked
+		kept string
+	}{
+		"value": {
+			document: "# head\na = \"${F}\" # tail\nb = 1\n",
+			fragment: "[\n  1, # c1\n  \"#s\", #c2\n  '''x#y''', \"\"\"z\\\"\"\"#\"\"\",#c3\r\n  { k = 'v#' },# c4\n] # c5",
+			kept:     "c2",
+			want:     "# head\na = [\n  \"***\",\n  \"***\",\n  '''***''', \"\"\"***\"\"\",\r\n  { k = '***' },\n] # tail\nb = 1\n",
+		},
+		"key": {
+			document: "[t]\n\"${F}\" = \"\" # tail\nz = 1\n",
+			fragment: comments + "x = 1# c2\n'k#' = \"v#\" # c3\r\ny = [ 1, # c4\r\n 2 ]\r\n# c5",
+			kept:     "c4",
+			want:     "[t]\nx = \"***\"\n'k#' = \"***\"\ny = [ \"***\",\r\n \"***\" ] # tail\nz = 1\n",
+		},
+		"override": {
+			document: "[t]\nb = { x = 1 } # tail\n\"${F}\" = \"\"\n",
+			fragment: "b = { y = 2 } # c1\nc = 3 # c2",
+			want:     "[t]\nb = { y = \"***\" } # tail\nc = \"***\"\n",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			for _, masked := range []bool{true, false} {
+				handler, entries := readToml(t, tC.document)
+				if masked {
+					handler.setMasked()
+				}
+				for _, entry := range entries {
+					if entry.(*TomlConfigEntry).fragment == nil && strings.Contains(entry.(*TomlConfigEntry).raw, "${F}") {
+						inserted, err := entry.(FragmentConfigEntry).SetFragment(filter.Fragment{Text: tC.fragment})
+						assert.NoError(t, err)
+						for _, e := range inserted {
+							e.SetValue(value.Mask)
+						}
+					}
+				}
+				output := writeToml(t, handler)
+				var parsed map[string]any
+				assert.NoError(t, toml.Unmarshal([]byte(output), &parsed), output)
+				if masked {
+					assert.Equal(t, tC.want, output)
+					assert.NotContains(t, output, "# c")
+					assert.NotContains(t, output, "#c")
+				} else if tC.kept != "" {
+					assert.Contains(t, output, tC.kept)
+				}
+			}
+		})
+	}
+}
+
+// TestTomlCommentsUnterminated checks that a string without its end swallows the rest of the text, so no comment is found
+func TestTomlCommentsUnterminated(t *testing.T) {
+	assert.Empty(t, tomlComments([]byte(`"a # b`)))
+	assert.Empty(t, tomlComments([]byte("'''a # b")))
+}
+
+// TestTomlRemoveCommentsOnce checks that the comments of a fragment are only removed once
+func TestTomlRemoveCommentsOnce(t *testing.T) {
+	fragment := &tomlFragment{text: []byte("1 # a")}
+	fragment.removeComments()
+	fragment.removeComments()
+	assert.Len(t, fragment.entries, 1)
 }

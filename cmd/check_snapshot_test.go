@@ -97,6 +97,60 @@ database:
 			},
 		},
 		{
+			name:     "fragment replacing an anchored value",
+			fileName: "config.yaml",
+			content:  "base: &base ${SNAP_CHECK_BASE | fragment}\nservice:\n  <<: *base\n  name: app\n",
+			env:      map[string]string{"SNAP_CHECK_BASE": "pool: &pool 10\nmax: *pool"},
+			args:     []string{"--diff"},
+		},
+		{
+			name:     "scalar fragment used as a merge key",
+			fileName: "config.yaml",
+			content:  "base: &base ${SNAP_CHECK_BASE | fragment}\nservice:\n  <<: *base\n",
+			env:      map[string]string{"SNAP_CHECK_BASE": "made-up"},
+			args:     []string{"--diff"},
+		},
+		{
+			name:     "scalar fragment used as a merge key without diff",
+			fileName: "config.yaml",
+			content:  "base: &base ${SNAP_CHECK_BASE | fragment}\nservice:\n  <<: *base\n",
+			env:      map[string]string{"SNAP_CHECK_BASE": "made-up"},
+		},
+		{
+			name:     "toml keys masked alike",
+			fileName: "config.toml",
+			content:  "\"${SNAP_CHECK_K1}\" = 1\n\"${SNAP_CHECK_K2}\" = 2\n",
+			env:      map[string]string{"SNAP_CHECK_K1": "made-up-a", "SNAP_CHECK_K2": "made-up-b"},
+		},
+		{
+			name:     "toml keys masked alike with diff",
+			fileName: "config.toml",
+			content:  "\"${SNAP_CHECK_K1}\" = 1\n\"${SNAP_CHECK_K2}\" = 2\n",
+			env:      map[string]string{"SNAP_CHECK_K1": "made-up-a", "SNAP_CHECK_K2": "made-up-b"},
+			args:     []string{"--diff"},
+		},
+		{
+			name:     "missing fragment used by a merge key",
+			fileName: "config.yaml",
+			content:  "base: &b ${SNAP_CHECK_MISSING | fragment}\nother: ${SNAP_CHECK_OK | fragment}\nx: {<<: *b}\n",
+			env:      map[string]string{"SNAP_CHECK_OK": "{k: v}"},
+			args:     []string{"--fail-on-missing"},
+		},
+		{
+			name:     "missing fragment used by a merge key with diff",
+			fileName: "config.yaml",
+			content:  "base: &b ${SNAP_CHECK_MISSING | fragment}\nother: ${SNAP_CHECK_OK | fragment}\nx: {<<: *b}\n",
+			env:      map[string]string{"SNAP_CHECK_OK": "{k: v}"},
+			args:     []string{"--fail-on-missing", "--diff"},
+		},
+		{
+			name:     "diff without the comments of fragments",
+			fileName: "config.yaml",
+			content:  "a: &k ${SNAP_CHECK_FR | fragment} # file-comment\nb: *k\n",
+			env:      map[string]string{"SNAP_CHECK_FR": "[1, 2] # made-up-fragment-comment"},
+			args:     []string{"--diff"},
+		},
+		{
 			name:     "fail on missing",
 			fileName: "config.yaml",
 			content: `password: ${SNAP_CHECK_PASWORD}
@@ -298,4 +352,115 @@ func renderCheckSnapshot(tC checkSnapshotCase, args []string, output string, err
 		sb.WriteString("(exit code 0)\n")
 	}
 	return sb.String()
+}
+
+// TestCheckMasksFragmentComments checks that check shows no comment of a fragment, since the text of fragments is
+// masked, while the comments of the file are kept, with and without a diff, and that --log-values shows both
+func TestCheckMasksFragmentComments(t *testing.T) {
+	const secret = "made-up-fragment-comment"
+	testCases := []struct {
+		name     string
+		fileName string
+		content  string
+		fragment string
+		// keptInDiff are the file comments the diff shows
+		keptInDiff string
+	}{
+		{
+			name:       "yaml value",
+			fileName:   "config.yaml",
+			content:    "# file-head\na: ${FRAG | fragment} # file-line\nb: 1\n",
+			fragment:   "# " + secret + "\n[1, 2] # " + secret,
+			keptInDiff: "file-line",
+		},
+		{
+			name:       "yaml key",
+			fileName:   "config.yaml",
+			content:    "t:\n  ${FRAG | fragment}: # file-line\n  z: 1\n",
+			fragment:   "# " + secret + "\nx: 1 # " + secret + "\ny: '#" + secret + "-in-string'",
+			keptInDiff: "file-line",
+		},
+		{
+			name:       "toml value",
+			fileName:   "config.toml",
+			content:    "# file-head\na = \"${FRAG | fragment}\" # file-line\nb = 1\n",
+			fragment:   "[\n  1, # " + secret + "\n  \"#" + secret + "-in-string\", #" + secret + "\n] # " + secret,
+			keptInDiff: "file-line",
+		},
+		{
+			name:       "toml key",
+			fileName:   "config.toml",
+			content:    "[t]\n\"${FRAG | fragment}\" = \"\" # file-line\nz = 1\n",
+			fragment:   "# " + secret + "\nx = 1 # " + secret + "\ny = '#" + secret + "-in-string'#" + secret + "\r\n",
+			keptInDiff: "file-line",
+		},
+		{
+			name:       "xml",
+			fileName:   "config.xml",
+			content:    "<a>\n  <!-- file-line -->\n  <b>${FRAG | fragment}</b>\n</a>\n",
+			fragment:   "<!-- " + secret + " --><c>1</c><!-- " + secret + " -->",
+			keptInDiff: "file-line",
+		},
+		{
+			name:       "xml processing instruction and directive",
+			fileName:   "config.xml",
+			content:    "<a>\n  <!-- file-line -->\n  <b>${FRAG | fragment}</b>\n</a>\n",
+			fragment:   "<c><?pi " + secret + "?>1</c><!DOCTYPE " + secret + ">",
+			keptInDiff: "file-line",
+		},
+	}
+	for _, tC := range testCases {
+		for _, args := range [][]string{{}, {"--diff"}, {"--diff", "--log-values"}} {
+			t.Run(tC.name+" "+strings.Join(args, " "), func(t *testing.T) {
+				t.Setenv("FRAG", tC.fragment)
+				t.Chdir(t.TempDir())
+				assert.NoError(t, os.WriteFile(tC.fileName, []byte(tC.content), 0o644))
+
+				var out bytes.Buffer
+				rootCmd.SetOut(&out)
+				t.Cleanup(func() { rootCmd.SetOut(nil) })
+				resetFlags(t)
+				rootCmd.SetArgs(append([]string{"config", "check", "-f", tC.fileName}, args...))
+				assert.NoError(t, rootCmd.Execute())
+
+				if slices.Contains(args, "--log-values") {
+					assert.Contains(t, out.String(), secret)
+					return
+				}
+				assert.NotContains(t, out.String(), secret)
+				if slices.Contains(args, "--diff") {
+					assert.Contains(t, out.String(), tC.keptInDiff)
+					assert.Contains(t, out.String(), "***")
+				}
+			})
+		}
+	}
+}
+
+// TestCheckAgreesWithProcessOnTomlKeyFragmentConflicts checks that a key of a fragment that is also defined by a table
+// header fails process and check alike, with and without --diff and --schema, although check masks the keys produced
+// by placeholders, and that keys masked alike don't fail either of them
+func TestCheckAgreesWithProcessOnTomlKeyFragmentConflicts(t *testing.T) {
+	const content = "[t]\na = \"str\"\n\"${FRAG | fragment}\" = \"\"\n[t.sub]\nz = 1\n\"${KEY_1}\" = 1\n\"${KEY_2}\" = 2\n"
+	t.Setenv("KEY_1", "made-up-a")
+	t.Setenv("KEY_2", "made-up-b")
+	for fragment, wantErr := range map[string]bool{"sub = 1": true, "sub.z = 2": true, "a = 1\nsub.y = 3": true, "ok = 1": false} {
+		for _, args := range [][]string{{"process"}, {"check"}, {"check", "--diff"}, {"check", "--schema", "schema.json"}} {
+			t.Run(fragment+" "+strings.Join(args, " "), func(t *testing.T) {
+				t.Setenv("FRAG", fragment)
+				t.Chdir(t.TempDir())
+				assert.NoError(t, os.WriteFile("config.toml", []byte(content), 0o644))
+				assert.NoError(t, os.WriteFile("schema.json", []byte("{}"), 0o644))
+
+				var out bytes.Buffer
+				rootCmd.SetOut(&out)
+				t.Cleanup(func() { rootCmd.SetOut(nil) })
+				resetFlags(t)
+				rootCmd.SetArgs(append([]string{"config", args[0], "-f", "config.toml"}, args[1:]...))
+				err := rootCmd.Execute()
+				assert.Equal(t, wantErr, err != nil, "%v: %s", err, out.String())
+				assert.NotContains(t, out.String(), "gonfig-masked-key")
+			})
+		}
+	}
 }

@@ -122,8 +122,9 @@ func TestSchemaViolationKeysNotLeakedBetweenFiles(t *testing.T) {
 
 // TestSchemaViolationsHideKeysOfAliasesTagsAndInvalidUTF8 checks that keys produced by placeholders are masked in
 // process and check, in text and JSON reports, when they are YAML aliases of processed values, have YAML tags or
-// contain invalid UTF-8, follow merge keys in sequences, anchors redefined by fragments or anchored values of
-// fragments, and that static keys and indexes equal to a processed key stay visible, unless --log-values is set
+// contain invalid UTF-8, follow merge keys in sequences, anchors of fragments renamed since the document has them or
+// anchored values of fragments, and that static keys and indexes equal to a processed key stay visible, unless
+// --log-values is set
 func TestSchemaViolationsHideKeysOfAliasesTagsAndInvalidUTF8(t *testing.T) {
 	const closed = `{"properties": {"a": {}}, "additionalProperties": false}`
 	testCases := []struct {
@@ -134,6 +135,7 @@ func TestSchemaViolationsHideKeysOfAliasesTagsAndInvalidUTF8(t *testing.T) {
 		schema  string
 		want    []string // texts that must be reported, the path and message are separate fields in the JSON report
 		hidden  []string // texts that must not be in the output without --log-values
+		absent  []string // texts that must not be in the output even with --log-values, e.g. values that are no keys
 	}{
 		{name: "alias as key", env: map[string]string{"SCHEMA_KEY_PW": "made-up-alias-s3cret"}, file: "c.yaml",
 			content: "a: &v ${SCHEMA_KEY_PW}\n*v : 1\n", schema: closed,
@@ -164,19 +166,24 @@ func TestSchemaViolationsHideKeysOfAliasesTagsAndInvalidUTF8(t *testing.T) {
 			content: "l:\n  - !!merge x\n  - {\"${SCHEMA_KEY_PW}\": 1}\n",
 			schema:  `{"properties": {"l": {"items": {"additionalProperties": false}}}}`,
 			want:    []string{"additional properties '***' not allowed"}, hidden: []string{"made-up-seq-s3cret"}},
-		{name: "anchor redefined by a fragment", env: map[string]string{"SCHEMA_KEY_PW": "made-up-anchor-s3cret",
-			"SCHEMA_KEY_FR": `[&k "${SCHEMA_KEY_PW}"]`}, file: "c.yaml",
+		// An anchor of a fragment with the name of an anchor of the document is renamed, so the alias still refers to the
+		// static anchor of the document, and the value of the fragment is no key
+		{name: "anchor of a fragment with the name of an anchor of the document",
+			env:     map[string]string{"SCHEMA_KEY_PW": "made-up-anchor-s3cret", "SCHEMA_KEY_FR": `[&k "${SCHEMA_KEY_PW}"]`},
+			file:    "c.yaml",
 			content: "a: &k static-anchor\nf: ${SCHEMA_KEY_FR | fragment}\nm:\n  *k : {c: x}\n",
 			schema:  `{"properties": {"m": {"additionalProperties": {"additionalProperties": {"type": "integer"}}}}}`,
-			want:    []string{"m.***.c"}, hidden: []string{"made-up-anchor-s3cret"}},
-		{name: "anchored scalar of a fragment", env: map[string]string{"SCHEMA_KEY_FR": "&s made-up-fragment-s3cret"},
+			want:    []string{"m.static-anchor.c"}, absent: []string{"made-up-anchor-s3cret"}},
+		{name: "anchored scalar of a fragment with the name of an anchor of the document",
+			env:  map[string]string{"SCHEMA_KEY_FR": "&s made-up-fragment-s3cret"},
 			file: "c.yaml", content: "x: &s plain\nf: ${SCHEMA_KEY_FR | fragment}\na: {*s : 1}\n",
 			schema: `{"additionalProperties": {"additionalProperties": false}}`,
-			want:   []string{"additional properties '***' not allowed"}, hidden: []string{"made-up-fragment-s3cret"}},
-		{name: "anchored scalar within a mapping of a fragment", env: map[string]string{"SCHEMA_KEY_FR": "{q: &s made-up-fragment-s3cret}"},
+			want:   []string{"additional properties 'plain' not allowed"}, absent: []string{"made-up-fragment-s3cret"}},
+		{name: "anchored scalar within a mapping of a fragment with the name of an anchor of the document",
+			env:  map[string]string{"SCHEMA_KEY_FR": "{q: &s made-up-fragment-s3cret}"},
 			file: "c.yaml", content: "x: &s plain\nf: ${SCHEMA_KEY_FR | fragment}\na: {*s : 1}\n",
 			schema: `{"additionalProperties": {"additionalProperties": false}}`,
-			want:   []string{"additional properties '***' not allowed"}, hidden: []string{"made-up-fragment-s3cret"}},
+			want:   []string{"additional properties 'plain' not allowed"}, absent: []string{"made-up-fragment-s3cret"}},
 		{name: "alias within a fragment", env: map[string]string{"SCHEMA_KEY_FR": "{v: &a made-up-fragment-s3cret, m: {*a : 1}}"},
 			file: "c.yaml", content: "f: ${SCHEMA_KEY_FR | fragment}\n",
 			schema: `{"properties": {"f": {"properties": {"m": {"additionalProperties": false}}}}}`,
@@ -195,11 +202,6 @@ func TestSchemaViolationsHideKeysOfAliasesTagsAndInvalidUTF8(t *testing.T) {
 			content: "l:\n  - !!merge x\n  - {made-up-same-key: 1}\n  - {\"${SCHEMA_KEY_PW}\": 1}\n",
 			schema:  `{"properties": {"l": {"items": {"additionalProperties": false}}}}`,
 			want:    []string{"l.0", "additional properties 'made-up-same-key' not allowed", "l.1", "additional properties '***' not allowed"}},
-		{name: "anchor redefined by a fragment with a value equal to a static key",
-			env: map[string]string{"SCHEMA_KEY_PW": "made-up-public-key", "SCHEMA_KEY_FR": `[&k "${SCHEMA_KEY_PW}"]`}, file: "c.yaml",
-			content: "a: &k static-anchor\nf: ${SCHEMA_KEY_FR | fragment}\nm:\n  *k : {c: x}\nmade-up-public-key: 1\n",
-			schema:  `{"properties": {"m": {"additionalProperties": {"additionalProperties": {"type": "integer"}}}}}`,
-			want:    []string{"m.***.c"}, hidden: []string{"m.made-up-public-key"}},
 		{name: "integer key merged into string keys equal to a static key", env: map[string]string{"SCHEMA_KEY_PW": "0x5EC"},
 			file:    "c.yaml",
 			content: "base: &b {!!int \"${SCHEMA_KEY_PW}\": 1}\nd:\n  s: 1\n  <<: *b\nother: {\"0x5EC\": 1}\n",
@@ -244,7 +246,7 @@ func TestSchemaViolationsHideKeysOfAliasesTagsAndInvalidUTF8(t *testing.T) {
 				for _, want := range tC.want {
 					assert.Contains(t, all, want, args)
 				}
-				for _, text := range tC.hidden {
+				for _, text := range append(tC.hidden, tC.absent...) {
 					assert.NotContains(t, all, text, args)
 				}
 
@@ -252,6 +254,9 @@ func TestSchemaViolationsHideKeysOfAliasesTagsAndInvalidUTF8(t *testing.T) {
 				assert.Error(t, err, args)
 				for _, text := range tC.hidden {
 					assert.Contains(t, output+err.Error(), text, args)
+				}
+				for _, text := range tC.absent {
+					assert.NotContains(t, output+err.Error(), text, args)
 				}
 			}
 		})

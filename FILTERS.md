@@ -577,6 +577,33 @@ logging:
       path: /var/log/app.log
 ```
 
+In YAML files, a value with an anchor keeps it when a fragment replaces it, so aliases of it refer to the fragment, e.g. a merge key:
+
+`defaults.yaml`:
+```yaml
+defaults: &defaults ${DEFAULTS | fragment}
+production:
+  <<: *defaults
+  replicas: 3
+```
+
+```console
+$ DEFAULTS='{"replicas": 1, "image": "app:latest"}' gonfig config process -f defaults.yaml
+defaults: &defaults
+  replicas: 1
+  image: app:latest
+production:
+  <<: *defaults
+  replicas: 3
+```
+
+The anchor of the value wins over an anchor of the fragment itself. An anchor within the fragment with the name of an anchor of the document, e.g. `defaults`, is renamed, e.g. to `defaults_1`, together with the aliases within the fragment referring to it, so aliases of the document keep referring to its own anchors. Output that would not be valid YAML fails instead, e.g. a merge key referring to a fragment that is no mapping:
+
+```console
+$ DEFAULTS=made-up gonfig config process -f defaults.yaml
+Error: failed to write defaults.yaml: the alias *defaults on line 3 is used as the value of a merge key, but does not refer to a mapping
+```
+
 In TOML files, the fragment has to be a single TOML value, e.g. an array or an inline table, which replaces the string containing the placeholder:
 
 `logging.toml`:
@@ -668,6 +695,22 @@ The fragment is merged deeply:
 - **Comments and key order** of the file are kept, and new keys are appended in the order of the fragment.
 
 Keys of the file with placeholders are matched as they are when the fragment is inserted, so the order matters. A key before the fragment's key is already processed and matched by its result, while a key after it is matched as written, like `${NAME}`, and gets its processed name afterwards.
+
+In YAML files, the key must not have an anchor, since the key is removed and aliases of it would refer to nothing. This fails even if no alias uses the anchor:
+
+`anchored.yaml`:
+```yaml
+database:
+  host: localhost
+  &overrides ${DB_OVERRIDES | fragment}:
+```
+
+```console
+$ DB_OVERRIDES=@db-prod.yaml gonfig config process -f anchored.yaml
+Error: failed to insert the fragment of database.${DB_OVERRIDES | fragment} in anchored.yaml: a key with a fragment must not have an anchor
+```
+
+A value the fragment replaces keeps its anchor, like for [fragments as values](#fragments-as-values).
 
 In JSON files, the key has to have the value `null`, e.g. `"${DB_OVERRIDES | fragment}": null`. XML files support fragments only as the content of elements.
 

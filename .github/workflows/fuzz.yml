@@ -53,6 +53,10 @@ jobs:
           - package: ./internal/file
             target: FuzzTomlKeyFragment
           - package: ./internal/file
+            target: FuzzYamlFragmentAnchors
+          - package: ./internal/file
+            target: FuzzTomlComments
+          - package: ./internal/file
             target: FuzzJsonKeyFragment
 
     steps:

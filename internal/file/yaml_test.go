@@ -10,6 +10,7 @@ import (
 
 	"github.com/gkampitakis/go-snaps/snaps"
 	"github.com/stretchr/testify/assert"
+	"go.yaml.in/yaml/v4"
 )
 
 // TestYamlProcessor reads a YAML file, counts its entries and writes it back unchanged
@@ -335,4 +336,112 @@ func TestYamlInvalidUTF8IsRejected(t *testing.T) {
 			assert.Empty(t, output.String())
 		})
 	}
+}
+
+// TestYamlCommentsBeforeAnchors checks that line comments the encoder would write before the anchor or tag of a block,
+// or defer to the line of the next key, are moved, so the output can be read, without losing a comment
+func TestYamlCommentsBeforeAnchors(t *testing.T) {
+	testCases := []struct {
+		desc  string
+		input string
+		want  string
+	}{
+		{desc: "anchor on the line after a key with a comment", input: "a: # c\n  &k\n  x: 1\nb: *k\n",
+			want: "a: &k\n  x: 1 # c\nb: *k\n"},
+		{desc: "tag on the line after a key with a comment", input: "a: # c\n  !!map\n  x: 1\n",
+			want: "a: !!map\n  x: 1 # c\n"},
+		{desc: "first entry with comments of its own", input: "a: # c\n  &k\n  x: 1 # d\nb: *k\n",
+			want: "a: &k\n  # c\n  x: 1 # d\nb: *k\n"},
+		{desc: "sequence with an anchor", input: "a: # c\n  &k\n  - 1\nb: *k\n",
+			want: "a: &k\n  - 1 # c\nb: *k\n"},
+		{desc: "key with an alias before an anchored block", input: "q: &m 1\np: *m # c\nz: &k\n  y: 1\nw: *k\n",
+			want: "q: &m 1\np: *m # c\nz: &k\n  y: 1\nw: *k\n"},
+		{desc: "key with an empty sequence before an anchored block", input: "p: [] # c\nz: &k\n  y: 1\nw: *k\n",
+			want: "p: [] # c\nz: &k\n  y: 1\nw: *k\n"},
+		{desc: "block without properties keeps the comment of its key", input: "a: # c\n  x: 1\n",
+			want: "a: # c\n  x: 1\n"},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			output := processYaml(t, tC.input, ConfigEntry.GetValue)
+			assert.Equal(t, tC.want, output)
+			assertDecodableYaml(t, output)
+		})
+	}
+}
+
+// TestYamlCommentsOfNodesBeforeAnchors checks the comments the parser doesn't produce for the input, but fragments may:
+// the comment of a key with an alias or flow mapping and of a block, which the encoder would defer to the next key
+func TestYamlCommentsOfNodesBeforeAnchors(t *testing.T) {
+	testCases := []struct {
+		desc  string
+		input string
+		// comment returns the node that gets the comment "# c"
+		comment func(mapping *yaml.Node) *yaml.Node
+		want    string
+	}{
+		{desc: "key with an alias", input: "q: &m 1\np: *m\nz: &k\n  y: 1\n",
+			comment: func(m *yaml.Node) *yaml.Node { return m.Content[2] }, want: "q: &m 1\np: *m # c\nz: &k\n  y: 1\n"},
+		{desc: "key with a scalar with a comment of its own", input: "p: 1 # d\nz: &k\n  y: 1\n",
+			comment: func(m *yaml.Node) *yaml.Node { return m.Content[0] }, want: "p: 1 # c # d\nz: &k\n  y: 1\n"},
+		{desc: "key with a flow mapping", input: "p: {x: 1}\nz: &k\n  y: 1\n",
+			comment: func(m *yaml.Node) *yaml.Node { return m.Content[0] }, want: "p: {x: 1} # c\nz: &k\n  y: 1\n"},
+		{desc: "block mapping", input: "p:\n  x: 1\nz: &k\n  y: 1\n",
+			comment: func(m *yaml.Node) *yaml.Node { return m.Content[1] }, want: "p:\n  x: 1 # c\nz: &k\n  y: 1\n"},
+		{desc: "block mapping with an anchor", input: "p: &k\n  x: 1\n",
+			comment: func(m *yaml.Node) *yaml.Node { return m.Content[1] }, want: "p: &k\n  x: 1 # c\n"},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			handler := NewYamlConfigFileHandler()
+			assert.NoError(t, handler.Read(strings.NewReader(tC.input)))
+			tC.comment(handler.documents[0].Content[0]).LineComment = "# c"
+			var output bytes.Buffer
+			assert.NoError(t, handler.Write(&output))
+			assert.Equal(t, tC.want, output.String())
+			assertDecodableYaml(t, output.String())
+		})
+	}
+}
+
+// TestYamlCommentsJoined checks that a comment moved to a node that has one already is kept: the head comment of the
+// first entry of a block and the line comment of a value written inline
+func TestYamlCommentsJoined(t *testing.T) {
+	t.Run("head comment of the first entry", func(t *testing.T) {
+		handler := NewYamlConfigFileHandler()
+		assert.NoError(t, handler.Read(strings.NewReader("a: &k\n  x: 1\n  y: 2\nb: *k\n")))
+		block := handler.documents[0].Content[0].Content[1]
+		block.LineComment = "# c"
+		block.Content[0].HeadComment = "# h"
+		block.Content[1].LineComment = "# d"
+		var output bytes.Buffer
+		assert.NoError(t, handler.Write(&output))
+		assert.Equal(t, "a: &k\n  # c\n  # h\n  x: 1 # d\n  y: 2\nb: *k\n", output.String())
+		assertDecodableYaml(t, output.String())
+	})
+	t.Run("line comments of key and value", func(t *testing.T) {
+		handler := NewYamlConfigFileHandler()
+		assert.NoError(t, handler.Read(strings.NewReader("q: &m 1\np: *m\nz: &k\n  y: 1\n")))
+		mapping := handler.documents[0].Content[0]
+		mapping.Content[2].LineComment = "# k"
+		mapping.Content[3].LineComment = "# v"
+		var output bytes.Buffer
+		assert.NoError(t, handler.Write(&output))
+		assert.Equal(t, "q: &m 1\np: *m # k # v\nz: &k\n  y: 1\n", output.String())
+		assertDecodableYaml(t, output.String())
+	})
+}
+
+// TestYamlCommentOfMappingKey checks that the comment of a key that is a mapping, which a fragment may bring, is moved
+// to its value, since the encoder would write it before the colon. Such a key can be parsed, but not decoded into Go
+// values, so the output is parsed into nodes.
+func TestYamlCommentOfMappingKey(t *testing.T) {
+	handler := NewYamlConfigFileHandler()
+	assert.NoError(t, handler.Read(strings.NewReader("{}: 1\nz: &k\n  y: 1\n")))
+	handler.documents[0].Content[0].Content[0].LineComment = "# c"
+	var output bytes.Buffer
+	assert.NoError(t, handler.Write(&output))
+	assert.Equal(t, "{}: 1 # c\nz: &k\n  y: 1\n", output.String())
+	var document yaml.Node
+	assert.NoError(t, yaml.Unmarshal(output.Bytes(), &document))
 }

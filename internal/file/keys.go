@@ -395,10 +395,12 @@ func emptyYamlDocument(document *yaml.Node) bool {
 }
 
 // yamlAliasTargets returns the node each alias of the documents refers to when the written content is decoded: the
-// last node before it with its anchor, or nil if there is none. This may differ from the node the alias referred to
-// when it was read, since a fragment may bring an anchor of the same name, e.g. "f: [&k ${PW}]" between "a: &k x" and
-// "*k", so the alias decodes to the value of the fragment. The nodes are visited in the order they are written. Anchors
-// are reset per document like the decoder does, so an alias referring to an anchor of an earlier document gets nil.
+// last node before it with its anchor, or nil if there is none. Anchors of fragments with the name of an anchor of the
+// document are renamed when they are inserted, see YamlConfigFileHandler.keepYamlAnchors, so an alias of the input
+// refers to the node it referred to when it was read, or to the fragment that replaced it, but resolving the written
+// names keeps the walk independent of how the tree was built. The nodes are visited in the order they are written.
+// Anchors are reset per document like the decoder does, so an alias referring to an anchor of an earlier document gets
+// nil.
 func yamlAliasTargets(documents []*yaml.Node) map[*yaml.Node]*yaml.Node {
 	targets := map[*yaml.Node]*yaml.Node{}
 	var anchors map[string]*yaml.Node

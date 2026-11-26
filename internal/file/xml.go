@@ -108,6 +108,10 @@ func (x *XmlTextConfigEntry) SetFragment(f filter.Fragment) ([]ConfigEntry, erro
 	if err != nil {
 		return nil, err
 	}
+	// Check doesn't show fragment text other than its structure, e.g. comments and processing instructions
+	if x.handler.masked {
+		removeXmlComments(fragment)
+	}
 
 	// Children are removed from the end, since removing a child shifts all following children,
 	// which would take quadratic time for fragments with many elements
@@ -152,6 +156,27 @@ func parseXmlFragment(text string) (*etree.Element, error) {
 type XmlConfigFileHandler struct {
 	document *etree.Document
 	entries  []ConfigEntry
+	// masked is set while values are masked, so the comments of fragments are not written, see maskingHandler
+	masked bool
+}
+
+// setMasked removes the comments, processing instructions and directives of the fragments inserted from now on, since
+// their text is masked
+func (x *XmlConfigFileHandler) setMasked() {
+	x.masked = true
+}
+
+// removeXmlComments removes the comments, processing instructions and directives within the element, including the
+// ones of nested elements, since check doesn't show fragment text other than its structure
+func removeXmlComments(element *etree.Element) {
+	for i := len(element.Child) - 1; i >= 0; i-- {
+		switch child := element.Child[i].(type) {
+		case *etree.Comment, *etree.ProcInst, *etree.Directive:
+			element.RemoveChildAt(i)
+		case *etree.Element:
+			removeXmlComments(child)
+		}
+	}
 }
 
 // NewXmlConfigFileHandler creates a new XML configuration file handler

@@ -224,3 +224,27 @@ keys when writing. The 1 MiB TOML benchmarks use an array of tables, which does 
 aliases that expand to a large document (`yaml/shared-anchor/schema/16000`) exceeds the alias limit of the YAML decoder on
 main and on the branch, so that combination is skipped.
 Validation of YAML with anchors takes 6.9 and 10 times per step already on main.
+
+### YAML comments, fragment anchors and the write step of check (#453)
+
+`BenchmarkProcessYAMLFragmentAnchorsScaling`, `BenchmarkCheckScaling` and `BenchmarkCheckFragmentScaling` measure 1000,
+4000 and 16000 entries. Compared to main (6 runs each, Go 1.27.3):
+
+- The existing suite is unchanged: B/op and allocs/op are identical, `ProcessYAMLScaling/static` (the comment walk of
+  every write) is within the noise at all sizes (35.8, 142.6 and 569.4 ms, 4.0 times per step on the branch, 3.8 and 4.2
+  times on main). Some single 1 MiB files are 4 to 6% slower (yaml/placeholders, xml, toml), the geomean of times is
+  +6.6%, partly noise.
+- Fragments with anchors take 5 to 13% more time (decreasing with size) and 1.5% more B/op, 0.6 to 1.8% more allocations.
+  Scaling is linear on the branch (3.5 and 3.9 times per step for colliding anchors that are renamed, 3.8 and 4.2 for
+  distinct anchors), so the renaming counters and per-document anchor sets do not add a quadratic term.
+- `config check` without `--diff` now writes the document into nothing, so it costs the processing of the file: YAML
+  takes 83 to 106% more time (19.9 to 36.4 ms, 88 to 171 ms, 352 to 723 ms), 2.4 to 2.8 times the memory,
+  YAML with fragments 68 to 85% more time. JSON +23 to 32%, TOML +7%, TOML with placeholder keys +31 to 43% (B/op +30 to 34%,
+  allocs +20%, `distinctKeysDocument` splices the document a second time). All of them keep their scaling: YAML 4.2 to
+  4.7 times per step, TOML tables and TOML keys 4.0 to 4.1, JSON 4.0 to 4.2.
+- TOML files with many top-level keys scale quadratically on main and on the branch (inline tables and key fragments:
+  9 and 11 times per 4 times the entries for `toml/inline`, 6 and 8 times for `CheckFragmentScaling/toml`, tracked in
+  [#444](https://github.com/denglertai/gonfig/issues/444)). The branch adds a second pass of that check when check writes
+  the document with placeholder keys: `CheckScaling/toml/keys-inline` takes 12.0, 102.8 and 1145 ms (8.5 and 11.1 times
+  per step) vs 7.9, 58.6 and 597 ms on main (+52%, +76%, +92%), the added time grows 10.7 and 12.5 times per step.
+  Placeholder keys in tables (`toml/keys`) are linear (4.1 and 4.0 times).

@@ -360,3 +360,160 @@ func TestCheckDiffMissingFile(t *testing.T) {
 	_, err := processor.Check()
 	assert.ErrorIs(t, err, os.ErrNotExist)
 }
+
+// TestCheckMaskedTomlKeys checks that keys of a TOML table that are all masked as *** don't fail check, with and
+// without a diff, since only masking makes them equal
+func TestCheckMaskedTomlKeys(t *testing.T) {
+	t.Setenv("CHECK_KEY_1", "made-up-a")
+	t.Setenv("CHECK_KEY_2", "made-up-b")
+	const content = "\"${CHECK_KEY_1}\" = 1\n\"${CHECK_KEY_2}\" = 2\n"
+
+	report := checkFile(t, general.TOML, content)
+	assert.Empty(t, report.Error)
+	assert.False(t, report.Failed())
+
+	assert.Equal(t, "@@ -1,2 +1,2 @@\n-\"${CHECK_KEY_1}\" = 1\n-\"${CHECK_KEY_2}\" = 2\n+\"***\" = 1\n+\"***\" = 2\n",
+		checkDiff(t, general.TOML, content))
+}
+
+// TestCheckSkipsWriteAfterEntryErrors checks that a file is not written without a diff if an entry failed, since the
+// placeholder kept by the entry may make writing fail, e.g. as the anchor of a merge key, so the entry's error is
+// reported instead of a write error
+func TestCheckSkipsWriteAfterEntryErrors(t *testing.T) {
+	t.Setenv("CHECK_FRAGMENT", "{k: made-up-v}")
+	report := checkFile(t, general.YAML, "base: &b ${CHECK_FRAGMENT | nosuchfilter | fragment}\nx: {<<: *b}\n")
+	assert.Empty(t, report.Error)
+	assert.Contains(t, report.Entries[0].Error, `unknown filter "nosuchfilter"`)
+	assert.Equal(t, 1, report.Errors())
+}
+
+// TestCheckDiffHidesFragmentComments checks that check doesn't show the comments of fragments, since the text of
+// fragments is masked, while the comments of the file stay
+func TestCheckDiffHidesFragmentComments(t *testing.T) {
+	tests := []struct {
+		name     string
+		fileType general.FileType
+		content  string
+		fragment string
+		want     string
+	}{
+		{
+			name:     "yaml value",
+			fileType: general.YAML,
+			content:  "a: &k ${CHECK_FRAGMENT | fragment} # file-comment\nb: *k\n",
+			fragment: "# made-up-head\n[1, 2] # made-up-comment\n# made-up-foot",
+			want:     "@@ -1,2 +1,4 @@\n-a: &k ${CHECK_FRAGMENT | fragment} # file-comment\n+a: &k\n+  - '***' # file-comment\n+  - '***'\n b: *k\n",
+		},
+		{
+			name:     "yaml key",
+			fileType: general.YAML,
+			content:  "db:\n  ${CHECK_FRAGMENT | fragment}:\n",
+			fragment: "# made-up-head\nport: 1 # made-up-comment",
+			want:     "@@ -1,2 +1,2 @@\n db:\n-  ${CHECK_FRAGMENT | fragment}:\n+  port: '***'\n",
+		},
+		{
+			name:     "toml value",
+			fileType: general.TOML,
+			content:  "# file-comment\nhosts = \"${CHECK_FRAGMENT | fragment}\" # file-line\n",
+			fragment: "[\n  \"a#b\", # made-up-comment\n  '''c#'''\n] # made-up-line",
+			want:     "@@ -1,2 +1,5 @@\n # file-comment\n-hosts = \"${CHECK_FRAGMENT | fragment}\" # file-line\n+hosts = [\n+  \"***\",\n+  '''***'''\n+] # file-line\n",
+		},
+		{
+			name:     "xml content",
+			fileType: general.XML,
+			content:  "<r><!-- file-comment --><a>${CHECK_FRAGMENT | fragment}</a></r>\n",
+			fragment: "<!-- made-up-comment --><b>x<!-- made-up-inner --></b>",
+			want:     "@@ -1 +1 @@\n-<r><!-- file-comment --><a>${CHECK_FRAGMENT | fragment}</a></r>\n+<r><!-- file-comment --><a><b>***</b></a></r>\n",
+		}, {
+			name:     "xml processing instruction and directive",
+			fileType: general.XML,
+			content:  "<r><?file-pi keep?><a>${CHECK_FRAGMENT | fragment}</a></r>\n",
+			fragment: "<b><?pi made-up-pi?>x</b><!DOCTYPE made-up-directive>",
+			want:     "@@ -1 +1 @@\n-<r><?file-pi keep?><a>${CHECK_FRAGMENT | fragment}</a></r>\n+<r><?file-pi keep?><a><b>***</b></a></r>\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("CHECK_FRAGMENT", tt.fragment)
+			got := checkDiff(t, tt.fileType, tt.content)
+			assert.Equal(t, tt.want, got)
+			assert.NotContains(t, got, "made-up")
+		})
+	}
+}
+
+// TestCheckMaskedTomlKeyFragmentConflicts checks that check fails like process for keys of fragments that are also
+// defined by a table header, although the keys produced by placeholders are masked, with and without a diff, and that
+// the names the keys are validated with are never shown
+func TestCheckMaskedTomlKeyFragmentConflicts(t *testing.T) {
+	const content = "[t]\na = \"str\"\n\"${CHECK_FRAGMENT | fragment}\" = \"\"\n[t.sub]\nz = 1\n"
+	for _, fragment := range []string{"sub = 1", "sub.z = 2", "a = 1\nsub.y = 3"} {
+		t.Run(fragment, func(t *testing.T) {
+			t.Setenv("CHECK_FRAGMENT", fragment)
+			_, err := processFragment(t, general.TOML, content, fragment)
+			assert.ErrorContains(t, err, "a key of a fragment is also defined by a table header")
+
+			report := checkFile(t, general.TOML, content)
+			assert.Contains(t, report.Error, "a key of a fragment is also defined by a table header")
+			assert.NotContains(t, report.Error, "gonfig-masked-key")
+
+			file := path.Join(t.TempDir(), "config.toml")
+			assert.NoError(t, os.WriteFile(file, []byte(content), 0o644))
+			processor := NewFileProcessor(file, general.TOML, io.Discard)
+			processor.Diff = true
+			report, err = processor.Check()
+			assert.NoError(t, err)
+			assert.Contains(t, report.Error, "a key of a fragment is also defined by a table header")
+		})
+	}
+}
+
+// TestCheckMaskedTomlKeysWithPlaceholderKeysOfFragments checks that keys with placeholders within a fragment used as a
+// key, which are masked alike, don't fail check, and that the diff shows them masked, not by the names they are
+// validated with
+func TestCheckMaskedTomlKeysWithPlaceholderKeysOfFragments(t *testing.T) {
+	t.Setenv("CHECK_KEY_1", "made-up-a")
+	t.Setenv("CHECK_KEY_2", "made-up-b")
+	t.Setenv("CHECK_FRAGMENT", "\"${CHECK_KEY_1}\" = 1\n\"${CHECK_KEY_2}\" = 2")
+	content := "[t]\n\"${CHECK_FRAGMENT | fragment}\" = \"\"\n"
+
+	report := checkFile(t, general.TOML, content)
+	assert.Empty(t, report.Error)
+	diff := checkDiff(t, general.TOML, content)
+	assert.Contains(t, diff, "\"***\" = ")
+	assert.NotContains(t, diff, "gonfig-masked-key")
+	assert.NotContains(t, diff, "made-up")
+}
+
+// TestCheckMaskedTomlKeysNextToKeysLikeTheirNames checks that the names masked keys are validated with collide with no
+// static key, also one written with escapes, so check passes like process
+func TestCheckMaskedTomlKeysNextToKeysLikeTheirNames(t *testing.T) {
+	t.Setenv("CHECK_KEY", "made-up-actual")
+	content := "\"${CHECK_KEY}\" = 1\ngonfig-masked-key-0 = 2\n\"gonfig\\u002Dmasked-key-1-0\" = 3\n"
+
+	_, err := processFragment(t, general.TOML, content, "")
+	assert.NoError(t, err)
+	report := checkFile(t, general.TOML, content)
+	assert.Empty(t, report.Error)
+	assert.False(t, report.Failed())
+}
+
+// TestTomlFreeKeyPrefix checks that the prefix of the names masked keys are validated with is contained in no key of
+// the document or its fragments as decoded: static keys, also with escapes, keys a fragment used as a key adds or
+// overrides a value with, and keys within a fragment used as a value
+func TestTomlFreeKeyPrefix(t *testing.T) {
+	handler := NewTomlConfigFileHandler()
+	assert.NoError(t, handler.Read(strings.NewReader("a = 1\n[t]\n\"x-gonfig\\u002Dmasked-key-\" = 1\n"+
+		"l = [{gonfig-masked-key-1-z = 1}]\n\"${F | fragment}\" = \"\"\nv = \"${G | fragment}\"\n")))
+	fragments := map[string]string{
+		"${F | fragment}": "gonfig-masked-key-2- = 1\nl = [{gonfig-masked-key-3- = 1}]",
+		"${G | fragment}": "{gonfig-masked-key-4- = 1}",
+	}
+	for _, entry := range handler.entries {
+		if text, ok := fragments[entry.GetValue()]; ok {
+			_, err := entry.SetFragment(filter.Fragment{Text: text})
+			assert.NoError(t, err)
+		}
+	}
+	assert.Equal(t, "gonfig-masked-key-5-", handler.freeKeyPrefix())
+}

@@ -30,6 +30,14 @@ type TomlFileHandler struct {
 	bom bool
 	// writtenKeys records the positions of the keys produced by placeholders when writing, see keyLocator
 	writtenKeys *tomlWrittenKeys
+	// masked is set while values are masked, see setMasked
+	masked bool
+}
+
+// setMasked makes Write validate the renamed keys with distinct names, since keys masked as *** collide whatever their
+// values are, see distinctKeysDocument, and remove the comments of fragments, since their text is masked
+func (t *TomlFileHandler) setMasked() {
+	t.masked = true
 }
 
 // TomlConfigEntry is a configuration entry for TOML files: a string value, or a key containing a placeholder.
@@ -73,6 +81,8 @@ type tomlFragment struct {
 	entries []*TomlConfigEntry
 	// overrides are the values of the table's key/value pairs a fragment used as a key replaces
 	overrides []tomlOverride
+	// commentsRemoved is set once entries removing the comments of text were added, see removeComments
+	commentsRemoved bool
 }
 
 // tomlOverride replaces the value of a key/value pair of the table by the value of the pair with the same key in
@@ -479,6 +489,9 @@ func (t *TomlFileHandler) Write(destination io.Writer) error {
 	if err != nil {
 		return err
 	}
+	if t.masked {
+		t.removeFragmentComments()
+	}
 	// The handler is not referenced after splicing, so the document as read can be freed while the result is written
 	keys := t.writtenKeys
 	if keys == nil {
@@ -486,7 +499,11 @@ func (t *TomlFileHandler) Write(destination io.Writer) error {
 	}
 	keys.base = result.Len()
 	if keyChanged := spliceToml(&result, t.data, t.entries, keys); keyChanged {
-		if err := checkRenamedKeys(bytes.TrimPrefix(result.Bytes(), utf8BOM), keyFragments); err != nil {
+		written := bytes.TrimPrefix(result.Bytes(), utf8BOM)
+		if t.masked {
+			written = t.distinctKeysDocument()
+		}
+		if err := checkRenamedKeys(written, keyFragments); err != nil {
 			return err
 		}
 	}
@@ -499,6 +516,171 @@ func (t *TomlFileHandler) Write(destination io.Writer) error {
 
 	_, err = destination.Write(result.Bytes())
 	return err
+}
+
+// distinctKeysDocument returns the document with every key produced by placeholders replaced by a distinct name that
+// no other key has, see freeKeyPrefix, which is only validated, never written or shown. Keys masked as *** collide whatever their values are, while collisions with
+// static keys, keys of fragments and table headers are still found, so check fails like process for them. Only
+// collisions between the values of placeholders go undetected while values are masked.
+func (t *TomlFileHandler) distinctKeysDocument() []byte {
+	var renamed []*TomlConfigEntry
+	var collect func(entries []*TomlConfigEntry)
+	collect = func(entries []*TomlConfigEntry) {
+		for _, entry := range entries {
+			switch {
+			case entry.fragment != nil:
+				collect(entry.fragment.entries)
+				for _, override := range entry.fragment.overrides {
+					collect(override.value.entries)
+				}
+			case entry.isKey && entry.changed():
+				renamed = append(renamed, entry)
+			}
+		}
+	}
+	collect(t.entries)
+
+	prefix := ""
+	if len(renamed) > 0 {
+		prefix = t.freeKeyPrefix()
+	}
+	values := make([]string, len(renamed))
+	for i, entry := range renamed {
+		values[i] = entry.val
+		entry.val = prefix + strconv.Itoa(i)
+	}
+	var document bytes.Buffer
+	document.Grow(len(t.data))
+	spliceToml(&document, t.data, t.entries, &tomlWrittenKeys{})
+	for i, entry := range renamed {
+		entry.val = values[i]
+	}
+	return document.Bytes()
+}
+
+// freeKeyPrefix returns a prefix for the names of distinctKeysDocument that no key of the document or a fragment
+// contains as decoded, e.g. a static key "gonfig-masked-key-0" or one written with escapes, so the names collide with
+// no other key. The keys are decoded once and joined by newlines, which the prefix doesn't contain.
+func (t *TomlFileHandler) freeKeyPrefix() string {
+	var keys strings.Builder
+	addKeys := func(text []byte) {
+		var document map[string]any
+		if toml.Unmarshal(text, &document) == nil {
+			writeTomlKeys(&keys, document)
+		}
+	}
+	addKeys(t.data)
+	for _, entry := range t.entries {
+		switch {
+		case entry.fragment == nil:
+		case entry.isKey:
+			addKeys(entry.fragment.text)
+			for _, override := range entry.fragment.overrides {
+				addKeys(append([]byte(tomlFragmentKey), override.value.text...))
+			}
+		default:
+			addKeys(append([]byte(tomlFragmentKey), entry.fragment.text...))
+		}
+	}
+
+	written := keys.String()
+	for attempt := 0; ; attempt++ {
+		prefix := "gonfig-masked-key-"
+		if attempt > 0 {
+			prefix = "gonfig-masked-key-" + strconv.Itoa(attempt) + "-"
+		}
+		if !strings.Contains(written, prefix) {
+			return prefix
+		}
+	}
+}
+
+// writeTomlKeys writes the keys of the decoded value and of the tables within it, each followed by a newline
+func writeTomlKeys(keys *strings.Builder, value any) {
+	switch v := value.(type) {
+	case map[string]any:
+		for key, item := range v {
+			keys.WriteString(key)
+			keys.WriteByte('\n')
+			writeTomlKeys(keys, item)
+		}
+	case []any:
+		for _, item := range v {
+			writeTomlKeys(keys, item)
+		}
+	}
+}
+
+// removeFragmentComments removes the comments of the fragments, so check doesn't show them, since the text of fragments
+// is masked. A comment is removed with the spaces before it by an entry replacing it by nothing, so the positions of
+// the entries of the fragment stay valid.
+func (t *TomlFileHandler) removeFragmentComments() {
+	for _, entry := range t.entries {
+		if entry.fragment == nil {
+			continue
+		}
+		entry.fragment.removeComments()
+		for _, override := range entry.fragment.overrides {
+			override.value.removeComments()
+		}
+	}
+}
+
+// removeComments adds an entry replacing each comment of the fragment's text by nothing, see removeFragmentComments
+func (f *tomlFragment) removeComments() {
+	if f.commentsRemoved {
+		return
+	}
+	f.commentsRemoved = true
+	for _, comment := range tomlComments(f.text) {
+		f.entries = append(f.entries, &TomlConfigEntry{offset: comment.start, raw: string(f.text[comment.start:comment.end]),
+			fragment: &tomlFragment{text: []byte{}}})
+	}
+}
+
+// tomlComments returns the ranges of the comments of valid TOML text, each with the spaces and tabs before it. A # only
+// starts a comment outside strings, so basic, literal and multi-line strings are skipped.
+func tomlComments(text []byte) []tomlRange {
+	var comments []tomlRange
+	for i := 0; i < len(text); i++ {
+		switch {
+		case bytes.HasPrefix(text[i:], []byte(`"""`)), bytes.HasPrefix(text[i:], []byte(`'''`)):
+			i = skipTomlString(text, i, string(text[i:i+3]))
+		case text[i] == '"' || text[i] == '\'':
+			i = skipTomlString(text, i, string(text[i]))
+		case text[i] == '#':
+			start, end := i, i
+			for start > 0 && (text[start-1] == ' ' || text[start-1] == '\t') {
+				start--
+			}
+			for end < len(text) && text[end] != '\n' && text[end] != '\r' {
+				end++
+			}
+			comments = append(comments, tomlRange{start: start, end: end})
+			i = end
+		}
+	}
+	return comments
+}
+
+// skipTomlString returns the position of the last byte of the string starting at i with the quote, e.g. """. Escapes
+// are only skipped in basic strings, since literal strings have none. A multi-line string may end with up to two more
+// quotes, e.g. """a"""" ends with the last one.
+func skipTomlString(text []byte, i int, quote string) int {
+	for j := i + len(quote); j < len(text); j++ {
+		if quote[0] == '"' && text[j] == '\\' {
+			j++
+			continue
+		}
+		if bytes.HasPrefix(text[j:], []byte(quote)) {
+			end := j + len(quote) - 1
+			for len(quote) == 3 && end+1 < len(text) && text[end+1] == quote[0] && end+1 < j+5 {
+				end++
+			}
+			return end
+		}
+	}
+	return len(text) - 1
 }
 
 // checkOverrides returns whether fragments are merged into tables, and an error if two of them replace the same value,

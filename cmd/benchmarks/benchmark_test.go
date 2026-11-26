@@ -503,3 +503,166 @@ func BenchmarkProcessKeysScaling(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkProcessYAMLFragmentAnchorsScaling inserts a small fragment with an anchor and an alias into each of n
+// entries (1k, 4k and 16k). Every entry has an anchor and an alias of its own. In the "same" variant all fragments use
+// the same anchor name, so every insert but the first renames it (k_1, k_2, ...), in the "distinct" variant no anchor
+// collides. 4x the entries should take about 4x the time (linear), about 16x is quadratic.
+func BenchmarkProcessYAMLFragmentAnchorsScaling(b *testing.B) {
+	for _, mode := range []string{"same", "distinct"} {
+		for _, n := range []int{1000, 4000, 16000} {
+			b.Run(fmt.Sprintf("%s/%d", mode, n), func(b *testing.B) {
+				b.Setenv("BENCH_FRAGMENT", "x: &k made-up-x\ny: *k\nz:\n  - 1\n  - 2")
+
+				var buf bytes.Buffer
+				for i := range n {
+					fmt.Fprintf(&buf, "a%d: &own%d ${BENCH_FRAGMENT | fragment}\nb%d: *own%d\n", i, i, i, i)
+				}
+				content := buf.String()
+				if mode == "distinct" {
+					buf.Reset()
+					for i := range n {
+						b.Setenv(fmt.Sprintf("BENCH_FRAGMENT_%d", i), fmt.Sprintf("x: &k%d made-up-x\ny: *k%d\nz:\n  - 1\n  - 2", i, i))
+						fmt.Fprintf(&buf, "a%d: &own%d ${BENCH_FRAGMENT_%d | fragment}\nb%d: *own%d\n", i, i, i, i, i)
+					}
+					content = buf.String()
+				}
+
+				path := filepath.Join(b.TempDir(), "config.yaml")
+				if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+					b.Fatal(err)
+				}
+
+				b.ReportAllocs()
+				for b.Loop() {
+					if err := file.NewFileProcessor(path, general.YAML, io.Discard).Process(); err != nil {
+						b.Fatal(err)
+					}
+				}
+			})
+		}
+	}
+}
+
+// checkScalingFormats are the formats of BenchmarkCheckScaling, each generating n entries with placeholders
+var checkScalingFormats = []struct {
+	name     string
+	fileType general.FileType
+	generate func(buf *bytes.Buffer, n int)
+}{
+	{"yaml", general.YAML, func(buf *bytes.Buffer, n int) {
+		buf.WriteString("services:\n")
+		for i := range n {
+			yamlEntry(buf, i, true)
+		}
+	}},
+	{"toml/tables", general.TOML, func(buf *bytes.Buffer, n int) {
+		// An array of tables, which does not trigger the quadratic behavior of the TOML library
+		for i := range n {
+			fmt.Fprintf(buf, "[[services]]\n# Settings of service %d\nhost = \"${BENCH_HOST}\"\nport = %d\npassword = \"${BENCH_PASSWORD | trim}\"\n", i, i)
+		}
+	}},
+	{"toml/inline", general.TOML, func(buf *bytes.Buffer, n int) {
+		for i := range n {
+			fmt.Fprintf(buf, "svc%d = { host = \"${BENCH_HOST}\", port = %d }\n", i, i)
+		}
+	}},
+	{"toml/keys", general.TOML, func(buf *bytes.Buffer, n int) {
+		// Placeholder keys are masked as "***" by check, so the masked document has duplicate keys (distinctKeysDocument)
+		for i := range n {
+			fmt.Fprintf(buf, "[[services]]\n\"opt_${BENCH_ID}\" = \"x\"\n\"${BENCH_ID}\" = %d\n", i)
+		}
+	}},
+	{"toml/keys-inline", general.TOML, func(buf *bytes.Buffer, n int) {
+		for i := range n {
+			fmt.Fprintf(buf, "svc%d = { \"k${BENCH_ID}\" = \"x\", \"${BENCH_ID}\" = %d }\n", i, i)
+		}
+	}},
+	{"json", general.JSON, func(buf *bytes.Buffer, n int) {
+		buf.WriteString("{\"services\": [\n")
+		for i := range n {
+			if i > 0 {
+				buf.WriteString(",\n")
+			}
+			fmt.Fprintf(buf, `{"host": "${BENCH_HOST}", "port": %d, "password": "${BENCH_PASSWORD | trim}"}`, i)
+		}
+		buf.WriteString("]}\n")
+	}},
+}
+
+// BenchmarkCheckScaling runs config check (FileProcessor.Check) without --diff on files with n entries (1k, 4k and 16k)
+// with placeholders. Check writes the file into nothing, with values masked. 4x the entries should take about 4x the time (linear), about 16x is quadratic.
+func BenchmarkCheckScaling(b *testing.B) {
+	for _, f := range checkScalingFormats {
+		for _, n := range []int{1000, 4000, 16000} {
+			b.Run(fmt.Sprintf("%s/%d", f.name, n), func(b *testing.B) {
+				setEnv(b)
+				b.Setenv("BENCH_ID", "id-s3cret")
+
+				var buf bytes.Buffer
+				f.generate(&buf, n)
+				path := filepath.Join(b.TempDir(), "config."+string(f.fileType))
+				if err := os.WriteFile(path, buf.Bytes(), 0o600); err != nil {
+					b.Fatal(err)
+				}
+
+				b.SetBytes(int64(buf.Len()))
+				b.ReportAllocs()
+				for b.Loop() {
+					report, err := file.NewFileProcessor(path, f.fileType, io.Discard).Check()
+					if err != nil {
+						b.Fatal(err)
+					}
+					if report.Error != "" || report.Errors() > 0 {
+						b.Fatalf("check failed: %s", report.Error)
+					}
+				}
+			})
+		}
+	}
+}
+
+// BenchmarkCheckFragmentScaling runs FileProcessor.Check without a diff on files with n fragments (1k, 4k and 16k), whose
+// comments are removed (TOML, YAML) while values are masked. 4x the entries should take about 4x the time (linear).
+func BenchmarkCheckFragmentScaling(b *testing.B) {
+	formats := []struct {
+		name     string
+		fileType general.FileType
+		fragment string
+		line     string
+	}{
+		{"yaml", general.YAML, "# managed\nx: &k made-up-x # c\ny: *k\n", "a%d: &own%d ${BENCH_FRAGMENT | fragment}\nb%d: *own%d\n"},
+		{"toml", general.TOML, "[\n  1, # first\n  2, # second\n]", "k%d = \"${BENCH_FRAGMENT | fragment}\"\n"},
+	}
+	for _, f := range formats {
+		for _, n := range []int{1000, 4000, 16000} {
+			b.Run(fmt.Sprintf("%s/%d", f.name, n), func(b *testing.B) {
+				b.Setenv("BENCH_FRAGMENT", f.fragment)
+
+				var buf bytes.Buffer
+				for i := range n {
+					if f.fileType == general.YAML {
+						fmt.Fprintf(&buf, f.line, i, i, i, i)
+					} else {
+						fmt.Fprintf(&buf, f.line, i)
+					}
+				}
+				path := filepath.Join(b.TempDir(), "config."+string(f.fileType))
+				if err := os.WriteFile(path, buf.Bytes(), 0o600); err != nil {
+					b.Fatal(err)
+				}
+
+				b.ReportAllocs()
+				for b.Loop() {
+					report, err := file.NewFileProcessor(path, f.fileType, io.Discard).Check()
+					if err != nil {
+						b.Fatal(err)
+					}
+					if report.Error != "" || report.Errors() > 0 {
+						b.Fatalf("check failed: %s %v", report.Error, report.Entries[0])
+					}
+				}
+			})
+		}
+	}
+}
