@@ -27,7 +27,8 @@ func (f *DummyFilterRegister) Filters() map[string]interface{} {
 }
 
 // Filter provides the filters. It was the symbol gonfig looked up in the former Go plugins (.so files), and is kept
-// to show that the filters of such a plugin can be served unchanged after migrating it to an executable plugin.
+// to show that the filters of such a plugin can be served after migrating it to an executable plugin. Only the
+// method DeclaredParams of the former plugins has to be renamed to Params, see PLUGINS.md#migrating-from-go-plugins.
 var Filter = DummyFilterRegister{}
 
 // ReverseFilter reverses the value, e.g. ${VAL | reverse}

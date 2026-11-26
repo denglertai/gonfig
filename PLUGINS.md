@@ -211,7 +211,7 @@ Params() []string
 [plugins/dummy](./plugins/dummy/) is a minimal plugin providing the filter `reverse`:
 
 - `ReverseFilter` implements `Process` and reverses the value rune by rune, so multi-byte characters stay intact.
-- `DummyFilterRegister` returns the filters, which `main` passes to `plugin.Serve`. This is how [Go plugins](#migrating-from-go-plugins) provided their filters, and shows that they can be served unchanged.
+- `DummyFilterRegister` returns the filters, which `main` passes to `plugin.Serve`. This is how [Go plugins](#migrating-from-go-plugins) provided their filters, and shows that they can be served unchanged, apart from renaming `DeclaredParams` to `Params`.
 
 Build it within its directory and point `--plugin-path` to the directory with the executable:
 
@@ -502,7 +502,7 @@ gonfig no longer loads `.so` files. One found in the plugin directory is ignored
 `gonfig plugin list` shows it as `<path> (Go plugin, ignored)` followed by `  ignored: <reason>`, with exit code 0. With `--output json`, it has `"type": "go"`, no filters (`"filters": []`) and the reason as `"error"`. See [listing plugins](#listing-plugins).
 The package `pkg/plugin` no longer has `PluginFilter`, the interface of the `Filter` symbol of a Go plugin.
 
-The filters of a Go plugin can be served unchanged:
+The filters of a Go plugin can be served unchanged, except for declared params:
 
 1. Add gonfig as a dependency of the plugin: `go get github.com/denglertai/gonfig@latest`.
 1. Add a `main` function serving the filters the plugin's `Filter` symbol returned:
@@ -513,7 +513,8 @@ The filters of a Go plugin can be served unchanged:
     	}
     }
     ```
-1. Build it as an executable instead of a shared object, e.g. `go build -o gonfig-plugin-hash .` instead of `go build -buildmode=plugin -o hash.so .`.
+1. Rename the method `DeclaredParams() []string` of filters declaring their params to `Params() []string`, which is what `plugin.Serve` looks for, see [values and params](#values-and-params). Otherwise, gonfig no longer validates their params.
+1. Build it as an executable instead of a shared object, e.g. `go build -o gonfig-plugin-hash .` instead of `go build -buildmode=plugin -o hash.so .` (`gonfig-plugin-hash.exe` on Windows).
 1. Replace the `.so` file in the plugin directory by the executable.
 
 ## Troubleshooting
