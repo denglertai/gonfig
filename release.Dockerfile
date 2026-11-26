@@ -1,9 +1,8 @@
 # Container image published by GoReleaser (dockers_v2 in .goreleaser.yaml).
 # It copies the prebuilt binaries from the build context, so it cannot be built from the sources with docker build.
 #
-# The binaries are linked against glibc for cgo (Go plugins), so the base provides glibc.
-# Once cgo is removed (#244), cgr.dev/chainguard/static suffices.
-FROM cgr.dev/chainguard/glibc-dynamic:latest@sha256:ae815f889199ee018b0072f05939ecef65b1b3a831d1c768fa82d1860f889942
+# gonfig and the plugins are built without cgo, so they are static and need no libc.
+FROM cgr.dev/chainguard/static:latest@sha256:599c3cd7597b84aa149c4282beecc8c6d4e1cb5c95dc8d982e70cd0a2a9147a2
 
 ARG TARGETPLATFORM
 

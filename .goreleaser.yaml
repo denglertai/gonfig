@@ -1,60 +1,34 @@
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
-# GoReleaser configuration using Zig for CGO cross-compilation
+# GoReleaser configuration, every binary is built without cgo
 version: 2
 
 project_name: gonfig
 
 builds:
-  # Linux AMD64
-  - id: linux-amd64
+  # gonfig needs no cgo, so every target is cross-compiled here and the binaries are static
+  - id: gonfig
     env:
-      - CGO_ENABLED=1
-      - CC=zig cc -target x86_64-linux-gnu
-      - CXX=zig c++ -target x86_64-linux-gnu
+      - CGO_ENABLED=0
     goos:
       - linux
+      - darwin
+      - windows
     goarch:
       - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
     flags:
       - -trimpath
     # The version is printed by gonfig --version, see internal/version. The commit date keeps builds reproducible.
-    ldflags: &ldflags
+    ldflags:
       - -s -w
       - -X github.com/denglertai/gonfig/internal/version.version={{ .Version }}
       - -X github.com/denglertai/gonfig/internal/version.commit={{ .FullCommit }}
       - -X github.com/denglertai/gonfig/internal/version.date={{ .CommitDate }}
 
-  # Linux ARM64
-  - id: linux-arm64
-    env:
-      - CGO_ENABLED=1
-      - CC=aarch64-linux-gnu-gcc
-      - CXX=aarch64-linux-gnu-g++
-    goos:
-      - linux
-    goarch:
-      - arm64
-    flags:
-      - -trimpath
-    ldflags: *ldflags
-
-  # Windows AMD64
-  - id: windows-amd64
-    env:
-      - CGO_ENABLED=1
-      - CC=zig cc -target x86_64-windows-gnu
-      - CXX=zig c++ -target x86_64-windows-gnu
-    goos:
-      - windows
-    goarch:
-      - amd64
-    flags:
-      - -trimpath
-      - -buildmode=exe
-    ldflags: *ldflags
-
-  # Plugins for secret managers, released with gonfig. They don't need cgo, so they are built for every platform here,
-  # including macOS, which gonfig itself is built for in a separate job of release.yml.
+  # Plugins for secret managers, released with gonfig and built for the same platforms
   - id: plugin-openbao
     dir: plugins/openbao
     binary: gonfig-plugin-openbao
@@ -92,9 +66,7 @@ archives:
   - id: gonfig
     # Archives include all builds by default, so the plugins get archives of their own below
     ids:
-      - linux-amd64
-      - linux-arm64
-      - windows-amd64
+      - gonfig
     formats: [tar.gz]
     # this name template makes the OS and Arch compatible with the results of `uname`.
     name_template: >-
@@ -152,8 +124,6 @@ release:
   header: |
     ## Release {{ .Tag }}
     
-    Multi-architecture binaries built with CGO enabled
-
     Plugins for secret managers, see PLUGINS.md: `gonfig-plugin-openbao` (OpenBao, HashiCorp Vault) and `gonfig-plugin-azure-keyvault` (Azure Key Vault)
 
     Container image for linux/amd64 and linux/arm64, including the plugins: `ghcr.io/denglertai/gonfig:{{ .Version }}`
@@ -168,9 +138,9 @@ sboms:
 dockers_v2:
   - id: gonfig
     # The plugins are part of the image, see release.Dockerfile
+    # Only the Linux binaries of these builds are used, see platforms
     ids:
-      - linux-amd64
-      - linux-arm64
+      - gonfig
       - plugin-openbao
       - plugin-azure-keyvault
     dockerfile: release.Dockerfile

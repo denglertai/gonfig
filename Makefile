@@ -1,4 +1,4 @@
-.PHONY: build build-all release prepare-release-branch release-draft release-dry-run snapshot clean install-deps install-zig install-goreleaser test lint bench profile check-clean check-main-up-to-date check-version-format check-melange-version
+.PHONY: build build-all release prepare-release-branch release-draft release-dry-run snapshot clean install-goreleaser test lint bench profile check-clean check-main-up-to-date check-version-format check-melange-version
 
 MELANGE_VERSION := $(strip $(shell awk '/^  version:/ {print $$2; exit}' melange.yaml))
 VERSION ?= v$(MELANGE_VERSION)
@@ -7,11 +7,11 @@ VERSION ?= v$(MELANGE_VERSION)
 build:
 	go build -o gonfig .
 
-# Build all platforms using Zig
+# Build all platforms
 build-all:
 	goreleaser build --snapshot --clean --skip=validate
 
-# Create a release using Zig
+# Publishing a release is handled by GitHub Actions
 release:
 	@echo "Publishing is handled by GitHub Actions."
 	@echo "Use: make release-draft"
@@ -82,7 +82,7 @@ release-draft: check-main-up-to-date check-clean check-version-format check-mela
 release-dry-run: install-goreleaser
 	goreleaser release --snapshot --clean
 
-# Build snapshot using Zig
+# Build snapshot
 snapshot:
 	goreleaser build --snapshot --clean
 
@@ -140,19 +140,6 @@ check-melange-version:
 		echo "Run: make prepare-release-branch VERSION=$(VERSION)"; \
 		echo "Open and merge the PR into main, then run release-draft from main."; \
 		exit 1; \
-	fi
-
-# Install Zig (required for cross-compilation with CGO)
-install-deps: install-zig
-
-# Install Zig from GitHub
-install-zig:
-	@echo "Installing Zig..."
-	@if command -v zig >/dev/null 2>&1; then \
-		echo "Zig is already installed: $$(zig version)"; \
-	else \
-		echo "Please install Zig manually from https://ziglang.org/download/"; \
-		echo "Or use: go install github.com/dosgo/zigtool/zig@latest"; \
 	fi
 
 # Test

@@ -33,7 +33,8 @@ vars:
 pipeline:
   - uses: go/build
     environment:
-      CGO_ENABLED: "1"
+      # Static like the release binaries, gonfig needs no cgo
+      CGO_ENABLED: "0"
       GOFLAGS: "-buildvcs=false"
     with:
       packages: .
@@ -44,7 +45,7 @@ pipeline:
         -X github.com/denglertai/gonfig/internal/version.date=${{vars.commit-date}}
 
 # The plugins for secret managers, released with gonfig. Subpackages get the version of gonfig and are built in the
-# same run. They install into /usr/libexec/gonfig/plugins, which gonfig searches by default, and need no cgo.
+# same run. They install into /usr/libexec/gonfig/plugins, which gonfig searches by default.
 # The dependency on gonfig isn't pinned to a version, since plugins and gonfig only share the versioned plugin protocol.
 subpackages:
   - name: gonfig-plugin-openbao

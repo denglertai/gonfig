@@ -7,7 +7,7 @@ model: inherit
 
 You analyse a gonfig issue before anyone changes code. gonfig is a Go CLI that fills config files (YAML, JSON, XML, properties, TOML, dotenv, INI, plain text) with environment variables via placeholders like `${VAR | filter}`, parsing each format instead of replacing text.
 
-Package map: `internal/value` (tokenizer, filter chains, templates), `internal/filter` (built-in filters), `internal/file` (one handler per file type, `FileProcessor`, typed values, fragments), `internal/config` (viper: `.gonfig.yaml`, `GONFIG_*`, flags), `internal/schema` (JSON Schema validation, `config check`), `internal/output` (atomic writes, file modes), `internal/diff` (unified diffs), `internal/plugin` + `pkg/plugin` (executable plugins over a protocol, and Go `.so` plugins loaded in-process), `plugins/*` (secret-manager plugins, separate modules), `cmd` (cobra wiring).
+Package map: `internal/value` (tokenizer, filter chains, templates), `internal/filter` (built-in filters), `internal/file` (one handler per file type, `FileProcessor`, typed values, fragments), `internal/config` (viper: `.gonfig.yaml`, `GONFIG_*`, flags), `internal/schema` (JSON Schema validation, `config check`), `internal/output` (atomic writes, file modes), `internal/diff` (unified diffs), `internal/plugin` + `pkg/plugin` (executable plugins over a protocol; `.so` files are ignored with a warning), `plugins/*` (secret-manager plugins, separate modules), `cmd` (cobra wiring).
 
 ## Steps
 
@@ -22,7 +22,7 @@ Package map: `internal/value` (tokenizer, filter chains, templates), `internal/f
 - **Proposed design:** files and functions to change, new/changed flags, filters or file-type support.
 - **Open decisions** for the user, each with a recommendation.
 - **Behavior / breaking changes** the design implies.
-- **Verification lanes needed** (yes/no + why): unit, snapshots, fuzz equivalence (parser/placeholder rewrite), polluted-env config test, docs examples, race detector (package-level state, plugins, pipes), benchmarks (hot path: placeholder processing, file handlers, merging), plugins - say which kind: executable, `.so` (in-process, no Windows, must match the binary's Go version and `-trimpath`) or both - and OpenBao/Vault integration, secrets audit.
+- **Verification lanes needed** (yes/no + why): unit, snapshots, fuzz equivalence (parser/placeholder rewrite), polluted-env config test, docs examples, race detector (package-level state, plugins, pipes), benchmarks (hot path: placeholder processing, file handlers, merging), executable plugins and OpenBao/Vault integration, secrets audit.
 - Pitfalls from `pitfalls.md` that apply.
 
 Keep it under ~60 lines. Never include real secrets; use made-up values.

@@ -18,7 +18,8 @@ var pluginCmd = &cobra.Command{
 	Use:   "plugin",
 	Short: "Work with plugins",
 	Long: `Work with the plugins in the plugin path, see --plugin-path.
-By default, /usr/libexec/gonfig/plugins (except on Windows) and ./plugins are searched.`,
+By default, /usr/libexec/gonfig/plugins is searched, on macOS also /usr/local/libexec/gonfig/plugins.
+Windows has no default plugin directory, so no plugins are started there unless a plugin path is set.`,
 	TraverseChildren: true,
 }
 
@@ -30,8 +31,8 @@ var pluginListCmd = &cobra.Command{
 and filters, if the plugins provide them. A filter shows its params if the plugin declares them, which gonfig then
 validates like the params of its built-in filters.
 
-Plugins that failed to start and filters skipped because another filter has their name already are listed as well,
-with exit code 0, since listing them is the purpose of the command.`,
+Plugins that failed to start, ignored Go plugins (.so files) and filters skipped because another filter has their
+name already are listed as well, with exit code 0, since listing them is the purpose of the command.`,
 	Args:             noArgs,
 	TraverseChildren: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -56,7 +57,11 @@ with exit code 0, since listing them is the purpose of the command.`,
 //	      Reads a secret of the KV secrets engine, e.g. secret/app/db#password
 func writePluginsText(w io.Writer, paths []string, plugins []plugin.Info) error {
 	var sb strings.Builder
-	if len(plugins) == 0 {
+	switch {
+	case len(paths) == 0:
+		// Windows has no default plugin directory, see plugin.InitPlugins
+		sb.WriteString("No plugins found, no plugin path is set, see --plugin-path\n")
+	case len(plugins) == 0:
 		fmt.Fprintf(&sb, "No plugins found in %s\n", strings.Join(paths, ", "))
 	}
 
@@ -66,13 +71,17 @@ func writePluginsText(w io.Writer, paths []string, plugins []plugin.Info) error 
 			sb.WriteString(" " + p.Version)
 		}
 		if p.Type == plugin.TypeGo {
-			sb.WriteString(" (deprecated Go plugin)")
+			sb.WriteString(" (Go plugin, ignored)")
 		}
 		sb.WriteString("\n")
 		if p.Description != "" {
 			fmt.Fprintf(&sb, "  %s\n", p.Description)
 		}
-		if p.Error != "" {
+		switch {
+		case p.Error != "" && p.Type == plugin.TypeGo:
+			// Go plugins are not started anymore, so they did not fail to start
+			fmt.Fprintf(&sb, "  ignored: %s\n", p.Error)
+		case p.Error != "":
 			fmt.Fprintf(&sb, "  failed to start: %s\n", p.Error)
 		}
 
@@ -100,6 +109,10 @@ func writePluginsText(w io.Writer, paths []string, plugins []plugin.Info) error 
 func writePluginsJson(w io.Writer, paths []string, plugins []plugin.Info) error {
 	if plugins == nil {
 		plugins = []plugin.Info{}
+	}
+	// Windows searches no paths without a plugin path, which is listed as an empty list like no plugins
+	if paths == nil {
+		paths = []string{}
 	}
 	// The plugins consist of strings, booleans and slices of them, so encoding them cannot fail
 	data, _ := json.MarshalIndent(struct {
