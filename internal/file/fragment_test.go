@@ -318,6 +318,27 @@ func TestFragments(t *testing.T) {
 			fragment: "",
 			want:     "{\n  \"8080\": 8080\n}\n",
 		},
+		{
+			desc:     "json key fragment replacing an edited scalar with an object",
+			fileType: general.JSON,
+			content:  `{"port": "${FRAGMENT_PORT}", "${FRAGMENT | fragment}": null}`,
+			fragment: `{"port": {"y": 2}}`,
+			want:     "{\n  \"port\": {\n    \"y\": 2\n  }\n}\n",
+		},
+		{
+			desc:     "json key fragment replacing an edited scalar with a string",
+			fileType: general.JSON,
+			content:  `{"port": "${FRAGMENT_PORT}", "${FRAGMENT | fragment}": null}`,
+			fragment: `{"port": "replacement"}`,
+			want:     "{\n  \"port\": \"replacement\"\n}\n",
+		},
+		{
+			desc:     "json key fragment replacing an object with a nested fragment key",
+			fileType: general.JSON,
+			content:  `{"${FRAGMENT | fragment}": null, "outer": {"${FRAGMENT | fragment}": null}}`,
+			fragment: `{"outer": "replacement"}`,
+			want:     "{\n  \"outer\": \"replacement\"\n}\n",
+		},
 		// XML
 		{
 			desc:     "xml element content replaced by a fragment",

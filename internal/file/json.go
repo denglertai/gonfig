@@ -51,6 +51,8 @@ type JsonConfigEntry struct {
 	isKey      bool
 	parent     *jsonNode
 	parentPath string
+	// superseded is set when the entry or its parent object was replaced by a fragment
+	superseded bool
 }
 
 // Key returns the key of the configuration entry
@@ -70,6 +72,9 @@ func (j *JsonConfigEntry) GetValue() string {
 
 // SetValue sets the value of the configuration entry, or renames the key
 func (j *JsonConfigEntry) SetValue(value string) {
+	if j.superseded {
+		return
+	}
 	if j.isKey {
 		i := slices.Index(j.parent.children, j.node)
 		if i < 0 {
@@ -90,7 +95,7 @@ func (j *JsonConfigEntry) SetValue(value string) {
 // mask replaces a value by value.Mask as a string, so numbers, booleans and nulls are masked as well.
 // Keys are kept, since they are part of the structure.
 func (j *JsonConfigEntry) mask() {
-	if j.isKey {
+	if j.isKey || j.superseded {
 		return
 	}
 	// The value is written with the type of the node, which is a string from now on
@@ -101,6 +106,9 @@ func (j *JsonConfigEntry) mask() {
 // SetTypedValue sets a number or boolean, which replaces the original value regardless of its type.
 // Keys are always strings, so they are not set.
 func (j *JsonConfigEntry) SetTypedValue(value any) bool {
+	if j.superseded {
+		return false
+	}
 	tv, ok := newTypedValue(value)
 	if !ok || j.isKey {
 		return false
@@ -122,6 +130,9 @@ func (j *JsonConfigEntry) SetTypedValue(value any) bool {
 // It returns the inserted entries for placeholder processing, or an error for invalid JSON,
 // trailing data, or violations of the key requirements.
 func (j *JsonConfigEntry) SetFragment(f filter.Fragment) ([]ConfigEntry, error) {
+	if j.superseded {
+		return nil, nil
+	}
 	fragment, err := parseJsonFragment(f.Text)
 	if err != nil {
 		return nil, err
@@ -144,6 +155,9 @@ func (j *JsonConfigEntry) SetFragment(f filter.Fragment) ([]ConfigEntry, error) 
 
 // mergeFragment merges the fragment into the object containing the key and removes the key
 func (j *JsonConfigEntry) mergeFragment(fragment *jsonNode) ([]ConfigEntry, error) {
+	if j.superseded {
+		return nil, nil
+	}
 	if j.node.kind != jsonScalar || j.node.value != nil {
 		return nil, errors.New("a key with a fragment must have the value null")
 	}
@@ -350,6 +364,43 @@ func (j *JsonConfigFileHandler) collectEntries(insert func()) []ConfigEntry {
 	return slices.Clone(j.entries[before:])
 }
 
+// collectDescendantNodes recursively collects all jsonNode pointers in the subtree of node
+func collectDescendantNodes(node *jsonNode, nodes map[*jsonNode]struct{}) {
+	if node == nil {
+		return
+	}
+	nodes[node] = struct{}{}
+	for _, child := range node.children {
+		collectDescendantNodes(child, nodes)
+	}
+}
+
+// invalidateSuperseded invalidates value-entry bookkeeping and marks entries in the subtree of the child
+// at index k as superseded before replacing it in target, while preserving placeholder-key entries on target
+func (j *JsonConfigFileHandler) invalidateSuperseded(target *jsonNode, k int) {
+	oldNode := target.children[k]
+	subtree := make(map[*jsonNode]struct{})
+	collectDescendantNodes(oldNode, subtree)
+
+	for _, entry := range j.entries {
+		jce := entry.(*JsonConfigEntry)
+		if jce.superseded {
+			continue
+		}
+		// Preserve placeholder-key entries directly on target for this member
+		if jce.isKey && jce.parent == target && jce.node == oldNode {
+			continue
+		}
+		_, nodeInSubtree := subtree[jce.node]
+		_, parentInSubtree := subtree[jce.parent]
+		if nodeInSubtree || parentInSubtree {
+			jce.edited = false
+			jce.typed = nil
+			jce.superseded = true
+		}
+	}
+}
+
 // mergeObjects deep merges the source object into the target object: objects are merged recursively,
 // other values of the source replace the ones of the target, and new keys are appended in the order of the source.
 // Keys are matched as they are now, so a key containing a placeholder that is not processed yet is matched as written.
@@ -377,6 +428,7 @@ func (j *JsonConfigFileHandler) mergeObjects(target *jsonNode, source *jsonNode,
 		case target.children[k].kind == jsonObject && child.kind == jsonObject:
 			j.mergeObjects(target.children[k], child, currentPath)
 		default:
+			j.invalidateSuperseded(target, k)
 			// The entry of a key containing a placeholder finds its key by the value, so it moves to the new value
 			if entry, isKey := j.keyEntries[target.children[k]]; isKey {
 				delete(j.keyEntries, target.children[k])
@@ -391,14 +443,28 @@ func (j *JsonConfigFileHandler) mergeObjects(target *jsonNode, source *jsonNode,
 
 // Process processes the configuration file and returns the configuration entries
 func (j *JsonConfigFileHandler) Process() (iter.Seq[ConfigEntry], error) {
-	return slices.Values(j.entries), nil
+	initialEntries := slices.Clone(j.entries)
+	return func(yield func(ConfigEntry) bool) {
+		for _, entry := range initialEntries {
+			jce := entry.(*JsonConfigEntry)
+			if jce.superseded {
+				continue
+			}
+			if jce.isKey && slices.Index(jce.parent.children, jce.node) < 0 {
+				continue
+			}
+			if !yield(entry) {
+				return
+			}
+		}
+	}, nil
 }
 
 // Write writes the configuration entries to the target
 func (j *JsonConfigFileHandler) Write(target io.Writer) error {
 	for _, entry := range j.entries {
 		jce := entry.(*JsonConfigEntry)
-		if !jce.edited {
+		if jce.superseded || !jce.edited {
 			continue
 		}
 
